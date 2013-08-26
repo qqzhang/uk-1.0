@@ -57,7 +57,13 @@ INSTALLDIRS = \
 	$(DESTDIR)$(mandir)/de.UTF-8/man$(prog_manext) \
 	$(DESTDIR)$(mandir)/fr.UTF-8/man$(prog_manext)
 
+CONFIG_UNIFIED_KERNEL = y
+
+ifeq  ($(CONFIG_UNIFIED_KERNEL),y)
+all:
+else
 all: $(PROGRAMS)
+endif
 
 @MAKE_RULES@
 
@@ -67,6 +73,14 @@ wineserver: $(OBJS)
 wineserver-installed: $(OBJS)
 	$(CC) -o $@ $(OBJS) $(LIBWINE) $(LIBPORT) $(LDFLAGS) $(EXTRALIBS) $(LIBS) $(LDRPATH_INSTALL)
 
+ifeq  ($(CONFIG_UNIFIED_KERNEL),y)
+install install-lib::
+
+install-man-pages::
+
+uninstall::
+
+else
 install install-lib:: wineserver-installed $(DESTDIR)$(bindir) install-man-pages
 	$(INSTALL_PROGRAM) wineserver-installed $(DESTDIR)$(bindir)/wineserver
 
@@ -78,3 +92,4 @@ uninstall::
 	$(RM) $(DESTDIR)$(bindir)/wineserver
 	$(RM) $(DESTDIR)$(mandir)/de.UTF-8/man$(prog_manext)/wineserver.$(prog_manext)
 	$(RM) $(DESTDIR)$(mandir)/fr.UTF-8/man$(prog_manext)/wineserver.$(prog_manext)
+endif
