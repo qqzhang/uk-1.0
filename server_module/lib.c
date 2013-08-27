@@ -474,6 +474,7 @@ int mkstemps ( char *template, int suffix_len)
       gcc_uint64_t v = value;
       int fd;
 
+#ifndef CONFIG_UNIFIED_KERNEL
       /* Fill in the random bits.  */
       XXXXXX[0] = letters[v % 62];
       v /= 62;
@@ -486,6 +487,22 @@ int mkstemps ( char *template, int suffix_len)
       XXXXXX[4] = letters[v % 62];
       v /= 62;
       XXXXXX[5] = letters[v % 62];
+#else
+      int mod;
+
+      mod = do_div(v,62); /**/
+      XXXXXX[0] = letters[mod];
+      mod = do_div(v,62);
+      XXXXXX[1] = letters[mod];
+      mod = do_div(v,62);
+      XXXXXX[2] = letters[mod];
+      mod = do_div(v,62);
+      XXXXXX[3] = letters[mod];
+      mod = do_div(v,62);
+      XXXXXX[4] = letters[mod];
+      mod = do_div(v,62);
+      XXXXXX[5] = letters[mod];
+#endif
 
 #ifdef VMS
       fd = open (template, O_RDWR|O_CREAT|O_EXCL, 0600, "fop=tmd");

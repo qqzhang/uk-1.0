@@ -68,6 +68,10 @@
 #define WANT_REQUEST_HANDLERS
 #include "request.h"
 
+#ifdef CONFIG_UNIFIED_KERNEL
+#include <asm/div64.h>
+#endif
+
 /* Some versions of glibc don't define this */
 #ifndef SCM_RIGHTS
 #define SCM_RIGHTS 1
@@ -476,7 +480,15 @@ unsigned int get_tick_count(void)
     if (!timebase.denom) mach_timebase_info( &timebase );
     return mach_absolute_time() * timebase.numer / timebase.denom / 1000000;
 #endif
+#ifndef CONFIG_UNIFIED_KERNEL
     return (current_time - server_start_time) / 10000;
+#else
+    {
+	    u64 tmp = (current_time - server_start_time);
+	    do_div(tmp, 10000);
+	    return (unsigned int)tmp;
+    }
+#endif
 }
 
 static void master_socket_dump( struct object *obj, int verbose )

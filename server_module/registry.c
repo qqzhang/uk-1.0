@@ -50,6 +50,10 @@
 #include "winternl.h"
 #include "wine/library.h"
 
+#ifdef CONFIG_UNIFIED_KERNEL
+#include <asm/div64.h>
+#endif
+
 struct notify
 {
     struct list       entry;    /* entry in list of notifications */
@@ -264,7 +268,13 @@ static void save_subkeys( const struct key *key, const struct key *base, FILE *f
     {
         fprintf( f, "\n[" );
         if (key != base) dump_path( key, base, f );
+#ifndef CONFIG_UNIFIED_KERNEL
         fprintf( f, "] %u\n", (unsigned int)((key->modif - ticks_1601_to_1970) / TICKS_PER_SEC) );
+#else
+	u64 tmp = (key->modif - ticks_1601_to_1970);
+	do_div(tmp, TICKS_PER_SEC);
+	fprintf( f, "] %u\n", (unsigned int)(tmp) );
+#endif
         if (key->class)
         {
             fprintf( f, "#class=\"" );

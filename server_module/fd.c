@@ -18,7 +18,6 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-
 #include "config.h"
 #include "wine/port.h"
 
@@ -99,6 +98,10 @@
 
 #include "winternl.h"
 #include "winioctl.h"
+
+#ifdef CONFIG_UNIFIED_KERNEL
+#include <asm/div64.h>
+#endif
 
 #if defined(HAVE_SYS_EPOLL_H) && defined(HAVE_EPOLL_CREATE)
 # include <sys/epoll.h>
@@ -401,14 +404,26 @@ const char *get_timeout_str( timeout_t timeout )
 
     if (timeout < 0)  /* relative */
     {
+#ifndef CONFIG_UNIFIED_KERNEL
         secs = -timeout / TICKS_PER_SEC;
         nsecs = -timeout % TICKS_PER_SEC;
+#else
+	timeout_t t = -timeout;
+        nsecs = do_div(t,TICKS_PER_SEC);
+        secs = t;
+#endif
         sprintf( buffer, "+%ld.%07ld", secs, nsecs );
     }
     else  /* absolute */
     {
+#ifndef CONFIG_UNIFIED_KERNEL
         secs = (timeout - current_time) / TICKS_PER_SEC;
         nsecs = (timeout - current_time) % TICKS_PER_SEC;
+#else
+	timeout_t t = (timeout - current_time);
+        nsecs = do_div(t,TICKS_PER_SEC);
+        secs = t;
+#endif
         if (nsecs < 0)
         {
             nsecs += TICKS_PER_SEC;
@@ -864,7 +879,14 @@ static int get_next_timeout(void)
         if ((ptr = list_head( &timeout_list )) != NULL)
         {
             struct timeout_user *timeout = LIST_ENTRY( ptr, struct timeout_user, entry );
+#ifndef CONFIG_UNIFIED_KERNEL
             int diff = (timeout->when - current_time + 9999) / 10000;
+#else
+	    int diff = 0;
+	    u64 tmp = (timeout->when - current_time + 9999);
+	    do_div(tmp, 10000);
+	    diff = (int)tmp;
+#endif
             if (diff < 0) diff = 0;
             return diff;
         }
