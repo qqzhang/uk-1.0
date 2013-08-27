@@ -182,10 +182,10 @@ int sigaction(int signum, const struct sigaction *act,
               struct sigaction *oldact);
               
 int sigemptyset(sigset_t *set);
-int sigfillset(sigset_t *set);
+//int sigfillset(sigset_t *set);
 int sigaddset(sigset_t *set, int signum);
-int sigdelset(sigset_t *set, int signum);
-int sigismember(const sigset_t *set, int signum);
+//int sigdelset(sigset_t *set, int signum);
+//int sigismember(const sigset_t *set, int signum);
 int sigprocmask(int how, const sigset_t *set, sigset_t *oldset);
 
 
@@ -200,9 +200,9 @@ uid_t geteuid(void);
 int setuid(uid_t uid);
 
 int open(const char *pathname, int flags, ...);
-int close(int fd);
+long close(unsigned int fd);
 
-ssize_t read(int fd, void *buf, size_t count);
+ssize_t read(unsigned int fd, void *buf, size_t size);
 ssize_t write(int fd, const void *buf, size_t count);
 ssize_t pread(int fd, void *buf, size_t count, off_t offset);
 ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset);
@@ -211,24 +211,19 @@ ssize_t readv(int fd, const struct iovec *iov, int iovcnt);
 
 ssize_t writev(int fd, const struct iovec *iov, int iovcnt);
 
-ssize_t preadv(int fd, const struct iovec *iov, int iovcnt,
-               off_t offset);
+ssize_t preadv(int fd, const struct iovec *iov, int iovcnt, off_t offset);
 
-ssize_t pwritev(int fd, const struct iovec *iov, int iovcnt,
-off_t offset);
+ssize_t pwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset);
                 
 ssize_t readlink(const char *path, char *buf, size_t bufsiz);
 
-int chmod(const char *path, mode_t mode);
-int fchmod(int fildes, mode_t mode);
-int fcntl(int fd, int cmd, ... /* arg */ );
-int dup(int oldfd);
-int dup2(int oldfd, int newfd);
+long dup(unsigned int fd);
+long dup2(unsigned int oldfd, unsigned int newfd);
 //int stat(const char *path, struct stat *buf);
 //int fstat(int fd, struct stat *buf);
 //int lstat(const char *path, struct stat *buf);
-int stat(const char *path, void *buf);
-int fstat(int fd, void *buf);
+int stat(const char *filename, void*st);
+long fstat(unsigned int fd, void*st);
 int lstat(const char *path, void *buf);
 int symlink(const char *oldpath, const char *newpath);
 int rename(const char *oldpath, const char *newpath);
@@ -242,31 +237,27 @@ int mkdir(const char *pathname, mode_t mode);
 int chdir(const char *path);
 int fchdir(int fd);
 int fsync(int fd);
+int chmod(const char *path, mode_t mode);
+int fchmod(int fildes, mode_t mode);
+int fcntl(int fd, int cmd, .../*unsigned long arg*/);
 
-int socket(int socket_family, int socket_type, int protocol);
-int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
-int listen(int sockfd, int backlog);
-int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
-int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
-int shutdown(int sockfd, int how);    
+long socket(int socket_family, int socket_type, int protocol);
+long bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+long listen(int sockfd, int backlog);
+long accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
+long connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+long shutdown(int sockfd, int how);    
 
 ssize_t recv(int sockfd, void *buf, size_t len, int flags);
-
 ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
                  struct sockaddr *src_addr, socklen_t *addrlen);
-
 ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags);
-
 ssize_t send(int sockfd, const void *buf, size_t len, int flags);
-
 ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
                const struct sockaddr *dest_addr, socklen_t addrlen);
-
 ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags);
 
-
 int socketpair (int domain, int type, int protocol, int fds[2]);
-		       
 int getsockopt(int sockfd, int level, int optname, void *optval,socklen_t *optlen);
 int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen);
 int getsockname(int sockfd, struct sockaddr *addr, socklen_t * addrlen );
@@ -276,7 +267,7 @@ int epoll_create(int size);
 int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event);
 int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout);
 
-int poll(struct pollfd *fds, unsigned long int nfds, int timeout);
+int poll(struct pollfd *pfds, unsigned int nfds, long timeout_msecs);
 
 //int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout);
 int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, void *timeout);

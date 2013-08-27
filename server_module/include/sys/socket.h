@@ -254,8 +254,22 @@ struct cmsghdr {
 
 #define CMSG_ALIGN(len) ( ((len)+sizeof(long)-1) & ~(sizeof(long)-1) )
 
-struct cmsghdr * __cmsg_nxthdr(void *__ctl, __kernel_size_t __size, struct cmsghdr *__cmsg);
-struct cmsghdr * cmsg_nxthdr (struct msghdr *__msg, struct cmsghdr *__cmsg);
+static inline struct cmsghdr * __cmsg_nxthdr(void *__ctl, __kernel_size_t __size,
+					       struct cmsghdr *__cmsg)
+{
+	struct cmsghdr * __ptr;
+
+	__ptr = (struct cmsghdr*)(((unsigned char *) __cmsg) +  CMSG_ALIGN(__cmsg->cmsg_len));
+	if ((unsigned long)((char*)(__ptr+1) - (char *) __ctl) > __size)
+		return (struct cmsghdr *)0;
+
+	return __ptr;
+}
+
+static inline struct cmsghdr * cmsg_nxthdr (struct msghdr *__msg, struct cmsghdr *__cmsg)
+{
+	return __cmsg_nxthdr(__msg->msg_control, __msg->msg_controllen, __cmsg);
+}
 
 #undef __kernel_size_t
 
