@@ -104,10 +104,4 @@ typedef struct
 # define CPU_ALLOC(count) __CPU_ALLOC (count)
 # define CPU_FREE(cpuset) __CPU_FREE (cpuset)
 
-int sched_setaffinity(pid_t pid, size_t cpusetsize,
-                      cpu_set_t *mask);
-
-int sched_getaffinity(pid_t pid, size_t cpusetsize,
-                      cpu_set_t *mask);	   
-                      
 #endif

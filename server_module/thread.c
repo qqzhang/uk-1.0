@@ -402,6 +402,18 @@ struct thread *get_thread_from_tid( int tid )
     return NULL;
 }
 
+#ifdef CONFIG_UNIFIED_KERNEL
+static int sched_setaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask)
+{
+	return ENOSYS;
+}
+
+static int sched_getaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask)
+{
+	return ENOSYS;
+}
+#endif
+
 /* find a thread from a Unix pid */
 struct thread *get_thread_from_pid( int pid )
 {

@@ -238,9 +238,9 @@ struct termios
 #define	TCIOFF	3		/* Send a STOP character.  */
 #define	TCION	4		/* Send a START character.  */
 
-int tcgetattr(int fd, struct termios *termios_p);
-int tcsetattr(int fd, int optional_actions,
+static int tcgetattr(int fd, struct termios *termios_p);
+static int tcsetattr(int fd, int optional_actions,
               const struct termios *termios_p);
-int tcflush(int fd, int queue_selector);
+static int tcflush(int fd, int queue_selector);
 
 #endif
