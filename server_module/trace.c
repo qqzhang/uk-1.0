@@ -400,7 +400,7 @@ static void dump_varargs_user_handles( const char *prefix, data_size_t size )
 static void dump_varargs_bytes( const char *prefix, data_size_t size )
 {
     const unsigned char *data = cur_data;
-    data_size_t len = min( 1024, size );
+    data_size_t len = min( (data_size_t)1024, size );
 
     fprintf( stderr,"%s{", prefix );
     while (len > 0)

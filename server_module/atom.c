@@ -427,7 +427,7 @@ DECL_HANDLER(get_atom_information)
 
         if ((entry = get_atom_entry( table, req->atom )))
         {
-            set_reply_data( entry->str, min( entry->len, get_reply_max_size() ));
+            set_reply_data( entry->str, min( (unsigned int)entry->len, get_reply_max_size() ));
             reply->count = entry->count;
             reply->pinned = entry->pinned;
             reply->total = entry->len;

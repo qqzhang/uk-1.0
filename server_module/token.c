@@ -232,7 +232,7 @@ static int acl_is_valid( const ACL *acl, data_size_t size )
     if (size < sizeof(ACL))
         return FALSE;
 
-    size = min(size, MAX_ACL_LEN);
+    size = min(size, (data_size_t)MAX_ACL_LEN);
 
     size -= sizeof(ACL);
 

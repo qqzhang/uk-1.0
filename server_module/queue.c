@@ -1189,7 +1189,7 @@ static struct timer *set_timer( struct msg_queue *queue, unsigned int rate )
     struct timer *timer = mem_alloc( sizeof(*timer) );
     if (timer)
     {
-        timer->rate = max( rate, 1 );
+        timer->rate = max( rate, (ULONG)1 );
         timer->when = current_time + (timeout_t)timer->rate * 10000;
         link_timer( queue, timer );
         /* check if we replaced the next timer */
@@ -2304,7 +2304,7 @@ DECL_HANDLER(send_hardware_message)
     struct thread *thread = NULL;
     struct desktop *desktop;
     struct msg_queue *sender = get_current_queue();
-    data_size_t size = min( 256, get_reply_max_size() );
+    data_size_t size = min( (ULONG)256, get_reply_max_size() );
 
     if (!(desktop = get_thread_desktop( current_thread, 0 ))) return;
 
@@ -2796,7 +2796,7 @@ DECL_HANDLER(get_key_state)
 {
     struct thread *thread;
     struct desktop *desktop;
-    data_size_t size = min( 256, get_reply_max_size() );
+    data_size_t size = min( (ULONG)256, get_reply_max_size() );
 
     if (!req->tid)  /* get global async key state */
     {
@@ -2827,7 +2827,7 @@ DECL_HANDLER(set_key_state)
 {
     struct thread *thread;
     struct desktop *desktop;
-    data_size_t size = min( 256, get_req_data_size() );
+    data_size_t size = min( (ULONG)256, get_req_data_size() );
 
     if (!req->tid)  /* set global async key state */
     {

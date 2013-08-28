@@ -271,9 +271,11 @@ static void save_subkeys( const struct reg_key *key, const struct reg_key *base,
 #ifndef CONFIG_UNIFIED_KERNEL
         fprintf( f, "] %u\n", (unsigned int)((key->modif - ticks_1601_to_1970) / TICKS_PER_SEC) );
 #else
+	{
 	u64 tmp = (key->modif - ticks_1601_to_1970);
 	do_div(tmp, TICKS_PER_SEC);
 	fprintf( f, "] %u\n", (unsigned int)(tmp) );
+	}
 #endif
         if (key->class)
         {
@@ -645,7 +647,7 @@ static struct reg_key *find_subkey( const struct reg_key *key, const struct unic
     while (min <= max)
     {
         i = (min + max) / 2;
-        len = min( key->subkeys[i]->namelen, name->len );
+        len = min( (unsigned int)key->subkeys[i]->namelen, name->len );
         res = memicmpW( key->subkeys[i]->name, name->str, len / sizeof(WCHAR) );
         if (!res) res = key->subkeys[i]->namelen - name->len;
         if (!res)
@@ -1024,7 +1026,7 @@ static struct reg_key_value *find_value( const struct reg_key *key, const struct
     while (min <= max)
     {
         i = (min + max) / 2;
-        len = min( key->values[i].namelen, name->len );
+        len = min( (unsigned int)key->values[i].namelen, name->len );
         res = memicmpW( key->values[i].name, name->str, len / sizeof(WCHAR) );
         if (!res) res = key->values[i].namelen - name->len;
         if (!res)

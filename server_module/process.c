@@ -922,7 +922,7 @@ DECL_HANDLER(new_process)
     {
         /* make sure we have a full startup_info_t structure */
         data_size_t env_size = info->data_size - info->info_size;
-        data_size_t info_size = min( req->info_size, FIELD_OFFSET( startup_info_t, curdir_len ));
+        data_size_t info_size = min( (LONG)req->info_size, FIELD_OFFSET( startup_info_t, curdir_len ));
 
         if (!(info->data = mem_alloc( sizeof(*info->data) + env_size ))) goto done;
         memcpy( info->data, get_req_data(), info_size );

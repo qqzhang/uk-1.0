@@ -1288,7 +1288,7 @@ static void read_console_output( struct screen_buffer *screen_buffer, int x, int
     case CHAR_INFO_MODE_TEXT:
         {
             WCHAR *data;
-            int count = min( end - src, get_reply_max_size() / sizeof(*data) );
+            int count = min( (unsigned int)(end - src), get_reply_max_size() / sizeof(*data) );
             if ((data = set_reply_data_size( count * sizeof(*data) )))
             {
                 for (i = 0; i < count; i++) data[i] = src[i].ch;
@@ -1298,7 +1298,7 @@ static void read_console_output( struct screen_buffer *screen_buffer, int x, int
     case CHAR_INFO_MODE_ATTR:
         {
             unsigned short *data;
-            int count = min( end - src, get_reply_max_size() / sizeof(*data) );
+            int count = min( (unsigned int)(end - src), get_reply_max_size() / sizeof(*data) );
             if ((data = set_reply_data_size( count * sizeof(*data) )))
             {
                 for (i = 0; i < count; i++) data[i] = src[i].attr;
@@ -1308,7 +1308,7 @@ static void read_console_output( struct screen_buffer *screen_buffer, int x, int
     case CHAR_INFO_MODE_TEXTATTR:
         {
             char_info_t *data;
-            int count = min( end - src, get_reply_max_size() / sizeof(*data) );
+            int count = min( (unsigned int)(end - src), get_reply_max_size() / sizeof(*data) );
             if ((data = set_reply_data_size( count * sizeof(*data) )))
             {
                 for (i = 0; i < count; i++) data[i] = src[i];

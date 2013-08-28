@@ -239,8 +239,7 @@ struct termios
 #define	TCION	4		/* Send a START character.  */
 
 static int tcgetattr(int fd, struct termios *termios_p);
-static int tcsetattr(int fd, int optional_actions,
-              const struct termios *termios_p);
+//static int tcsetattr(int fd, int optional_actions, const struct termios *termios_p);
 static int tcflush(int fd, int queue_selector);
 
 #endif
