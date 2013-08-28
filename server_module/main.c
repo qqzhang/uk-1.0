@@ -60,7 +60,7 @@ static void usage( FILE *fh )
     fprintf(fh, "\n");
 }
 
-static void parse_args( int argc, char *argv[] )
+static void wine_parse_args( int argc, char *argv[] )
 {
     int ret, optc;
 
@@ -128,7 +128,7 @@ static void sigterm_handler( int signum )
 int main( int argc, char *argv[] )
 {
     setvbuf( stderr, NULL, _IOLBF, 0 );
-    parse_args( argc, argv );
+    wine_parse_args( argc, argv );
 
     /* setup temporary handlers before the real signal initialization is done */
     signal( SIGPIPE, SIG_IGN );
@@ -148,3 +148,24 @@ int main( int argc, char *argv[] )
     main_loop();
     return 0;
 }
+
+#ifdef CONFIG_UNIFIED_KERNEL
+#include <linux/kernel.h>
+#include <linux/module.h>
+
+static int __init unifiedkernel_init(void)
+{
+	return 0;
+}
+
+static void __exit unifiedkernel_exit(void)
+{
+}
+
+module_init(unifiedkernel_init);
+module_exit(unifiedkernel_exit);
+
+MODULE_AUTHOR("insigma");
+MODULE_LICENSE("GPL");
+#endif
+
