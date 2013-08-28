@@ -45,8 +45,8 @@ struct winstation
 {
     struct object      obj;                /* object header */
     unsigned int       flags;              /* winstation flags */
-    struct list        entry;              /* entry in global winstation list */
-    struct list        desktops;           /* list of desktops of this winstation */
+    struct list_head        entry;              /* entry in global winstation list */
+    struct list_head        desktops;           /* list of desktops of this winstation */
     struct clipboard  *clipboard;          /* clipboard information */
     struct atom_table *atom_table;         /* global atom table */
 };
@@ -66,11 +66,11 @@ struct desktop
     struct object        obj;              /* object header */
     unsigned int         flags;            /* desktop flags */
     struct winstation   *winstation;       /* winstation this desktop belongs to */
-    struct list          entry;            /* entry in winstation list of desktops */
+    struct list_head          entry;            /* entry in winstation list of desktops */
     struct window       *top_window;       /* desktop window for this desktop */
     struct window       *msg_window;       /* HWND_MESSAGE top window */
     struct hook_table   *global_hooks;     /* table of global hooks on this desktop */
-    struct list          hotkeys;          /* list of registered hotkeys */
+    struct list_head          hotkeys;          /* list of registered hotkeys */
     struct timeout_user *close_timeout;    /* timeout before closing the desktop */
     struct thread_input *foreground_input; /* thread input of foreground thread */
     unsigned int         users;            /* processes and threads using this desktop */

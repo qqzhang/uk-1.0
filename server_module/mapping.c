@@ -64,7 +64,7 @@ struct mapping
     client_ptr_t    base;            /* default base addr (for PE image mapping) */
     struct ranges  *committed;       /* list of committed ranges in this mapping */
     struct file    *shared_file;     /* temp file for shared PE mapping */
-    struct list     shared_entry;    /* entry in global shared PE mappings list */
+    struct list_head     shared_entry;    /* entry in global shared PE mappings list */
 };
 
 static void mapping_dump( struct object *obj, int verbose );
@@ -106,7 +106,7 @@ static const struct fd_ops mapping_fd_ops =
     default_fd_cancel_async       /* cancel_async */
 };
 
-static struct list shared_list = LIST_INIT(shared_list);
+static struct list_head shared_list = LIST_INIT(shared_list);
 
 static size_t page_mask;
 
@@ -422,7 +422,7 @@ static int get_image_params( struct mapping *mapping, int unix_fd, int protect )
 
     if (!build_shared_mapping( mapping, unix_fd, sec, nt.FileHeader.NumberOfSections )) goto error;
 
-    if (mapping->shared_file) list_add_head( &shared_list, &mapping->shared_entry );
+    if (mapping->shared_file) wine_list_add_head( &shared_list, &mapping->shared_entry );
 
     mapping->protect = protect;
     free( sec );

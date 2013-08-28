@@ -162,7 +162,7 @@ static inline int epoll_wait( int epfd, struct epoll_event *events, int maxevent
 /* closed_fd is used to keep track of the unix fd belonging to a closed fd object */
 struct closed_fd
 {
-    struct list entry;       /* entry in inode closed list */
+    struct list_head entry;       /* entry in inode closed list */
     int         unix_fd;     /* the unix file descriptor */
     char        unlink[1];   /* name to unlink on close (if any) */
 };
@@ -172,10 +172,10 @@ struct fd
     struct object        obj;         /* object header */
     const struct fd_ops *fd_ops;      /* file descriptor operations */
     struct inode        *inode;       /* inode that this fd belongs to */
-    struct list          inode_entry; /* entry in inode fd list */
+    struct list_head          inode_entry; /* entry in inode fd list */
     struct closed_fd    *closed;      /* structure to store the unix fd at destroy time */
     struct object       *user;        /* object using this file descriptor */
-    struct list          locks;       /* list of locks on this fd */
+    struct list_head          locks;       /* list of locks on this fd */
     unsigned int         access;      /* file access (FILE_READ_DATA etc.) */
     unsigned int         options;     /* file options (FILE_DELETE_ON_CLOSE, FILE_SYNCHRONOUS...) */
     unsigned int         sharing;     /* file sharing mode */
@@ -224,10 +224,10 @@ static const struct object_ops fd_ops =
 struct device
 {
     struct object       obj;        /* object header */
-    struct list         entry;      /* entry in device hash list */
+    struct list_head         entry;      /* entry in device hash list */
     dev_t               dev;        /* device number */
     int                 removable;  /* removable device? (or -1 if unknown) */
-    struct list         inode_hash[INODE_HASH_SIZE];  /* inodes hash table */
+    struct list_head         inode_hash[INODE_HASH_SIZE];  /* inodes hash table */
 };
 
 static void device_dump( struct object *obj, int verbose );
@@ -258,12 +258,12 @@ static const struct object_ops device_ops =
 struct inode
 {
     struct object       obj;        /* object header */
-    struct list         entry;      /* inode hash list entry */
+    struct list_head         entry;      /* inode hash list entry */
     struct device      *device;     /* device containing this inode */
     ino_t               ino;        /* inode number */
-    struct list         open;       /* list of open file descriptors */
-    struct list         locks;      /* list of file locks */
-    struct list         closed;     /* list of file descriptors to close at destroy time */
+    struct list_head         open;       /* list of open file descriptors */
+    struct list_head         locks;      /* list of file locks */
+    struct list_head         closed;     /* list of file descriptors to close at destroy time */
 };
 
 static void inode_dump( struct object *obj, int verbose );
@@ -295,13 +295,13 @@ struct file_lock
 {
     struct object       obj;         /* object header */
     struct fd          *fd;          /* fd owning this lock */
-    struct list         fd_entry;    /* entry in list of locks on a given fd */
-    struct list         inode_entry; /* entry in inode list of locks */
+    struct list_head         fd_entry;    /* entry in list of locks on a given fd */
+    struct list_head         inode_entry; /* entry in inode list of locks */
     int                 shared;      /* shared lock? */
     file_pos_t          start;       /* locked region is interval [start;end) */
     file_pos_t          end;
     struct process     *process;     /* process owning this lock */
-    struct list         proc_entry;  /* entry in list of locks owned by the process */
+    struct list_head         proc_entry;  /* entry in list of locks owned by the process */
 };
 
 static void file_lock_dump( struct object *obj, int verbose );
@@ -347,13 +347,13 @@ static file_pos_t max_unix_offset = OFF_T_MAX;
 
 struct timeout_user
 {
-    struct list           entry;      /* entry in sorted timeout list */
+    struct list_head           entry;      /* entry in sorted timeout list */
     timeout_t             when;       /* timeout expiry (absolute time) */
     timeout_callback      callback;   /* callback function */
     void                 *private;    /* callback private data */
 };
 
-static struct list timeout_list = LIST_INIT(timeout_list);   /* sorted timeouts list */
+static struct list_head timeout_list = LIST_INIT(timeout_list);   /* sorted timeouts list */
 timeout_t current_time;
 
 static inline void set_current_time(void)
@@ -368,7 +368,7 @@ static inline void set_current_time(void)
 struct timeout_user *add_timeout_user( timeout_t when, timeout_callback func, void *private )
 {
     struct timeout_user *user;
-    struct list *ptr;
+    struct list_head *ptr;
 
     if (!(user = mem_alloc( sizeof(*user) ))) return NULL;
     user->when     = (when > 0) ? when : current_time - when;
@@ -382,7 +382,7 @@ struct timeout_user *add_timeout_user( timeout_t when, timeout_callback func, vo
         struct timeout_user *timeout = LIST_ENTRY( ptr, struct timeout_user, entry );
         if (timeout->when >= user->when) break;
     }
-    list_add_before( ptr, &user->entry );
+    wine_list_add_before( ptr, &user->entry );
     return user;
 }
 
@@ -849,7 +849,7 @@ static int get_next_timeout(void)
 {
     if (!list_empty( &timeout_list ))
     {
-        struct list expired_list, *ptr;
+        struct list_head expired_list, *ptr;
 
         /* first remove all expired timers from the list */
 
@@ -932,7 +932,7 @@ void main_loop(void)
 /****************************************************************/
 /* device functions */
 
-static struct list device_hash[DEVICE_HASH_SIZE];
+static struct list_head device_hash[DEVICE_HASH_SIZE];
 
 static int is_device_removable( dev_t dev, int unix_fd )
 {
@@ -992,7 +992,7 @@ static struct device *get_device( dev_t dev, int unix_fd )
         device->dev = dev;
         device->removable = is_device_removable( dev, unix_fd );
         for (i = 0; i < INODE_HASH_SIZE; i++) list_init( &device->inode_hash[i] );
-        list_add_head( &device_hash[hash], &device->entry );
+        wine_list_add_head( &device_hash[hash], &device->entry );
     }
     return device;
 }
@@ -1023,12 +1023,12 @@ static void device_destroy( struct object *obj )
 /* close all pending file descriptors in the closed list */
 static void inode_close_pending( struct inode *inode, int keep_unlinks )
 {
-    struct list *ptr = list_head( &inode->closed );
+    struct list_head *ptr = list_head( &inode->closed );
 
     while (ptr)
     {
         struct closed_fd *fd = LIST_ENTRY( ptr, struct closed_fd, entry );
-        struct list *next = list_next( &inode->closed, ptr );
+        struct list_head *next = list_next( &inode->closed, ptr );
 
         if (fd->unix_fd != -1)
         {
@@ -1055,7 +1055,7 @@ static void inode_dump( struct object *obj, int verbose )
 static void inode_destroy( struct object *obj )
 {
     struct inode *inode = (struct inode *)obj;
-    struct list *ptr;
+    struct list_head *ptr;
 
     assert( list_empty(&inode->open) );
     assert( list_empty(&inode->locks) );
@@ -1108,7 +1108,7 @@ static struct inode *get_inode( dev_t dev, ino_t ino, int unix_fd )
         list_init( &inode->open );
         list_init( &inode->locks );
         list_init( &inode->closed );
-        list_add_head( &device->inode_hash[hash], &inode->entry );
+        wine_list_add_head( &device->inode_hash[hash], &inode->entry );
     }
     else release_object( device );
 
@@ -1120,13 +1120,13 @@ static void inode_add_closed_fd( struct inode *inode, struct closed_fd *fd )
 {
     if (!list_empty( &inode->locks ))
     {
-        list_add_head( &inode->closed, &fd->entry );
+        wine_list_add_head( &inode->closed, &fd->entry );
     }
     else if (fd->unlink[0])  /* close the fd but keep the structure around for unlink */
     {
         if (fd->unix_fd != -1) close( fd->unix_fd );
         fd->unix_fd = -1;
-        list_add_head( &inode->closed, &fd->entry );
+        wine_list_add_head( &inode->closed, &fd->entry );
     }
     else  /* no locks on this inode and no unlink, get rid of the fd */
     {
@@ -1236,7 +1236,7 @@ static void remove_unix_locks( struct fd *fd, file_pos_t start, file_pos_t end )
         file_pos_t   end;
     } *first, *cur, *next, *buffer;
 
-    struct list *ptr;
+    struct list_head *ptr;
     int count = 0;
 
     if (!fd->inode) return;
@@ -1367,7 +1367,7 @@ static void remove_lock( struct file_lock *lock, int remove_unix )
 /* remove all locks owned by a given process */
 void remove_process_locks( struct process *process )
 {
-    struct list *ptr;
+    struct list_head *ptr;
 
     while ((ptr = list_head( &process->locks )))
     {
@@ -1380,7 +1380,7 @@ void remove_process_locks( struct process *process )
 static void remove_fd_locks( struct fd *fd )
 {
     file_pos_t start = FILE_POS_T_MAX, end = 0;
-    struct list *ptr;
+    struct list_head *ptr;
 
     while ((ptr = list_head( &fd->locks )))
     {
@@ -1396,7 +1396,7 @@ static void remove_fd_locks( struct fd *fd )
 /* returns handle to wait on */
 obj_handle_t lock_fd( struct fd *fd, file_pos_t start, file_pos_t count, int shared, int wait )
 {
-    struct list *ptr;
+    struct list_head *ptr;
     file_pos_t end = start + count;
 
     if (!fd->inode)  /* not a regular file */
@@ -1441,7 +1441,7 @@ obj_handle_t lock_fd( struct fd *fd, file_pos_t start, file_pos_t count, int sha
 /* remove a lock on an fd */
 void unlock_fd( struct fd *fd, file_pos_t start, file_pos_t count )
 {
-    struct list *ptr;
+    struct list_head *ptr;
     file_pos_t end = start + count;
 
     /* find an existing lock with the exact same parameters */
@@ -1505,7 +1505,7 @@ static unsigned int check_sharing( struct fd *fd, unsigned int access, unsigned 
 
     unsigned int existing_sharing = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
     unsigned int existing_access = 0;
-    struct list *ptr;
+    struct list_head *ptr;
 
     fd->access = access;
     fd->sharing = sharing;
@@ -1679,7 +1679,7 @@ struct fd *dup_fd_object( struct fd *orig, unsigned int access, unsigned int sha
         closed->unlink[0] = 0;
         fd->closed = closed;
         fd->inode = (struct inode *)grab_object( orig->inode );
-        list_add_head( &fd->inode->open, &fd->inode_entry );
+        wine_list_add_head( &fd->inode->open, &fd->inode_entry );
         if ((err = check_sharing( fd, access, sharing, 0, options )))
         {
             set_error( err );
@@ -1844,7 +1844,7 @@ struct fd *open_fd( struct fd *root, const char *name, int flags, mode_t *mode, 
         fd->inode = inode;
         fd->closed = closed_fd;
         fd->cacheable = !inode->device->removable;
-        list_add_head( &inode->open, &fd->inode_entry );
+        wine_list_add_head( &inode->open, &fd->inode_entry );
 
         /* check directory options */
         if ((options & FILE_DIRECTORY_FILE) && !S_ISDIR(st.st_mode))

@@ -119,7 +119,7 @@ static void free_inode( struct inode *inode );
 static struct fd *inotify_fd;
 
 struct change_record {
-    struct list entry;
+    struct list_head entry;
     unsigned int cookie;
     struct filesystem_event event;
 };
@@ -130,13 +130,13 @@ struct dir
     struct fd     *fd;       /* file descriptor to the directory */
     mode_t         mode;     /* file stat.st_mode */
     uid_t          uid;      /* file stat.st_uid */
-    struct list    entry;    /* entry in global change notifications list */
+    struct list_head    entry;    /* entry in global change notifications list */
     unsigned int   filter;   /* notification filter */
     int            notified; /* SIGIO counter */
     int            want_data; /* return change data */
     int            subtree;  /* do we want to watch subdirectories? */
-    struct list    change_records;   /* data for the change */
-    struct list    in_entry; /* entry in the inode dirs list */
+    struct list_head    change_records;   /* data for the change */
+    struct list_head    in_entry; /* entry in the inode dirs list */
     struct inode  *inode;    /* inode of the associated directory */
 };
 
@@ -182,7 +182,7 @@ static const struct fd_ops dir_fd_ops =
     default_fd_cancel_async      /* cancel_async */
 };
 
-static struct list change_list = LIST_INIT(change_list);
+static struct list_head change_list = LIST_INIT(change_list);
 
 static void dnotify_adjust_changes( struct dir *dir )
 {
@@ -222,7 +222,7 @@ static inline void insert_change( struct dir *dir )
     sigemptyset( &sigset );
     sigaddset( &sigset, SIGIO );
     sigprocmask( SIG_BLOCK, &sigset, NULL );
-    list_add_head( &change_list, &dir->entry );
+    wine_list_add_head( &change_list, &dir->entry );
     sigprocmask( SIG_UNBLOCK, &sigset, NULL );
 }
 
@@ -364,7 +364,7 @@ static int dir_set_sd( struct object *obj, const struct security_descriptor *sd,
 
 static struct change_record *get_first_change_record( struct dir *dir )
 {
-    struct list *ptr = list_head( &dir->change_records );
+    struct list_head *ptr = list_head( &dir->change_records );
     if (!ptr) return NULL;
     list_remove( ptr );
     return LIST_ENTRY( ptr, struct change_record, entry );
@@ -416,26 +416,26 @@ static enum server_fd_type dir_get_fd_type( struct fd *fd )
 #define HASH_SIZE 31
 
 struct inode {
-    struct list ch_entry;    /* entry in the children list */
-    struct list children;    /* children of this inode */
+    struct list_head ch_entry;    /* entry in the children list */
+    struct list_head children;    /* children of this inode */
     struct inode *parent;    /* parent of this inode */
-    struct list dirs;        /* directory handles watching this inode */
-    struct list ino_entry;   /* entry in the inode hash */
-    struct list wd_entry;    /* entry in the watch descriptor hash */
+    struct list_head dirs;        /* directory handles watching this inode */
+    struct list_head ino_entry;   /* entry in the inode hash */
+    struct list_head wd_entry;    /* entry in the watch descriptor hash */
     dev_t dev;               /* device number */
     ino_t ino;               /* device's inode number */
     int wd;                  /* inotify's watch descriptor */
     char *name;              /* basename name of the inode */
 };
 
-static struct list inode_hash[ HASH_SIZE ];
-static struct list wd_hash[ HASH_SIZE ];
+static struct list_head inode_hash[ HASH_SIZE ];
+static struct list_head wd_hash[ HASH_SIZE ];
 
 static int inotify_add_dir( char *path, unsigned int filter );
 
 static struct inode *inode_from_wd( int wd )
 {
-    struct list *bucket = &wd_hash[ wd % HASH_SIZE ];
+    struct list_head *bucket = &wd_hash[ wd % HASH_SIZE ];
     struct inode *inode;
 
     LIST_FOR_EACH_ENTRY( inode, bucket, struct inode, wd_entry )
@@ -445,14 +445,14 @@ static struct inode *inode_from_wd( int wd )
     return NULL;
 }
 
-static inline struct list *get_hash_list( dev_t dev, ino_t ino )
+static inline struct list_head *get_hash_list( dev_t dev, ino_t ino )
 {
     return &inode_hash[ (ino ^ dev) % HASH_SIZE ];
 }
 
 static struct inode *find_inode( dev_t dev, ino_t ino )
 {
-    struct list *bucket = get_hash_list( dev, ino );
+    struct list_head *bucket = get_hash_list( dev, ino );
     struct inode *inode;
 
     LIST_FOR_EACH_ENTRY( inode, bucket, struct inode, ino_entry )
@@ -671,7 +671,7 @@ static unsigned int filter_from_inode( struct inode *inode, int is_parent )
 
 static char *inode_get_path( struct inode *inode, int sz )
 {
-    struct list *head;
+    struct list_head *head;
     char *path;
     int len;
 
@@ -1144,7 +1144,7 @@ DECL_HANDLER(read_change)
 {
     struct change_record *record, *next;
     struct dir *dir;
-    struct list events;
+    struct list_head events;
     char *data, *event;
     int size = 0;
 
@@ -1153,7 +1153,7 @@ DECL_HANDLER(read_change)
         return;
 
     list_init( &events );
-    list_move_tail( &events, &dir->change_records );
+    wine_list_move_tail( &events, &dir->change_records );
     release_object( dir );
 
     if (list_empty( &events ))
@@ -1180,7 +1180,7 @@ DECL_HANDLER(read_change)
             /* FIXME: rename events are sometimes reported as delete/create */
             if (record->event.action == FILE_ACTION_RENAMED_OLD_NAME)
             {
-                struct list *elem = list_next( &events, &record->entry );
+                struct list_head *elem = list_next( &events, &record->entry );
                 if (elem)
                     next = LIST_ENTRY(elem, struct change_record, entry);
 

@@ -96,17 +96,17 @@ struct object
 {
     unsigned int              refcount;    /* reference count */
     const struct object_ops  *ops;
-    struct list               wait_queue;
+    struct list_head               wait_queue;
     struct object_name       *name;
     struct security_descriptor *sd;
 #ifdef DEBUG_OBJECTS
-    struct list               obj_list;
+    struct list_head               obj_list;
 #endif
 };
 
 struct wait_queue_entry
 {
-    struct list     entry;
+    struct list_head     entry;
     struct object  *obj;
     struct thread  *thread;
 };

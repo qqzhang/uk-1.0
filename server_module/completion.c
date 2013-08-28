@@ -47,7 +47,7 @@
 struct uk_completion
 {
     struct object  obj;
-    struct list    queue;
+    struct list_head    queue;
     unsigned int   depth;
 };
 
@@ -79,7 +79,7 @@ static const struct object_ops completion_ops =
 
 struct comp_msg
 {
-    struct   list queue_entry;
+    struct   list_head queue_entry;
     apc_param_t   ckey;
     apc_param_t   cvalue;
     unsigned int  information;
@@ -230,7 +230,7 @@ DECL_HANDLER(add_completion)
 DECL_HANDLER(remove_completion)
 {
     struct uk_completion* completion = get_completion_obj( current_thread->process, req->handle, IO_COMPLETION_MODIFY_STATE );
-    struct list *entry;
+    struct list_head *entry;
     struct comp_msg *msg;
 
     if (!completion) return;

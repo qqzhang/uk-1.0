@@ -1803,7 +1803,7 @@ static size_t format_string( WCHAR *buffer, size_t len, const char *format, cons
     }
 
     if (count < len)
-        memcpy( buffer, str, min( max, len - count ) * sizeof(WCHAR) );
+        memcpy( buffer, str, min( max, (int)(len - count) ) * sizeof(WCHAR) );
     count += max;
     buffer += max;
 
@@ -2740,6 +2740,13 @@ long sysconf(int name)
 	return 0;
 }
 int syscall(int number, ...)
+{
+	klog(0,"NOT IMPLEMENT!\n");
+	return 0;
+}
+
+/* sys/resource.h*/
+int getrlimit(int resource, struct rlimit *rlim)
 {
 	klog(0,"NOT IMPLEMENT!\n");
 	return 0;

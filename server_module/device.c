@@ -37,8 +37,8 @@
 struct ioctl_call
 {
     struct object          obj;           /* object header */
-    struct list            dev_entry;     /* entry in device queue */
-    struct list            mgr_entry;     /* entry in manager queue */
+    struct list_head            dev_entry;     /* entry in device queue */
+    struct list_head            mgr_entry;     /* entry in manager queue */
     struct device         *device;        /* device containing this ioctl */
     struct thread         *thread;        /* thread that queued the ioctl */
     client_ptr_t           user_arg;      /* user arg used to identify the request */
@@ -79,8 +79,8 @@ static const struct object_ops ioctl_call_ops =
 struct device_manager
 {
     struct object          obj;           /* object header */
-    struct list            devices;       /* list of devices */
-    struct list            requests;      /* list of pending ioctls across all devices */
+    struct list_head            devices;       /* list of devices */
+    struct list_head            requests;      /* list of pending ioctls across all devices */
 };
 
 static void device_manager_dump( struct object *obj, int verbose );
@@ -114,8 +114,8 @@ struct device
     struct device_manager *manager;       /* manager for this device (or NULL if deleted) */
     struct fd             *fd;            /* file descriptor for ioctl */
     client_ptr_t           user_ptr;      /* opaque ptr for client side */
-    struct list            entry;         /* entry in device manager list */
-    struct list            requests;      /* list of pending ioctl requests */
+    struct list_head            entry;         /* entry in device manager list */
+    struct list_head            requests;      /* list of pending ioctl requests */
 };
 
 static void device_dump( struct object *obj, int verbose );
@@ -404,7 +404,7 @@ static int device_manager_signaled( struct object *obj, struct thread *thread )
 static void device_manager_destroy( struct object *obj )
 {
     struct device_manager *manager = (struct device_manager *)obj;
-    struct list *ptr;
+    struct list_head *ptr;
 
     while ((ptr = list_head( &manager->devices )))
     {
@@ -488,7 +488,7 @@ DECL_HANDLER(get_next_device_request)
 {
     struct ioctl_call *ioctl;
     struct device_manager *manager;
-    struct list *ptr;
+    struct list_head *ptr;
 
     if (!(manager = (struct device_manager *)get_handle_obj( current_thread->process, req->manager,
                                                              0, &device_manager_ops )))

@@ -86,7 +86,7 @@ struct thread_wait
 struct thread_apc
 {
     struct object       obj;      /* object header */
-    struct list         entry;    /* queue linked list */
+    struct list_head         entry;    /* queue linked list */
     struct thread      *caller;   /* thread that queued this apc */
     struct object      *owner;    /* object that queued this apc */
     int                 executed; /* has it been executed by the client? */
@@ -97,7 +97,7 @@ struct thread_apc
 static void dump_thread_apc( struct object *obj, int verbose );
 static int thread_apc_signaled( struct object *obj, struct thread *thread );
 static void thread_apc_destroy( struct object *obj );
-static void clear_apc_queue( struct list *queue );
+static void clear_apc_queue( struct list_head *queue );
 
 static const struct object_ops thread_apc_ops =
 {
@@ -160,7 +160,7 @@ static const struct fd_ops thread_fd_ops =
     NULL                        /* cancel_async */
 };
 
-static struct list thread_list = LIST_INIT(thread_list);
+static struct list_head thread_list = LIST_INIT(thread_list);
 
 /* initialize the structure for a newly allocated thread */
 static inline void init_thread_structure( struct thread *thread )
@@ -229,7 +229,7 @@ struct thread *create_thread( int fd, struct process *process )
     thread->affinity = process->affinity;
     if (!current_thread) current_thread = thread;
 
-    list_add_head( &thread_list, &thread->entry );
+    wine_list_add_head( &thread_list, &thread->entry );
 
     if (!(thread->id = alloc_ptid( thread )))
     {
@@ -794,7 +794,7 @@ done:
 /* attempt to wake threads sleeping on the object wait queue */
 void uk_wake_up( struct object *obj, int max )
 {
-    struct list *ptr;
+    struct list_head *ptr;
 
     LIST_FOR_EACH( ptr, &obj->wait_queue )
     {
@@ -807,7 +807,7 @@ void uk_wake_up( struct object *obj, int max )
 }
 
 /* return the apc queue to use for a given apc type */
-static inline struct list *get_apc_queue( struct thread *thread, enum apc_type type )
+static inline struct list_head *get_apc_queue( struct thread *thread, enum apc_type type )
 {
     switch(type)
     {
@@ -830,7 +830,7 @@ static inline int is_in_apc_wait( struct thread *thread )
 /* queue an existing APC to a given thread */
 static int queue_apc( struct process *process, struct thread *thread, struct thread_apc *apc )
 {
-    struct list *queue;
+    struct list_head *queue;
 
     if (!thread)  /* find a suitable thread inside the process */
     {
@@ -900,7 +900,7 @@ int thread_queue_apc( struct thread *thread, struct object *owner, const apc_cal
 void thread_cancel_apc( struct thread *thread, struct object *owner, enum apc_type type )
 {
     struct thread_apc *apc;
-    struct list *queue = get_apc_queue( thread, type );
+    struct list_head *queue = get_apc_queue( thread, type );
 
     LIST_FOR_EACH_ENTRY( apc, queue, struct thread_apc, entry )
     {
@@ -917,7 +917,7 @@ void thread_cancel_apc( struct thread *thread, struct object *owner, enum apc_ty
 static struct thread_apc *thread_dequeue_apc( struct thread *thread, int system_only )
 {
     struct thread_apc *apc = NULL;
-    struct list *ptr = list_head( &thread->system_apc );
+    struct list_head *ptr = list_head( &thread->system_apc );
 
     if (!ptr && !system_only) ptr = list_head( &thread->user_apc );
     if (ptr)
@@ -929,9 +929,9 @@ static struct thread_apc *thread_dequeue_apc( struct thread *thread, int system_
 }
 
 /* clear an APC queue, cancelling all the APCs on it */
-static void clear_apc_queue( struct list *queue )
+static void clear_apc_queue( struct list_head *queue )
 {
-    struct list *ptr;
+    struct list_head *ptr;
 
     while ((ptr = list_head( queue )))
     {

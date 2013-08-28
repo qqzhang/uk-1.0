@@ -42,7 +42,7 @@ struct hook_table;
 
 struct hook
 {
-    struct list         chain;    /* hook chain entry */
+    struct list_head         chain;    /* hook chain entry */
     user_handle_t       handle;   /* user handle for this hook */
     struct process     *process;  /* process the hook is set to */
     struct thread      *thread;   /* thread the hook is set to */
@@ -66,7 +66,7 @@ struct hook
 struct hook_table
 {
     struct object obj;              /* object header */
-    struct list   hooks[NB_HOOKS];  /* array of hook chains */
+    struct list_head   hooks[NB_HOOKS];  /* array of hook chains */
     int           counts[NB_HOOKS]; /* use counts for each hook chain */
 };
 
@@ -145,7 +145,7 @@ static struct hook *add_hook( struct desktop *desktop, struct thread *thread, in
     hook->thread = thread ? (struct thread *)grab_object( thread ) : NULL;
     hook->table  = table;
     hook->index  = index;
-    list_add_head( &table->hooks[index], &hook->chain );
+    wine_list_add_head( &table->hooks[index], &hook->chain );
     if (thread) thread->desktop_users++;
     return hook;
 }
@@ -170,7 +170,7 @@ static void free_hook( struct hook *hook )
 /* find a hook from its index and proc */
 static struct hook *find_hook( struct thread *thread, int index, client_ptr_t proc )
 {
-    struct list *p;
+    struct list_head *p;
     struct hook_table *table = get_queue_hooks( thread );
 
     if (table)
@@ -187,7 +187,7 @@ static struct hook *find_hook( struct thread *thread, int index, client_ptr_t pr
 /* get the first hook in the chain */
 static inline struct hook *get_first_hook( struct hook_table *table, int index )
 {
-    struct list *elem = list_head( &table->hooks[index] );
+    struct list_head *elem = list_head( &table->hooks[index] );
     return elem ? HOOK_ENTRY( elem ) : NULL;
 }
 

@@ -41,7 +41,7 @@
 
 struct window_class
 {
-    struct list     entry;           /* entry in process list */
+    struct list_head     entry;           /* entry in process list */
     struct process *process;         /* process owning the class */
     int             count;           /* reference count */
     int             local;           /* local class? */
@@ -68,7 +68,7 @@ static struct window_class *create_class( struct process *process, int extra_byt
     /* other fields are initialized by caller */
 
     /* local classes have priority so we put them first in the list */
-    if (local) list_add_head( &process->classes, &class->entry );
+    if (local) wine_list_add_head( &process->classes, &class->entry );
     else wine_list_add_tail( &process->classes, &class->entry );
     return class;
 }
@@ -82,7 +82,7 @@ static void destroy_class( struct window_class *class )
 
 void destroy_process_classes( struct process *process )
 {
-    struct list *ptr;
+    struct list_head *ptr;
 
     while ((ptr = list_head( &process->classes )))
     {
@@ -93,7 +93,7 @@ void destroy_process_classes( struct process *process )
 
 static struct window_class *find_class( struct process *process, atom_t atom, mod_handle_t instance )
 {
-    struct list *ptr;
+    struct list_head *ptr;
 
     LIST_FOR_EACH( ptr, &process->classes )
     {

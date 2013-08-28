@@ -44,7 +44,7 @@ enum debug_event_state { EVENT_QUEUED, EVENT_SENT, EVENT_CONTINUED };
 struct debug_event
 {
     struct object          obj;       /* object header */
-    struct list            entry;     /* entry in event queue */
+    struct list_head            entry;     /* entry in event queue */
     struct thread         *sender;    /* thread which sent this event */
     struct thread         *debugger;  /* debugger thread receiving the event */
     enum debug_event_state state;     /* event state */
@@ -57,7 +57,7 @@ struct debug_event
 struct debug_ctx
 {
     struct object        obj;         /* object header */
-    struct list          event_queue; /* pending events queue */
+    struct list_head          event_queue; /* pending events queue */
     int                  kill_on_exit;/* kill debuggees on debugger exit ? */
 };
 
@@ -334,7 +334,7 @@ static int debug_ctx_signaled( struct object *obj, struct thread *thread )
 
 static void debug_ctx_destroy( struct object *obj )
 {
-    struct list *ptr;
+    struct list_head *ptr;
     struct debug_ctx *debug_ctx = (struct debug_ctx *)obj;
     assert( obj->ops == &debug_ctx_ops );
 
@@ -500,7 +500,7 @@ int debugger_detach( struct process *process, struct thread *debugger )
 /* generate all startup events of a given process */
 void generate_startup_debug_events( struct process *process, client_ptr_t entry )
 {
-    struct list *ptr;
+    struct list_head *ptr;
     struct thread *thread, *first_thread = get_process_first_thread( process );
 
     /* generate creation events */

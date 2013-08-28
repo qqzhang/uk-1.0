@@ -50,7 +50,7 @@ enum message_kind { SEND_MESSAGE, POST_MESSAGE };
 
 struct message_result
 {
-    struct list            sender_entry;  /* entry in sender list */
+    struct list_head            sender_entry;  /* entry in sender list */
     struct message        *msg;           /* message the result is for */
     struct message_result *recv_next;     /* next in receiver list */
     struct msg_queue      *sender;        /* sender queue */
@@ -68,7 +68,7 @@ struct message_result
 
 struct message
 {
-    struct list            entry;     /* entry in message list */
+    struct list_head            entry;     /* entry in message list */
     enum message_type      type;      /* message type */
     user_handle_t          win;       /* window handle */
     unsigned int           msg;       /* message code */
@@ -83,7 +83,7 @@ struct message
 
 struct timer
 {
-    struct list     entry;     /* entry in timer list */
+    struct list_head     entry;     /* entry in timer list */
     timeout_t       when;      /* next expiration */
     unsigned int    rate;      /* timer rate in ms */
     user_handle_t   win;       /* window handle */
@@ -107,7 +107,7 @@ struct thread_input
     int                    caret_state;   /* caret on/off state */
     user_handle_t          cursor;        /* current_thread cursor */
     int                    cursor_count;  /* cursor show count */
-    struct list            msg_list;      /* list of hardware messages */
+    struct list_head            msg_list;      /* list of hardware messages */
     unsigned char          keystate[256]; /* state of each key */
 };
 
@@ -124,12 +124,12 @@ struct msg_queue
     int                    quit_message;    /* is there a pending quit message? */
     int                    exit_code;       /* exit code of pending quit message */
     int                    cursor_count;    /* per-queue cursor show count */
-    struct list            msg_list[NB_MSG_KINDS];  /* lists of messages */
-    struct list            send_result;     /* stack of sent messages waiting for result */
-    struct list            callback_result; /* list of callback messages waiting for result */
+    struct list_head            msg_list[NB_MSG_KINDS];  /* lists of messages */
+    struct list_head            send_result;     /* stack of sent messages waiting for result */
+    struct list_head            callback_result; /* list of callback messages waiting for result */
     struct message_result *recv_result;     /* stack of received messages waiting for result */
-    struct list            pending_timers;  /* list of pending timers */
-    struct list            expired_timers;  /* list of expired timers */
+    struct list_head            pending_timers;  /* list of pending timers */
+    struct list_head            expired_timers;  /* list of expired timers */
     lparam_t               next_timer_id;   /* id for the next timer with a 0 window */
     struct timeout_user   *timeout;         /* timeout for next timer to expire */
     struct thread_input   *input;           /* thread input descriptor */
@@ -139,7 +139,7 @@ struct msg_queue
 
 struct hotkey
 {
-    struct list         entry;        /* entry in desktop hotkey list */
+    struct list_head         entry;        /* entry in desktop hotkey list */
     struct msg_queue   *queue;        /* queue owning this hotkey */
     user_handle_t       win;          /* window handle */
     int                 id;           /* hotkey id */
@@ -487,7 +487,7 @@ static inline unsigned int get_unique_id(void)
 static int merge_message( struct thread_input *input, const struct message *msg )
 {
     struct message *prev;
-    struct list *ptr;
+    struct list_head *ptr;
 
     if (msg->msg != WM_MOUSEMOVE) return 0;
     for (ptr = list_tail( &input->msg_list ); ptr; ptr = list_prev( &input->msg_list, ptr ))
@@ -679,9 +679,9 @@ static struct message_result *alloc_message_result( struct msg_queue *send_queue
             msg->data_size = 0;
 
             result->callback_msg = callback_msg;
-            list_add_head( &send_queue->callback_result, &result->sender_entry );
+            wine_list_add_head( &send_queue->callback_result, &result->sender_entry );
         }
-        else if (send_queue) list_add_head( &send_queue->send_result, &result->sender_entry );
+        else if (send_queue) wine_list_add_head( &send_queue->send_result, &result->sender_entry );
 
         if (timeout != TIMEOUT_INFINITE)
             result->timeout = add_timeout_user( timeout, result_timeout, result );
@@ -825,9 +825,9 @@ static int get_quit_message( struct msg_queue *queue, unsigned int flags,
 }
 
 /* empty a message list and free all the messages */
-static void empty_msg_list( struct list *list )
+static void empty_msg_list( struct list_head *list )
 {
-    struct list *ptr;
+    struct list_head *ptr;
 
     while ((ptr = list_head( list )) != NULL)
     {
@@ -840,7 +840,7 @@ static void empty_msg_list( struct list *list )
 /* cleanup all pending results when deleting a queue */
 static void cleanup_results( struct msg_queue *queue )
 {
-    struct list *entry;
+    struct list_head *entry;
 
     while ((entry = list_head( &queue->send_result )) != NULL)
     {
@@ -935,7 +935,7 @@ static int msg_queue_satisfied( struct object *obj, struct thread *thread )
 static void msg_queue_destroy( struct object *obj )
 {
     struct msg_queue *queue = (struct msg_queue *)obj;
-    struct list *ptr;
+    struct list_head *ptr;
     struct hotkey *hotkey, *hotkey2;
     int i;
 
@@ -1079,7 +1079,7 @@ void detach_thread_input( struct thread *thread_from )
 /* set the next timer to expire */
 static void set_next_timer( struct msg_queue *queue )
 {
-    struct list *ptr;
+    struct list_head *ptr;
 
     if (queue->timeout)
     {
@@ -1102,7 +1102,7 @@ static void set_next_timer( struct msg_queue *queue )
 static struct timer *find_timer( struct msg_queue *queue, user_handle_t win,
                                  unsigned int msg, lparam_t id )
 {
-    struct list *ptr;
+    struct list_head *ptr;
 
     /* we need to search both lists */
 
@@ -1123,7 +1123,7 @@ static struct timer *find_timer( struct msg_queue *queue, user_handle_t win,
 static void timer_callback( void *private )
 {
     struct msg_queue *queue = private;
-    struct list *ptr;
+    struct list_head *ptr;
 
     queue->timeout = NULL;
     /* move on to the next timer */
@@ -1136,14 +1136,14 @@ static void timer_callback( void *private )
 /* link a timer at its rightful place in the queue list */
 static void link_timer( struct msg_queue *queue, struct timer *timer )
 {
-    struct list *ptr;
+    struct list_head *ptr;
 
     for (ptr = queue->pending_timers.next; ptr != &queue->pending_timers; ptr = ptr->next)
     {
         struct timer *t = LIST_ENTRY( ptr, struct timer, entry );
         if (t->when >= timer->when) break;
     }
-    list_add_before( ptr, &timer->entry );
+    wine_list_add_before( ptr, &timer->entry );
 }
 
 /* remove a timer from the queue timer list and free it */
@@ -1168,7 +1168,7 @@ static struct timer *find_expired_timer( struct msg_queue *queue, user_handle_t 
                                          unsigned int get_first, unsigned int get_last,
                                          int remove )
 {
-    struct list *ptr;
+    struct list_head *ptr;
 
     LIST_FOR_EACH( ptr, &queue->expired_timers )
     {
@@ -1893,7 +1893,7 @@ static int get_hardware_message( struct thread *thread, unsigned int hw_id, user
 {
     struct thread_input *input = thread->queue->input;
     struct thread *win_thread;
-    struct list *ptr;
+    struct list_head *ptr;
     user_handle_t win;
     int clear_bits, got_one = 0;
     unsigned int msg_code;
@@ -1998,7 +1998,7 @@ void inc_queue_paint_count( struct thread *thread, int incr )
 void queue_cleanup_window( struct thread *thread, user_handle_t win )
 {
     struct msg_queue *queue = thread->queue;
-    struct list *ptr;
+    struct list_head *ptr;
     int i;
 
     if (!queue) return;
@@ -2008,7 +2008,7 @@ void queue_cleanup_window( struct thread *thread, user_handle_t win )
     ptr = list_head( &queue->pending_timers );
     while (ptr)
     {
-        struct list *next = list_next( &queue->pending_timers, ptr );
+        struct list_head *next = list_next( &queue->pending_timers, ptr );
         struct timer *timer = LIST_ENTRY( ptr, struct timer, entry );
         if (timer->win == win) free_timer( queue, timer );
         ptr = next;
@@ -2016,7 +2016,7 @@ void queue_cleanup_window( struct thread *thread, user_handle_t win )
     ptr = list_head( &queue->expired_timers );
     while (ptr)
     {
-        struct list *next = list_next( &queue->expired_timers, ptr );
+        struct list_head *next = list_next( &queue->expired_timers, ptr );
         struct timer *timer = LIST_ENTRY( ptr, struct timer, entry );
         if (timer->win == win) free_timer( queue, timer );
         ptr = next;
@@ -2025,7 +2025,7 @@ void queue_cleanup_window( struct thread *thread, user_handle_t win )
     /* remove messages */
     for (i = 0; i < NB_MSG_KINDS; i++)
     {
-        struct list *ptr, *next;
+        struct list_head *ptr, *next;
 
         LIST_FOR_EACH_SAFE( ptr, next, &queue->msg_list[i] )
         {
@@ -2361,7 +2361,7 @@ DECL_HANDLER(post_quit_message)
 DECL_HANDLER(get_message)
 {
     struct timer *timer;
-    struct list *ptr;
+    struct list_head *ptr;
     struct msg_queue *queue = get_current_queue();
     user_handle_t get_win = get_user_full_handle( req->get_win );
     unsigned int filter = req->flags >> 16;
@@ -2471,7 +2471,7 @@ DECL_HANDLER(accept_hardware_message)
 DECL_HANDLER(get_message_reply)
 {
     struct message_result *result;
-    struct list *entry;
+    struct list_head *entry;
     struct msg_queue *queue = current_thread->queue;
 
     if (queue)

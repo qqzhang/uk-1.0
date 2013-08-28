@@ -42,7 +42,7 @@
 
 struct object_name
 {
-    struct list         entry;           /* entry in the hash list */
+    struct list_head         entry;           /* entry in the hash list */
     struct object      *obj;             /* object owning this name */
     struct object      *parent;          /* parent object */
     data_size_t         len;             /* name length in bytes */
@@ -52,17 +52,17 @@ struct object_name
 struct namespace
 {
     unsigned int        hash_size;       /* size of hash table */
-    struct list         names[1];        /* array of hash entry lists */
+    struct list_head         names[1];        /* array of hash entry lists */
 };
 
 
 #ifdef DEBUG_OBJECTS
-static struct list object_list = LIST_INIT(object_list);
-static struct list static_object_list = LIST_INIT(static_object_list);
+static struct list_head object_list = LIST_INIT(object_list);
+static struct list_head static_object_list = LIST_INIT(static_object_list);
 
 void dump_objects(void)
 {
-    struct list *p;
+    struct list_head *p;
 
     LIST_FOR_EACH( p, &static_object_list )
     {
@@ -80,7 +80,7 @@ void dump_objects(void)
 
 void close_objects(void)
 {
-    struct list *ptr;
+    struct list_head *ptr;
 
     /* release the static objects */
     while ((ptr = list_head( &static_object_list )))
@@ -88,7 +88,7 @@ void close_objects(void)
         struct object *obj = LIST_ENTRY( ptr, struct object, obj_list );
         /* move it back to the standard list before freeing */
         list_remove( &obj->obj_list );
-        list_add_head( &object_list, &obj->obj_list );
+        wine_list_add_head( &object_list, &obj->obj_list );
         release_object( obj );
     }
 
@@ -157,7 +157,7 @@ static void set_object_name( struct namespace *namespace,
 {
     int hash = get_name_hash( namespace, ptr->name, ptr->len );
 
-    list_add_head( &namespace->names[hash], &ptr->entry );
+    wine_list_add_head( &namespace->names[hash], &ptr->entry );
     ptr->obj = obj;
     obj->name = ptr;
 }
@@ -212,7 +212,7 @@ void *alloc_object( const struct object_ops *ops )
         obj->sd       = NULL;
         list_init( &obj->wait_queue );
 #ifdef DEBUG_OBJECTS
-        list_add_head( &object_list, &obj->obj_list );
+        wine_list_add_head( &object_list, &obj->obj_list );
 #endif
         return obj;
     }
@@ -286,7 +286,7 @@ void make_object_static( struct object *obj )
 {
 #ifdef DEBUG_OBJECTS
     list_remove( &obj->obj_list );
-    list_add_head( &static_object_list, &obj->obj_list );
+    wine_list_add_head( &static_object_list, &obj->obj_list );
 #endif
 }
 
@@ -323,8 +323,8 @@ void release_object( void *ptr )
 struct object *find_object( const struct namespace *namespace, const struct unicode_str *name,
                             unsigned int attributes )
 {
-    const struct list *list;
-    struct list *p;
+    const struct list_head *list;
+    struct list_head *p;
 
     if (!name || !name->len) return NULL;
 

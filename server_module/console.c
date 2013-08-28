@@ -124,7 +124,7 @@ static const struct object_ops console_input_events_ops =
 struct screen_buffer
 {
     struct object         obj;           /* object header */
-    struct list           entry;         /* entry in list of all screen buffers */
+    struct list_head           entry;         /* entry in list of all screen buffers */
     struct console_input *input;         /* associated console input */
     int                   mode;          /* output mode */
     int                   cursor_size;   /* size of cursor (percentage filled) */
@@ -180,7 +180,7 @@ static const struct fd_ops console_fd_ops =
     default_fd_cancel_async       /* cancel_async */
 };
 
-static struct list screen_buffer_list = LIST_INIT(screen_buffer_list);
+static struct list_head screen_buffer_list = LIST_INIT(screen_buffer_list);
 
 static const char_info_t empty_char_info = { ' ', 0x000f };  /* white on black space */
 
@@ -415,7 +415,7 @@ static struct screen_buffer *create_console_output( struct console_input *consol
         allow_fd_caching(screen_buffer->fd);
     }
 
-    list_add_head( &screen_buffer_list, &screen_buffer->entry );
+    wine_list_add_head( &screen_buffer_list, &screen_buffer->entry );
 
     if (!(screen_buffer->data = malloc( screen_buffer->width * screen_buffer->height *
                                         sizeof(*screen_buffer->data) )))

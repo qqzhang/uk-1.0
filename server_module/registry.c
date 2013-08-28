@@ -56,7 +56,7 @@
 
 struct notify
 {
-    struct list       entry;    /* entry in list of notifications */
+    struct list_head       entry;    /* entry in list of notifications */
     struct event     *event;    /* event to set when changing this key */
     int               subtree;  /* true if subtree notification */
     unsigned int      filter;   /* which events to notify on */
@@ -81,7 +81,7 @@ struct reg_key
     struct reg_key_value *values;      /* values array */
     unsigned int      flags;       /* flags */
     timeout_t         modif;       /* last modification time */
-    struct list       notify_list; /* list of notifications */
+    struct list_head       notify_list; /* list of notifications */
 };
 
 /* key flags */
@@ -405,7 +405,7 @@ static int key_close_handle( struct object *obj, struct process *process, obj_ha
 static void key_destroy( struct object *obj )
 {
     int i;
-    struct list *ptr;
+    struct list_head *ptr;
     struct reg_key *key = (struct reg_key *)obj;
     assert( obj->ops == &key_ops );
 
@@ -526,7 +526,7 @@ static void make_clean( struct reg_key *key )
 /* go through all the notifications and send them if necessary */
 static void check_notify( struct reg_key *key, unsigned int change, int not_subtree )
 {
-    struct list *ptr, *next;
+    struct list_head *ptr, *next;
 
     LIST_FOR_EACH_SAFE( ptr, next, &key->notify_list )
     {
@@ -2239,7 +2239,7 @@ DECL_HANDLER(set_registry_notification)
                     notify->filter  = req->filter;
                     notify->hkey    = req->hkey;
                     notify->process = current_thread->process;
-                    list_add_head( &key->notify_list, &notify->entry );
+                    wine_list_add_head( &key->notify_list, &notify->entry );
                 }
             }
             release_object( event );

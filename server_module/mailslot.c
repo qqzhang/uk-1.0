@@ -59,7 +59,7 @@ struct mailslot
     int                 write_fd;
     unsigned int        max_msgsize;
     timeout_t           read_timeout;
-    struct list         writers;
+    struct list_head         writers;
 };
 
 /* mailslot functions */
@@ -111,7 +111,7 @@ struct mail_writer
     struct object         obj;
     struct fd            *fd;
     struct mailslot      *mailslot;
-    struct list           entry;
+    struct list_head           entry;
     unsigned int          access;
     unsigned int          sharing;
 };
@@ -290,7 +290,7 @@ static struct object *mailslot_open_file( struct object *obj, unsigned int acces
     writer->mailslot = mailslot;
     writer->access   = mail_writer_map_access( &writer->obj, access );
     writer->sharing  = sharing;
-    list_add_head( &mailslot->writers, &writer->entry );
+    wine_list_add_head( &mailslot->writers, &writer->entry );
 
     if (!(writer->fd = create_anonymous_fd( &mail_writer_fd_ops, unix_fd, &writer->obj, options )))
     {

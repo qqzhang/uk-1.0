@@ -51,7 +51,7 @@
 
 /* process structure */
 
-static struct list process_list = LIST_INIT(process_list);
+static struct list_head process_list = LIST_INIT(process_list);
 static int running_processes, user_processes;
 static struct event *shutdown_event;           /* signaled when shutdown starts */
 static struct timeout_user *shutdown_timeout;  /* timeout for server shutdown */
@@ -212,7 +212,7 @@ void *get_ptid_entry( unsigned int id )
 /* return the main thread of the process */
 struct thread *get_process_first_thread( struct process *process )
 {
-    struct list *ptr = list_head( &process->thread_list );
+    struct list_head *ptr = list_head( &process->thread_list );
     if (!ptr) return NULL;
     return LIST_ENTRY( ptr, struct thread, proc_entry );
 }
@@ -623,7 +623,7 @@ void kill_console_processes( struct thread *renderer, int exit_code )
 /* a process has been killed (i.e. its last thread died) */
 static void process_killed( struct process *process )
 {
-    struct list *ptr;
+    struct list_head *ptr;
 
     assert( list_empty( &process->thread_list ));
     process->end_time = current_time;
@@ -706,7 +706,7 @@ void suspend_process( struct process *process )
 {
     if (!process->suspend++)
     {
-        struct list *ptr, *next;
+        struct list_head *ptr, *next;
 
         LIST_FOR_EACH_SAFE( ptr, next, &process->thread_list )
         {
@@ -722,7 +722,7 @@ void resume_process( struct process *process )
     assert (process->suspend > 0);
     if (!--process->suspend)
     {
-        struct list *ptr, *next;
+        struct list_head *ptr, *next;
 
         LIST_FOR_EACH_SAFE( ptr, next, &process->thread_list )
         {
@@ -752,7 +752,7 @@ void kill_process( struct process *process, int violent_death )
     if (violent_death) terminate_process( process, NULL, 1 );
     else
     {
-        struct list *ptr;
+        struct list_head *ptr;
 
         grab_object( process );  /* make sure it doesn't get freed when threads die */
         while ((ptr = list_head( &process->thread_list )))
@@ -823,7 +823,7 @@ void detach_debugged_processes( struct thread *debugger )
 
 void enum_processes( int (*cb)(struct process*, void*), void *user )
 {
-    struct list *ptr, *next;
+    struct list_head *ptr, *next;
 
     LIST_FOR_EACH_SAFE( ptr, next, &process_list )
     {
@@ -1056,7 +1056,7 @@ DECL_HANDLER(init_process_done)
 
     /* main exe is the first in the dll list */
     list_remove( &dll->entry );
-    list_add_head( &process->dlls, &dll->entry );
+    wine_list_add_head( &process->dlls, &dll->entry );
 
     process->ldt_copy = req->ldt_copy;
 

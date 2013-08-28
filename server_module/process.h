@@ -34,7 +34,7 @@ enum startup_state { STARTUP_IN_PROGRESS, STARTUP_DONE, STARTUP_ABORTED };
 
 struct process_dll
 {
-    struct list          entry;           /* entry in per-process dll list */
+    struct list_head          entry;           /* entry in per-process dll list */
     struct mapping      *mapping;         /* dll file */
     mod_handle_t         base;            /* dll base address (in process addr space) */
     client_ptr_t         name;            /* ptr to ptr to name (in process addr space) */
@@ -47,16 +47,16 @@ struct process_dll
 
 struct rawinput_device_entry
 {
-    struct list            entry;
+    struct list_head            entry;
     struct rawinput_device device;
 };
 
 struct process
 {
     struct object        obj;             /* object header */
-    struct list          entry;           /* entry in system-wide process list */
+    struct list_head          entry;           /* entry in system-wide process list */
     struct process      *parent;          /* parent process */
-    struct list          thread_list;     /* thread list */
+    struct list_head          thread_list;     /* thread list */
     struct thread       *debugger;        /* thread debugging this process */
     struct handle_table *handles;         /* handle entries */
     struct fd           *msg_fd;          /* fd for sendmsg/recvmsg */
@@ -75,8 +75,8 @@ struct process
     unsigned int         is_system:1;     /* is it a system process? */
     unsigned int         debug_children:1;/* also debug all child processes */
     unsigned int         is_terminating:1;/* is process terminating? */
-    struct list          locks;           /* list of file locks owned by the process */
-    struct list          classes;         /* window classes owned by the process */
+    struct list_head          locks;           /* list of file locks owned by the process */
+    struct list_head          classes;         /* window classes owned by the process */
     struct console_input*console;         /* console input */
     enum startup_state   startup_state;   /* startup state */
     struct startup_info *startup_info;    /* startup info while init is in progress */
@@ -84,11 +84,11 @@ struct process
     obj_handle_t         winstation;      /* main handle to process window station */
     obj_handle_t         desktop;         /* handle to desktop to use for new threads */
     struct token        *token;           /* security token associated with this process */
-    struct list          dlls;            /* list of loaded dlls */
+    struct list_head          dlls;            /* list of loaded dlls */
     client_ptr_t         peb;             /* PEB address in client address space */
     client_ptr_t         ldt_copy;        /* pointer to LDT copy in client addr space */
     unsigned int         trace_data;      /* opaque data used by the process tracing mechanism */
-    struct list          rawinput_devices;/* list of registered rawinput devices */
+    struct list_head          rawinput_devices;/* list of registered rawinput devices */
     const struct rawinput_device *rawinput_mouse; /* rawinput mouse device, if any */
     const struct rawinput_device *rawinput_kbd;   /* rawinput keyboard device, if any */
 };
@@ -163,7 +163,7 @@ static inline int is_process_init_done( struct process *process )
 
 static inline struct process_dll *get_process_exe_module( struct process *process )
 {
-    struct list *ptr = list_head( &process->dlls );
+    struct list_head *ptr = list_head( &process->dlls );
     return ptr ? LIST_ENTRY( ptr, struct process_dll, entry ) : NULL;
 }
 

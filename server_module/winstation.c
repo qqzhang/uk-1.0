@@ -41,7 +41,7 @@
 #include "wine/unicode.h"
 
 
-static struct list winstation_list = LIST_INIT(winstation_list);
+static struct list_head winstation_list = LIST_INIT(winstation_list);
 static struct namespace *winstation_namespace;
 
 static void winstation_dump( struct object *obj, int verbose );

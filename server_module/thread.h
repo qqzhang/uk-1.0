@@ -52,18 +52,18 @@ struct inflight_fd
 struct thread
 {
     struct object          obj;           /* object header */
-    struct list            entry;         /* entry in system-wide thread list */
-    struct list            proc_entry;    /* entry in per-process thread list */
+    struct list_head            entry;         /* entry in system-wide thread list */
+    struct list_head            proc_entry;    /* entry in per-process thread list */
     struct process        *process;
     thread_id_t            id;            /* thread id */
-    struct list            mutex_list;    /* list of currently owned mutexes */
+    struct list_head            mutex_list;    /* list of currently owned mutexes */
     struct debug_ctx      *debug_ctx;     /* debugger context if this thread is a debugger */
     struct debug_event    *debug_event;   /* debug event being sent to debugger */
     int                    debug_break;   /* debug breakpoint pending? */
     struct msg_queue      *queue;         /* message queue */
     struct thread_wait    *wait;          /* current_thread wait condition if sleeping */
-    struct list            system_apc;    /* queue of system async procedure calls */
-    struct list            user_apc;      /* queue of user async procedure calls */
+    struct list_head            system_apc;    /* queue of system async procedure calls */
+    struct list_head            user_apc;      /* queue of user async procedure calls */
     struct inflight_fd     inflight[MAX_INFLIGHT_FDS];  /* fds currently in flight */
     unsigned int           error;         /* current_thread error code */
     union generic_request  req;           /* current_thread request */

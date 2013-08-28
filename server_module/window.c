@@ -59,9 +59,9 @@ struct window
 {
     struct window   *parent;          /* parent window */
     user_handle_t    owner;           /* owner of this window */
-    struct list      children;        /* list of children in Z-order */
-    struct list      unlinked;        /* list of children not linked in the Z-order list */
-    struct list      entry;           /* entry in parent's children list */
+    struct list_head      children;        /* list of children in Z-order */
+    struct list_head      unlinked;        /* list of children not linked in the Z-order list */
+    struct list_head      entry;           /* entry in parent's children list */
     user_handle_t    handle;          /* full handle for this window */
     struct thread   *thread;          /* thread owning the window */
     struct desktop  *desktop;         /* desktop that the window belongs to */
@@ -141,28 +141,28 @@ static inline int is_desktop_window( const struct window *win )
 /* get next window in Z-order list */
 static inline struct window *get_next_window( struct window *win )
 {
-    struct list *ptr = list_next( &win->parent->children, &win->entry );
+    struct list_head *ptr = list_next( &win->parent->children, &win->entry );
     return ptr ? LIST_ENTRY( ptr, struct window, entry ) : NULL;
 }
 
 /* get previous window in Z-order list */
 static inline struct window *get_prev_window( struct window *win )
 {
-    struct list *ptr = list_prev( &win->parent->children, &win->entry );
+    struct list_head *ptr = list_prev( &win->parent->children, &win->entry );
     return ptr ? LIST_ENTRY( ptr, struct window, entry ) : NULL;
 }
 
 /* get first child in Z-order list */
 static inline struct window *get_first_child( struct window *win )
 {
-    struct list *ptr = list_head( &win->children );
+    struct list_head *ptr = list_head( &win->children );
     return ptr ? LIST_ENTRY( ptr, struct window, entry ) : NULL;
 }
 
 /* get last child in Z-order list */
 static inline struct window *get_last_child( struct window *win )
 {
-    struct list *ptr = list_tail( &win->children );
+    struct list_head *ptr = list_tail( &win->children );
     return ptr ? LIST_ENTRY( ptr, struct window, entry ) : NULL;
 }
 
@@ -193,12 +193,12 @@ static void link_window( struct window *win, struct window *previous )
     }
     else if (previous == WINPTR_TOPMOST)
     {
-        list_add_head( &win->parent->children, &win->entry );
+        wine_list_add_head( &win->parent->children, &win->entry );
         win->ex_style |= WS_EX_TOPMOST;
     }
     else if (previous == WINPTR_TOP)
     {
-        struct list *entry = win->parent->children.next;
+        struct list_head *entry = win->parent->children.next;
         if (!(win->ex_style & WS_EX_TOPMOST))  /* put it above the first non-topmost window */
         {
             while (entry != &win->parent->children)
@@ -213,7 +213,7 @@ static void link_window( struct window *win, struct window *previous )
                 entry = entry->next;
             }
         }
-        list_add_before( entry, &win->entry );
+        wine_list_add_before( entry, &win->entry );
     }
     else
     {
@@ -260,7 +260,7 @@ static int set_parent_window( struct window *win, struct window *parent )
     else  /* move it to parent unlinked list */
     {
         list_remove( &win->entry );  /* unlink it from the previous location */
-        list_add_head( &win->parent->unlinked, &win->entry );
+        wine_list_add_head( &win->parent->unlinked, &win->entry );
         win->is_linked = 0;
     }
     return 1;
@@ -509,7 +509,7 @@ static struct window *create_window( struct window *parent, struct window *owner
     }
 
     /* put it on parent unlinked list */
-    if (parent) list_add_head( &parent->unlinked, &win->entry );
+    if (parent) wine_list_add_head( &parent->unlinked, &win->entry );
     else
     {
         list_init( &win->entry );
@@ -2605,7 +2605,7 @@ DECL_HANDLER(update_window_zorder)
         if (!(ptr->ex_style & WS_EX_TOPMOST) || (win->ex_style & WS_EX_TOPMOST))
         {
             list_remove( &win->entry );
-            list_add_before( &ptr->entry, &win->entry );
+            wine_list_add_before( &ptr->entry, &win->entry );
         }
         break;
     }

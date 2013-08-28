@@ -108,8 +108,8 @@ struct token
     struct object  obj;             /* object header */
     luid_t         token_id;        /* system-unique id of token */
     luid_t         modified_id;     /* new id allocated every time token is modified */
-    struct list    privileges;      /* privileges available to the token */
-    struct list    groups;          /* groups that the user of this token belongs to (sid_and_attributes) */
+    struct list_head    privileges;      /* privileges available to the token */
+    struct list_head    groups;          /* groups that the user of this token belongs to (sid_and_attributes) */
     SID           *user;            /* SID of user this token represents */
     SID           *primary_group;   /* SID of user's primary group */
     unsigned       primary;         /* is this a primary or impersonation token? */
@@ -120,7 +120,7 @@ struct token
 
 struct privilege
 {
-    struct list entry;
+    struct list_head entry;
     LUID        luid;
     unsigned    enabled  : 1; /* is the privilege currently enabled? */
     unsigned    def      : 1; /* is the privilege enabled by default? */
@@ -128,7 +128,7 @@ struct privilege
 
 struct group
 {
-    struct list entry;
+    struct list_head entry;
     unsigned    enabled  : 1; /* is the sid currently enabled? */
     unsigned    def      : 1; /* is the sid enabled by default? */
     unsigned    logon    : 1; /* is this a logon sid? */
@@ -409,7 +409,7 @@ static inline void privilege_remove( struct privilege *privilege )
 static void token_destroy( struct object *obj )
 {
     struct token* token;
-    struct list *cursor, *cursor_next;
+    struct list_head *cursor, *cursor_next;
 
     assert( obj->ops == &token_ops );
     token = (struct token *)obj;

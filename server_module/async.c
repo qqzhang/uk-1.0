@@ -36,7 +36,7 @@ struct async
 {
     struct object        obj;             /* object header */
     struct thread       *thread;          /* owning thread */
-    struct list          queue_entry;     /* entry in async queue list */
+    struct list_head          queue_entry;     /* entry in async queue list */
     struct async_queue  *queue;           /* queue containing this async */
     unsigned int         status;          /* current_thread status */
     struct timeout_user *timeout;
@@ -75,7 +75,7 @@ struct async_queue
     struct fd           *fd;              /* file descriptor owning this queue */
     struct uk_completion   *completion;      /* completion associated with a recently closed file descriptor */
     apc_param_t          comp_key;        /* completion key associated with a recently closed file descriptor */
-    struct list          queue;           /* queue of async objects */
+    struct list_head          queue;           /* queue of async objects */
 };
 
 static void async_queue_dump( struct object *obj, int verbose );
@@ -312,7 +312,7 @@ int async_queued( struct async_queue *queue )
 /* check if an async operation is waiting to be alerted */
 int async_waiting( struct async_queue *queue )
 {
-    struct list *ptr;
+    struct list_head *ptr;
     struct async *async;
 
     if (!queue) return 0;
@@ -324,7 +324,7 @@ int async_waiting( struct async_queue *queue )
 int async_wake_up_by( struct async_queue *queue, struct process *process,
                       struct thread *thread, client_ptr_t iosb, unsigned int status )
 {
-    struct list *ptr, *next;
+    struct list_head *ptr, *next;
     int woken = 0;
 
     if (!queue || (!process && !thread && !iosb)) return 0;
@@ -346,7 +346,7 @@ int async_wake_up_by( struct async_queue *queue, struct process *process,
 /* wake up async operations on the queue */
 void async_wake_up( struct async_queue *queue, unsigned int status )
 {
-    struct list *ptr, *next;
+    struct list_head *ptr, *next;
 
     if (!queue) return;
 

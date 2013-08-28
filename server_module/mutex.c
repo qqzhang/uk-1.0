@@ -42,7 +42,7 @@ struct uk_mutex
     struct thread *owner;           /* mutex owner */
     unsigned int   count;           /* recursion count */
     int            abandoned;       /* has it been abandoned? */
-    struct list    entry;           /* entry in owner thread mutex list */
+    struct list_head    entry;           /* entry in owner thread mutex list */
 };
 
 static void mutex_dump( struct object *obj, int verbose );
@@ -109,7 +109,7 @@ static void do_release( struct uk_mutex *mutex )
 
 void abandon_mutexes( struct thread *thread )
 {
-    struct list *ptr;
+    struct list_head *ptr;
 
     while ((ptr = list_head( &thread->mutex_list )) != NULL)
     {
@@ -154,7 +154,7 @@ static int mutex_satisfied( struct object *obj, struct thread *thread )
     {
         assert( !mutex->owner );
         mutex->owner = thread;
-        list_add_head( &thread->mutex_list, &mutex->entry );
+        wine_list_add_head( &thread->mutex_list, &mutex->entry );
     }
     if (!mutex->abandoned) return 0;
     mutex->abandoned = 0;

@@ -70,7 +70,7 @@ struct pipe_server
     struct object        obj;        /* object header */
     struct fd           *fd;         /* pipe file descriptor */
     struct fd           *ioctl_fd;   /* file descriptor for ioctls when not connected */
-    struct list          entry;      /* entry in named pipe servers list */
+    struct list_head          entry;      /* entry in named pipe servers list */
     enum pipe_state      state;      /* server state */
     struct pipe_client  *client;     /* client that this server is connected to */
     struct named_pipe   *pipe;
@@ -97,7 +97,7 @@ struct named_pipe
     unsigned int        insize;
     unsigned int        instances;
     timeout_t           timeout;
-    struct list         servers;     /* list of servers using this pipe */
+    struct list_head         servers;     /* list of servers using this pipe */
     struct async_queue *waiters;     /* list of clients waiting to connect */
 };
 
@@ -751,7 +751,7 @@ static struct pipe_server *create_pipe_server( struct named_pipe *pipe, unsigned
     server->flush_poll = NULL;
     server->options = options;
 
-    list_add_head( &pipe->servers, &server->entry );
+    wine_list_add_head( &pipe->servers, &server->entry );
     grab_object( pipe );
     if (!(server->ioctl_fd = alloc_pseudo_fd( &pipe_server_fd_ops, &server->obj, options )))
     {
