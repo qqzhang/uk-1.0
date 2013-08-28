@@ -1,6 +1,9 @@
 #ifndef _SYS_TIME_H
 #define _SYS_TIME_H
 
+#include <linux/time.h>
+
+#if 0
 struct timeval {
     long    tv_sec;         /* seconds */
     long    tv_usec;        /* microseconds */
@@ -23,5 +26,6 @@ struct timezone {
 #define CLOCK_MONOTONIC_RAW		4
 #define CLOCK_REALTIME_COARSE		5
 #define CLOCK_MONOTONIC_COARSE		6
+#endif
 
 #endif

@@ -13,8 +13,8 @@
 
 
 /*typedef*/
-typedef void __signalfn_t(int);
-typedef __signalfn_t* __sighandler_t;
+//typedef void __signalfn_t(int);
+//typedef __signalfn_t* __sighandler_t;
 
 /*for major*/
 unsigned int gnu_dev_major (unsigned long long int dev);
@@ -27,7 +27,7 @@ unsigned long long int gnu_dev_makedev (unsigned int major, unsigned int minor);
 
 /*struct define*/
 
-typedef unsigned long sigset_t;
+//typedef unsigned long sigset_t;
 typedef unsigned int socklen_t;
 
 #define __fsid_t		struct { int __val[2]; }
@@ -55,11 +55,13 @@ struct statfs
     pid_t l_pid;	/* Process holding the lock.  */
   };
 
+#if 0
 typedef union sigval
   {
     int sival_int;
     void *sival_ptr;
   } sigval_t;
+#endif
 
 #define __SI_MAX_SIZE     128
 #define __SI_PAD_SIZE     ((__SI_MAX_SIZE / sizeof (int)) - 3)
@@ -68,6 +70,7 @@ typedef union sigval
 #define __uid_t int 
 #define __clock_t int 
 
+#if 0
 typedef struct siginfo
   {
     int si_signo;		/* Signal number.  */
@@ -154,6 +157,7 @@ struct sigaction {
 #define SIG_DFL	((__force __sighandler_t)0)	/* default signal handling */
 #define SIG_IGN	((__force __sighandler_t)1)	/* ignore signal */
 #define SIG_ERR	((__force __sighandler_t)-1)	/* error return from signal */
+#endif
 
 /*unistd*/
 
@@ -186,7 +190,7 @@ int sigaction(int signum, const struct sigaction *act,
 //int sigaddset(sigset_t *set, int signum);
 //int sigdelset(sigset_t *set, int signum);
 //int sigismember(const sigset_t *set, int signum);
-int sigprocmask(int how, const sigset_t *set, sigset_t *oldset);
+//int sigprocmask(int how, const sigset_t *set, sigset_t *oldset);
 
 
 int inotify_init(void);
@@ -271,10 +275,12 @@ int poll(struct pollfd *pfds, unsigned int nfds, long timeout_msecs);
 
 //int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout);
 int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, void *timeout);
+#if 0
 void FD_CLR(int fd, fd_set *set);
 int  FD_ISSET(int fd, fd_set *set);
 void FD_SET(int fd, fd_set *set);
 void FD_ZERO(fd_set *set);
+#endif
 
 void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
 int munmap(void *addr, size_t length);
@@ -285,11 +291,15 @@ pid_t wait(int *status);
 pid_t waitpid(pid_t pid, int *status, int options);
 
 
-long ptrace(enum __ptrace_request request, ...);
+//long ptrace(enum __ptrace_request request, ...);
+long ptrace(int request, ...);
 long sysconf(int name);
 
-#define __NR_tkill 131
-#define __NR_tgkill 131
+//#define __NR_tkill 130
+//#define __NR_tgkill 131
 int syscall(int number, ...);
+
+/* sys/resource.h*/
+int getrlimit(int resource, struct rlimit *rlim);
 
 #endif

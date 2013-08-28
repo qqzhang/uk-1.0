@@ -1,6 +1,9 @@
 #ifndef _SIGNAL_H_
 #define _SIGNAL_H_
 
+#include <linux/signal.h>
+
+#if 0
 #define SIGHUP		 1
 #define SIGINT		 2
 #define SIGQUIT		 3
@@ -65,6 +68,8 @@
 #endif
 #ifndef SIG_SETMASK
 #define SIG_SETMASK        2	/* for setting the signal mask */
+#endif
+
 #endif
 
 #endif

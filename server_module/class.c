@@ -69,7 +69,7 @@ static struct window_class *create_class( struct process *process, int extra_byt
 
     /* local classes have priority so we put them first in the list */
     if (local) list_add_head( &process->classes, &class->entry );
-    else list_add_tail( &process->classes, &class->entry );
+    else wine_list_add_tail( &process->classes, &class->entry );
     return class;
 }
 

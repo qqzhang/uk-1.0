@@ -121,7 +121,7 @@ static struct winstation *create_winstation( const struct unicode_str *name, uns
             winstation->flags = flags;
             winstation->clipboard = NULL;
             winstation->atom_table = NULL;
-            list_add_tail( &winstation_list, &winstation->entry );
+            wine_list_add_tail( &winstation_list, &winstation->entry );
             list_init( &winstation->desktops );
         }
     }
@@ -234,7 +234,7 @@ static struct desktop *create_desktop( const struct unicode_str *name, unsigned 
             desktop->users = 0;
             memset( &desktop->cursor, 0, sizeof(desktop->cursor) );
             memset( desktop->keystate, 0, sizeof(desktop->keystate) );
-            list_add_tail( &winstation->desktops, &desktop->entry );
+            wine_list_add_tail( &winstation->desktops, &desktop->entry );
             list_init( &desktop->hotkeys );
         }
     }

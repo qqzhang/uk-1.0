@@ -36,7 +36,7 @@
 #include "request.h"
 #include "security.h"
 
-struct mutex
+struct uk_mutex
 {
     struct object  obj;             /* object header */
     struct thread *owner;           /* mutex owner */
@@ -50,12 +50,12 @@ static struct object_type *mutex_get_type( struct object *obj );
 static int mutex_signaled( struct object *obj, struct thread *thread );
 static int mutex_satisfied( struct object *obj, struct thread *thread );
 static unsigned int mutex_map_access( struct object *obj, unsigned int access );
-static void mutex_destroy( struct object *obj );
+static void uk_mutex_destroy( struct object *obj );
 static int mutex_signal( struct object *obj, unsigned int access );
 
 static const struct object_ops mutex_ops =
 {
-    sizeof(struct mutex),      /* size */
+    sizeof(struct uk_mutex),      /* size */
     mutex_dump,                /* dump */
     mutex_get_type,            /* get_type */
     add_queue,                 /* add_queue */
@@ -70,14 +70,14 @@ static const struct object_ops mutex_ops =
     no_lookup_name,            /* lookup_name */
     no_open_file,              /* open_file */
     no_close_handle,           /* close_handle */
-    mutex_destroy              /* destroy */
+    uk_mutex_destroy              /* destroy */
 };
 
 
-static struct mutex *create_mutex( struct directory *root, const struct unicode_str *name,
+static struct uk_mutex *create_mutex( struct directory *root, const struct unicode_str *name,
                                    unsigned int attr, int owned, const struct security_descriptor *sd )
 {
-    struct mutex *mutex;
+    struct uk_mutex *mutex;
 
     if ((mutex = create_named_object_dir( root, name, attr, &mutex_ops )))
     {
@@ -98,13 +98,13 @@ static struct mutex *create_mutex( struct directory *root, const struct unicode_
 }
 
 /* release a mutex once the recursion count is 0 */
-static void do_release( struct mutex *mutex )
+static void do_release( struct uk_mutex *mutex )
 {
     assert( !mutex->count );
     /* remove the mutex from the thread list of owned mutexes */
     list_remove( &mutex->entry );
     mutex->owner = NULL;
-    wake_up( &mutex->obj, 0 );
+    uk_wake_up( &mutex->obj, 0 );
 }
 
 void abandon_mutexes( struct thread *thread )
@@ -113,7 +113,7 @@ void abandon_mutexes( struct thread *thread )
 
     while ((ptr = list_head( &thread->mutex_list )) != NULL)
     {
-        struct mutex *mutex = LIST_ENTRY( ptr, struct mutex, entry );
+        struct uk_mutex *mutex = LIST_ENTRY( ptr, struct uk_mutex, entry );
         assert( mutex->owner == thread );
         mutex->count = 0;
         mutex->abandoned = 1;
@@ -123,7 +123,7 @@ void abandon_mutexes( struct thread *thread )
 
 static void mutex_dump( struct object *obj, int verbose )
 {
-    struct mutex *mutex = (struct mutex *)obj;
+    struct uk_mutex *mutex = (struct uk_mutex *)obj;
     assert( obj->ops == &mutex_ops );
     fprintf( stderr, "Mutex count=%u owner=%p ", mutex->count, mutex->owner );
     dump_object_name( &mutex->obj );
@@ -139,14 +139,14 @@ static struct object_type *mutex_get_type( struct object *obj )
 
 static int mutex_signaled( struct object *obj, struct thread *thread )
 {
-    struct mutex *mutex = (struct mutex *)obj;
+    struct uk_mutex *mutex = (struct uk_mutex *)obj;
     assert( obj->ops == &mutex_ops );
     return (!mutex->count || (mutex->owner == thread));
 }
 
 static int mutex_satisfied( struct object *obj, struct thread *thread )
 {
-    struct mutex *mutex = (struct mutex *)obj;
+    struct uk_mutex *mutex = (struct uk_mutex *)obj;
     assert( obj->ops == &mutex_ops );
     assert( !mutex->count || (mutex->owner == thread) );
 
@@ -172,7 +172,7 @@ static unsigned int mutex_map_access( struct object *obj, unsigned int access )
 
 static int mutex_signal( struct object *obj, unsigned int access )
 {
-    struct mutex *mutex = (struct mutex *)obj;
+    struct uk_mutex *mutex = (struct uk_mutex *)obj;
     assert( obj->ops == &mutex_ops );
 
     if (!(access & SYNCHRONIZE))
@@ -189,9 +189,9 @@ static int mutex_signal( struct object *obj, unsigned int access )
     return 1;
 }
 
-static void mutex_destroy( struct object *obj )
+static void uk_mutex_destroy( struct object *obj )
 {
-    struct mutex *mutex = (struct mutex *)obj;
+    struct uk_mutex *mutex = (struct uk_mutex *)obj;
     assert( obj->ops == &mutex_ops );
 
     if (!mutex->count) return;
@@ -202,7 +202,7 @@ static void mutex_destroy( struct object *obj )
 /* create a mutex */
 DECL_HANDLER(create_mutex)
 {
-    struct mutex *mutex;
+    struct uk_mutex *mutex;
     struct unicode_str name;
     struct directory *root = NULL;
     const struct object_attributes *objattr = get_req_data();
@@ -236,7 +236,7 @@ DECL_HANDLER(open_mutex)
 {
     struct unicode_str name;
     struct directory *root = NULL;
-    struct mutex *mutex;
+    struct uk_mutex *mutex;
 
     get_req_unicode_str( &name );
     if (req->rootdir && !(root = get_directory_obj( current_thread->process, req->rootdir, 0 )))
@@ -254,9 +254,9 @@ DECL_HANDLER(open_mutex)
 /* release a mutex */
 DECL_HANDLER(release_mutex)
 {
-    struct mutex *mutex;
+    struct uk_mutex *mutex;
 
-    if ((mutex = (struct mutex *)get_handle_obj( current_thread->process, req->handle,
+    if ((mutex = (struct uk_mutex *)get_handle_obj( current_thread->process, req->handle,
                                                  0, &mutex_ops )))
     {
         if (!mutex->count || (mutex->owner != current_thread)) set_error( STATUS_MUTANT_NOT_OWNED );

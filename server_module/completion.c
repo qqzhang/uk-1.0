@@ -44,7 +44,7 @@
 #include "request.h"
 
 
-struct completion
+struct uk_completion
 {
     struct object  obj;
     struct list    queue;
@@ -59,7 +59,7 @@ static void completion_destroy( struct object * );
 
 static const struct object_ops completion_ops =
 {
-    sizeof(struct completion), /* size */
+    sizeof(struct uk_completion), /* size */
     completion_dump,           /* dump */
     completion_get_type,       /* get_type */
     add_queue,                 /* add_queue */
@@ -88,7 +88,7 @@ struct comp_msg
 
 static void completion_destroy( struct object *obj)
 {
-    struct completion *completion = (struct completion *) obj;
+    struct uk_completion *completion = (struct uk_completion *) obj;
     struct comp_msg *tmp, *next;
 
     LIST_FOR_EACH_ENTRY_SAFE( tmp, next, &completion->queue, struct comp_msg, queue_entry )
@@ -99,7 +99,7 @@ static void completion_destroy( struct object *obj)
 
 static void completion_dump( struct object *obj, int verbose )
 {
-    struct completion *completion = (struct completion *) obj;
+    struct uk_completion *completion = (struct uk_completion *) obj;
 
     assert( obj->ops == &completion_ops );
     fprintf( stderr, "Completion " );
@@ -116,7 +116,7 @@ static struct object_type *completion_get_type( struct object *obj )
 
 static int completion_signaled( struct object *obj, struct thread *thread )
 {
-    struct completion *completion = (struct completion *)obj;
+    struct uk_completion *completion = (struct uk_completion *)obj;
 
     return !list_empty( &completion->queue );
 }
@@ -130,9 +130,9 @@ static unsigned int completion_map_access( struct object *obj, unsigned int acce
     return access & ~(GENERIC_READ | GENERIC_WRITE | GENERIC_EXECUTE | GENERIC_ALL);
 }
 
-static struct completion *create_completion( struct directory *root, const struct unicode_str *name, unsigned int attr, unsigned int concurrent )
+static struct uk_completion *create_completion( struct directory *root, const struct unicode_str *name, unsigned int attr, unsigned int concurrent )
 {
-    struct completion *completion;
+    struct uk_completion *completion;
 
     if ((completion = create_named_object_dir( root, name, attr, &completion_ops )))
     {
@@ -146,12 +146,12 @@ static struct completion *create_completion( struct directory *root, const struc
     return completion;
 }
 
-struct completion *get_completion_obj( struct process *process, obj_handle_t handle, unsigned int access )
+struct uk_completion *get_completion_obj( struct process *process, obj_handle_t handle, unsigned int access )
 {
-    return (struct completion *) get_handle_obj( process, handle, access, &completion_ops );
+    return (struct uk_completion *) get_handle_obj( process, handle, access, &completion_ops );
 }
 
-void add_completion( struct completion *completion, apc_param_t ckey, apc_param_t cvalue,
+void add_completion( struct uk_completion *completion, apc_param_t ckey, apc_param_t cvalue,
                      unsigned int status, unsigned int information )
 {
     struct comp_msg *msg = mem_alloc( sizeof( *msg ) );
@@ -164,15 +164,15 @@ void add_completion( struct completion *completion, apc_param_t ckey, apc_param_
     msg->status = status;
     msg->information = information;
 
-    list_add_tail( &completion->queue, &msg->queue_entry );
+    wine_list_add_tail( &completion->queue, &msg->queue_entry );
     completion->depth++;
-    wake_up( &completion->obj, 1 );
+    uk_wake_up( &completion->obj, 1 );
 }
 
 /* create a completion */
 DECL_HANDLER(create_completion)
 {
-    struct completion *completion;
+    struct uk_completion *completion;
     struct unicode_str name;
     struct directory *root = NULL;
 
@@ -194,7 +194,7 @@ DECL_HANDLER(create_completion)
 /* open a completion */
 DECL_HANDLER(open_completion)
 {
-    struct completion *completion;
+    struct uk_completion *completion;
     struct unicode_str name;
     struct directory *root = NULL;
 
@@ -217,7 +217,7 @@ DECL_HANDLER(open_completion)
 /* add completion to completion port */
 DECL_HANDLER(add_completion)
 {
-    struct completion* completion = get_completion_obj( current_thread->process, req->handle, IO_COMPLETION_MODIFY_STATE );
+    struct uk_completion* completion = get_completion_obj( current_thread->process, req->handle, IO_COMPLETION_MODIFY_STATE );
 
     if (!completion) return;
 
@@ -229,7 +229,7 @@ DECL_HANDLER(add_completion)
 /* get completion from completion port */
 DECL_HANDLER(remove_completion)
 {
-    struct completion* completion = get_completion_obj( current_thread->process, req->handle, IO_COMPLETION_MODIFY_STATE );
+    struct uk_completion* completion = get_completion_obj( current_thread->process, req->handle, IO_COMPLETION_MODIFY_STATE );
     struct list *entry;
     struct comp_msg *msg;
 
@@ -256,7 +256,7 @@ DECL_HANDLER(remove_completion)
 /* get queue depth for completion port */
 DECL_HANDLER(query_completion)
 {
-    struct completion* completion = get_completion_obj( current_thread->process, req->handle, IO_COMPLETION_QUERY_STATE );
+    struct uk_completion* completion = get_completion_obj( current_thread->process, req->handle, IO_COMPLETION_QUERY_STATE );
 
     if (!completion) return;
 

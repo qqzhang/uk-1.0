@@ -1,6 +1,8 @@
 #ifndef _SYS_SOCKET_H_
 #define _SYS_SOCKET_H_
 
+#include <linux/uio.h>
+
 enum sock_type {
 	SOCK_STREAM	= 1,
 	SOCK_DGRAM	= 2,
@@ -223,13 +225,6 @@ enum sock_type {
 
 #define  __kernel_ssize_t long		
 typedef unsigned short	sa_family_t;
-
-
-struct iovec
-{
-	void __user *iov_base;	/* BSD uses caddr_t (1003.1g requires void *) */
-	__kernel_size_t iov_len; /* Must be size_t (1003.1g) */
-};
 
 struct msghdr {
 	void	*	msg_name;	/* Socket name			*/

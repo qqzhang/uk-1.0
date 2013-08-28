@@ -60,29 +60,6 @@
 #endif
 #endif
 
-#ifdef CONFIG_UNIFIED_KERNEL
-/*sigaddset, sigemptyset*/
-static inline int sigemptyset(sigset_t *set)
-{
-	if (set == NULL)
-	{
-		return -1;
-	}
-
-	memset (set, 0, sizeof (sigset_t));
-
-	return 0;
-}
-
-#define	__sigmask(sig)	(((sigset_t) 1) << ((sig) - 1))
-static inline int sigaddset (sigset_t *set, int sig)
-{
-	sigset_t mask = __sigmask (sig);
-	*set |= mask;
-	return 0;
-}
-#endif
-
 /* inotify support */
 
 #ifdef HAVE_SYS_INOTIFY_H
@@ -499,7 +476,7 @@ static struct inode *create_inode( dev_t dev, ino_t ino )
         inode->wd = -1;
         inode->parent = NULL;
         inode->name = NULL;
-        list_add_tail( get_hash_list( dev, ino ), &inode->ino_entry );
+        wine_list_add_tail( get_hash_list( dev, ino ), &inode->ino_entry );
     }
     return inode;
 }
@@ -519,7 +496,7 @@ static void inode_set_wd( struct inode *inode, int wd )
     if (inode->wd != -1)
         list_remove( &inode->wd_entry );
     inode->wd = wd;
-    list_add_tail( &wd_hash[ wd % HASH_SIZE ], &inode->wd_entry );
+    wine_list_add_tail( &wd_hash[ wd % HASH_SIZE ], &inode->wd_entry );
 }
 
 static void inode_set_name( struct inode *inode, const char *name )
@@ -586,7 +563,7 @@ static struct inode *inode_add( struct inode *parent,
  
     if (!inode->parent)
     {
-        list_add_tail( &parent->children, &inode->ch_entry );
+        wine_list_add_tail( &parent->children, &inode->ch_entry );
         inode->parent = parent;
         assert( inode != parent );
     }
@@ -644,7 +621,7 @@ static void inotify_do_change_notify( struct dir *dir, unsigned int action,
         memcpy( record->event.name, relpath, len );
         record->event.len = len;
 
-        list_add_tail( &dir->change_records, &record->entry );
+        wine_list_add_tail( &dir->change_records, &record->entry );
     }
 
     fd_async_wake_up( dir->fd, ASYNC_TYPE_WAIT, STATUS_ALERTED );
@@ -957,7 +934,7 @@ static int inotify_adjust_changes( struct dir *dir )
             inode = create_inode( st.st_dev, st.st_ino );
         if (!inode)
             return 0;
-        list_add_tail( &inode->dirs, &dir->in_entry );
+        wine_list_add_tail( &inode->dirs, &dir->in_entry );
         dir->inode = inode;
     }
 

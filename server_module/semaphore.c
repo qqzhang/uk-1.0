@@ -115,7 +115,7 @@ static int release_semaphore( struct semaphore *sem, unsigned int count,
     else
     {
         sem->count = count;
-        wake_up( &sem->obj, count );
+        uk_wake_up( &sem->obj, count );
     }
     return 1;
 }

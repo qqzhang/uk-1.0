@@ -421,7 +421,7 @@ static inline void set_queue_bits( struct msg_queue *queue, unsigned int bits )
 {
     queue->wake_bits |= bits;
     queue->changed_bits |= bits;
-    if (is_signaled( queue )) wake_up( &queue->obj, 0 );
+    if (is_signaled( queue )) uk_wake_up( &queue->obj, 0 );
 }
 
 /* clear some queue bits */
@@ -513,7 +513,7 @@ static int merge_message( struct thread_input *input, const struct message *msg 
         prev_data->info  = msg_data->info;
     }
     list_remove( ptr );
-    list_add_tail( &input->msg_list, ptr );
+    wine_list_add_tail( &input->msg_list, ptr );
     return 1;
 }
 
@@ -567,7 +567,7 @@ static void store_message_result( struct message_result *res, lparam_t result, u
             /* queue the callback message in the sender queue */
             struct callback_msg_data *data = res->callback_msg->data;
             data->result = result;
-            list_add_tail( &res->sender->msg_list[SEND_MESSAGE], &res->callback_msg->entry );
+            wine_list_add_tail( &res->sender->msg_list[SEND_MESSAGE], &res->callback_msg->entry );
             set_queue_bits( res->sender, QS_SENDMESSAGE );
             res->callback_msg = NULL;
             remove_result_from_sender( res );
@@ -977,7 +977,7 @@ static void msg_queue_poll_event( struct fd *fd, int event )
 
     if (event & (POLLERR | POLLHUP)) set_fd_events( fd, -1 );
     else set_fd_events( queue->fd, 0 );
-    wake_up( &queue->obj, 0 );
+    uk_wake_up( &queue->obj, 0 );
 }
 
 static void thread_input_dump( struct object *obj, int verbose )
@@ -1129,7 +1129,7 @@ static void timer_callback( void *private )
     /* move on to the next timer */
     ptr = list_head( &queue->pending_timers );
     list_remove( ptr );
-    list_add_tail( &queue->expired_timers, ptr );
+    wine_list_add_tail( &queue->expired_timers, ptr );
     set_next_timer( queue );
 }
 
@@ -1319,7 +1319,7 @@ static void release_hardware_message( struct msg_queue *queue, unsigned int hw_i
                     release_object( owner );
                     return;
                 }
-                list_add_tail( &owner->queue->input->msg_list, &msg->entry );
+                wine_list_add_tail( &owner->queue->input->msg_list, &msg->entry );
             }
             set_queue_bits( owner->queue, get_hardware_msg_bit( msg ));
             remove = 0;
@@ -1365,7 +1365,7 @@ found:
     msg->data      = NULL;
     msg->data_size = 0;
 
-    list_add_tail( &hotkey->queue->msg_list[POST_MESSAGE], &msg->entry );
+    wine_list_add_tail( &hotkey->queue->msg_list[POST_MESSAGE], &msg->entry );
     set_queue_bits( hotkey->queue, QS_POSTMESSAGE|QS_ALLPOSTMESSAGE|QS_HOTKEY );
     hotkey->queue->hotkey_count++;
     return 1;
@@ -1422,7 +1422,7 @@ static void update_rawinput_device(const struct rawinput_device *device)
     if (!(e = find_rawinput_device( device->usage_page, device->usage )))
     {
         if (!(e = mem_alloc( sizeof(*e) ))) return;
-        list_add_tail( &current_thread->process->rawinput_devices, &e->entry );
+        wine_list_add_tail( &current_thread->process->rawinput_devices, &e->entry );
     }
 
     if (device->flags & RIDEV_REMOVE)
@@ -1501,7 +1501,7 @@ static void queue_hardware_message( struct desktop *desktop, struct message *msg
     else
     {
         msg->unique_id = 0;  /* will be set once we return it to the app */
-        list_add_tail( &input->msg_list, &msg->entry );
+        wine_list_add_tail( &input->msg_list, &msg->entry );
         set_queue_bits( thread->queue, get_hardware_msg_bit(msg) );
     }
     release_object( thread );
@@ -1547,7 +1547,7 @@ static int send_hook_ll_message( struct desktop *desktop, struct message *hardwa
     }
     msg->result->hardware_msg = hardware_msg;
     msg->result->desktop = (struct desktop *)grab_object( desktop );
-    list_add_tail( &queue->msg_list[SEND_MESSAGE], &msg->entry );
+    wine_list_add_tail( &queue->msg_list[SEND_MESSAGE], &msg->entry );
     set_queue_bits( queue, QS_SENDMESSAGE );
     return 1;
 }
@@ -2065,7 +2065,7 @@ void post_message( user_handle_t win, unsigned int message, lparam_t wparam, lpa
         msg->data      = NULL;
         msg->data_size = 0;
 
-        list_add_tail( &thread->queue->msg_list[POST_MESSAGE], &msg->entry );
+        wine_list_add_tail( &thread->queue->msg_list[POST_MESSAGE], &msg->entry );
         set_queue_bits( thread->queue, QS_POSTMESSAGE|QS_ALLPOSTMESSAGE );
         if (message == WM_HOTKEY)
         {
@@ -2110,7 +2110,7 @@ void post_win_event( struct thread *thread, unsigned int event,
             if (debug_level > 1)
                 fprintf( stderr, "post_win_event: tid %04x event %04x win %08x object_id %d child_id %d\n",
                          get_thread_id(thread), event, win, object_id, child_id );
-            list_add_tail( &thread->queue->msg_list[SEND_MESSAGE], &msg->entry );
+            wine_list_add_tail( &thread->queue->msg_list[SEND_MESSAGE], &msg->entry );
             set_queue_bits( thread->queue, QS_SENDMESSAGE );
         }
         else
@@ -2199,7 +2199,7 @@ DECL_HANDLER(set_queue_mask)
         {
             /* if skip wait is set, do what would have been done in the subsequent wait */
             if (req->skip_wait) msg_queue_satisfied( &queue->obj, current_thread );
-            else wake_up( &queue->obj, 0 );
+            else uk_wake_up( &queue->obj, 0 );
         }
     }
 }
@@ -2274,11 +2274,11 @@ DECL_HANDLER(send_message)
             }
             /* fall through */
         case MSG_NOTIFY:
-            list_add_tail( &recv_queue->msg_list[SEND_MESSAGE], &msg->entry );
+            wine_list_add_tail( &recv_queue->msg_list[SEND_MESSAGE], &msg->entry );
             set_queue_bits( recv_queue, QS_SENDMESSAGE );
             break;
         case MSG_POSTED:
-            list_add_tail( &recv_queue->msg_list[POST_MESSAGE], &msg->entry );
+            wine_list_add_tail( &recv_queue->msg_list[POST_MESSAGE], &msg->entry );
             set_queue_bits( recv_queue, QS_POSTMESSAGE|QS_ALLPOSTMESSAGE );
             if (msg->msg == WM_HOTKEY)
             {
@@ -2655,7 +2655,7 @@ DECL_HANDLER(register_hotkey)
         new_hotkey = mem_alloc( sizeof(*new_hotkey) );
         if (new_hotkey)
         {
-            list_add_tail( &desktop->hotkeys, &new_hotkey->entry );
+            wine_list_add_tail( &desktop->hotkeys, &new_hotkey->entry );
             new_hotkey->queue  = current_thread->queue;
             new_hotkey->win    = win_handle;
             new_hotkey->id     = req->id;

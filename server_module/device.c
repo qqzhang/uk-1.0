@@ -236,7 +236,7 @@ static void set_ioctl_result( struct ioctl_call *ioctl, unsigned int status,
         release_object( ioctl->async );
         ioctl->async = NULL;
     }
-    wake_up( &ioctl->obj, 0 );
+    uk_wake_up( &ioctl->obj, 0 );
 
     if (status != STATUS_ALERTED)
     {
@@ -339,10 +339,10 @@ static obj_handle_t device_ioctl( struct fd *fd, ioctl_code_t code, const async_
         release_object( ioctl );
         return 0;
     }
-    list_add_tail( &device->requests, &ioctl->dev_entry );
-    list_add_tail( &device->manager->requests, &ioctl->mgr_entry );
+    wine_list_add_tail( &device->requests, &ioctl->dev_entry );
+    wine_list_add_tail( &device->manager->requests, &ioctl->mgr_entry );
     if (list_head( &device->manager->requests ) == &ioctl->mgr_entry)  /* first one */
-        wake_up( &device->manager->obj, 0 );
+        uk_wake_up( &device->manager->obj, 0 );
     /* don't release ioctl since it is now queued in the device */
     set_error( STATUS_PENDING );
     return handle;
@@ -359,7 +359,7 @@ static struct device *create_device( struct directory *root, const struct unicod
         {
             /* initialize it if it didn't already exist */
             device->manager = manager;
-            list_add_tail( &manager->devices, &device->entry );
+            wine_list_add_tail( &manager->devices, &device->entry );
             list_init( &device->requests );
             if (!(device->fd = alloc_pseudo_fd( &device_fd_ops, &device->obj, 0 )))
             {

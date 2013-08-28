@@ -47,7 +47,7 @@ struct ranges
 {
     unsigned int count;
     unsigned int max;
-    struct range
+    struct uk_range
     {
         file_pos_t  start;
         file_pos_t  end;
@@ -221,7 +221,7 @@ static inline void get_section_sizes( const IMAGE_SECTION_HEADER *sec, size_t *m
 static void add_committed_range( struct mapping *mapping, file_pos_t start, file_pos_t end )
 {
     unsigned int i, j;
-    struct range *ranges;
+    struct uk_range *ranges;
 
     if (!mapping->committed) return;  /* everything committed already */
 
@@ -268,7 +268,7 @@ static void add_committed_range( struct mapping *mapping, file_pos_t start, file
 static int find_committed_range( struct mapping *mapping, file_pos_t start, mem_size_t *size )
 {
     unsigned int i;
-    struct range *ranges;
+    struct uk_range *ranges;
 
     if (!mapping->committed)  /* everything is committed */
     {

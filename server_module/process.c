@@ -223,7 +223,7 @@ static void set_process_startup_state( struct process *process, enum startup_sta
     if (process->startup_state == STARTUP_IN_PROGRESS) process->startup_state = state;
     if (process->startup_info)
     {
-        wake_up( &process->startup_info->obj, 0 );
+        uk_wake_up( &process->startup_info->obj, 0 );
         release_object( process->startup_info );
         process->startup_info = NULL;
     }
@@ -344,7 +344,7 @@ struct thread *create_process( int fd, struct thread *parent_thread, int inherit
 
     process->start_time = current_time;
     process->end_time = 0;
-    list_add_tail( &process_list, &process->entry );
+    wine_list_add_tail( &process_list, &process->entry );
 
     if (!(process->id = process->group_id = alloc_ptid( process )))
     {
@@ -544,7 +544,7 @@ static struct process_dll *process_load_dll( struct process *process, struct map
             return NULL;
         }
         if (mapping) dll->mapping = grab_mapping_unless_removable( mapping );
-        list_add_tail( &process->dlls, &dll->entry );
+        wine_list_add_tail( &process->dlls, &dll->entry );
     }
     return dll;
 }
@@ -660,13 +660,13 @@ static void process_killed( struct process *process )
     set_process_startup_state( process, STARTUP_ABORTED );
     finish_process_tracing( process );
     start_sigkill_timer( process );
-    wake_up( &process->obj, 0 );
+    uk_wake_up( &process->obj, 0 );
 }
 
 /* add a thread to a process running threads list */
 void add_process_thread( struct process *process, struct thread *thread )
 {
-    list_add_tail( &process->thread_list, &thread->proc_entry );
+    wine_list_add_tail( &process->thread_list, &thread->proc_entry );
     if (!process->running_threads++)
     {
         running_processes++;

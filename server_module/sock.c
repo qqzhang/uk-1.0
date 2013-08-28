@@ -456,7 +456,7 @@ static void sock_poll_event( struct fd *fd, int event )
 
     /* if anyone is stupid enough to wait on the socket object itself,
      * maybe we should wake them up too, just in case? */
-    wake_up( &sock->obj, 0 );
+    uk_wake_up( &sock->obj, 0 );
 
     sock_reselect( sock );
 }

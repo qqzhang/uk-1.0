@@ -1,6 +1,9 @@
 #ifndef _LIMITS_H
 #define _LIMITS_H
 
+#include <linux/limits.h>
+
+#if 0
 #define CHAR_BIT 8
 #define MB_LEN_MAX 2
 
@@ -35,5 +38,6 @@
 #define I64_MIN  _I64_MIN
 #define I64_MAX  _I64_MAX
 #define UI64_MAX _UI64_MAX
+#endif
 
 #endif

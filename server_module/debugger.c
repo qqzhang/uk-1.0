@@ -248,8 +248,8 @@ static void link_event( struct debug_event *event )
 
     assert( debug_ctx );
     grab_object( event );
-    list_add_tail( &debug_ctx->event_queue, &event->entry );
-    if (!event->sender->debug_event) wake_up( &debug_ctx->obj, 0 );
+    wine_list_add_tail( &debug_ctx->event_queue, &event->entry );
+    if (!event->sender->debug_event) uk_wake_up( &debug_ctx->obj, 0 );
 }
 
 /* find the next event that we can send to the debugger */
@@ -362,7 +362,7 @@ static int continue_debug_event( struct process *process, struct thread *thread,
 
                 event->status = status;
                 event->state  = EVENT_CONTINUED;
-                wake_up( &event->obj, 0 );
+                uk_wake_up( &event->obj, 0 );
                 unlink_event( debug_ctx, event );
                 resume_process( process );
                 return 1;
@@ -477,7 +477,7 @@ int debugger_detach( struct process *process, struct thread *debugger )
         assert( event->state != EVENT_CONTINUED );
         event->status = DBG_CONTINUE;
         event->state  = EVENT_CONTINUED;
-        wake_up( &event->obj, 0 );
+        uk_wake_up( &event->obj, 0 );
         unlink_event( debug_ctx, event );
         /* from queued debug event */
         resume_process( process );

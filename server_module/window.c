@@ -188,7 +188,7 @@ static void link_window( struct window *win, struct window *previous )
 
     if (previous == WINPTR_BOTTOM)
     {
-        list_add_tail( &win->parent->children, &win->entry );
+        wine_list_add_tail( &win->parent->children, &win->entry );
         win->ex_style &= ~WS_EX_TOPMOST;
     }
     else if (previous == WINPTR_TOPMOST)
@@ -217,7 +217,7 @@ static void link_window( struct window *win, struct window *previous )
     }
     else
     {
-        list_add_after( &previous->entry, &win->entry );
+        wine_list_add_after( &previous->entry, &win->entry );
         if (!(previous->ex_style & WS_EX_TOPMOST)) win->ex_style &= ~WS_EX_TOPMOST;
         else
         {

@@ -51,7 +51,7 @@ KDIR := /lib/modules/$(shell uname -r)/build
 PWD := $(shell pwd)
 
 all:
-	make -Wall -C $(KDIR) M=$(PWD) EXTRA_CFLAGS="-I$(PWD)/../include -I$(PWD)/include -D CONFIG_UNIFIED_KERNEL" modules
+	make -Wall -C $(KDIR) M=$(PWD) EXTRA_CFLAGS="-I$(PWD)/include -I$(PWD)/../include -D CONFIG_UNIFIED_KERNEL" modules
 	
 clean:
 	make -C $(KDIR) M=$(PWD) clean

@@ -267,7 +267,7 @@ static void console_input_events_append( struct console_input* console,
         }
         evts->events[evts->num_used++] = *evt;
     }
-    wake_up( &evts->obj, 0 );
+    uk_wake_up( &evts->obj, 0 );
 }
 
 /* retrieves events from the console's renderer events list */

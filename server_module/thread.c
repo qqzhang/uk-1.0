@@ -403,12 +403,12 @@ struct thread *get_thread_from_tid( int tid )
 }
 
 #ifdef CONFIG_UNIFIED_KERNEL
-static int sched_setaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask)
+static int uk_sched_setaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask)
 {
 	return ENOSYS;
 }
 
-static int sched_getaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask)
+static int uk_sched_getaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask)
 {
 	return ENOSYS;
 }
@@ -440,7 +440,11 @@ int set_thread_affinity( struct thread *thread, affinity_t affinity )
         for (i = 0, mask = 1; mask; i++, mask <<= 1)
             if (affinity & mask) CPU_SET( i, &set );
 
-        ret = sched_setaffinity( thread->unix_tid, sizeof(set), &set );
+#ifdef CONFIG_UNIFIED_KERNEL
+	ret = uk_sched_setaffinity( thread->unix_tid, sizeof(set), &set );
+#else
+	ret = sched_setaffinity( thread->unix_tid, sizeof(set), &set );
+#endif
     }
 #endif
     if (!ret) thread->affinity = affinity;
@@ -456,7 +460,11 @@ affinity_t get_thread_affinity( struct thread *thread )
         cpu_set_t set;
         unsigned int i;
 
+#ifdef CONFIG_UNIFIED_KERNEL
+        if (!uk_sched_getaffinity( thread->unix_tid, sizeof(set), &set ))
+#else
         if (!sched_getaffinity( thread->unix_tid, sizeof(set), &set ))
+#endif
             for (i = 0; i < 8 * sizeof(mask); i++)
                 if (CPU_ISSET( i, &set )) mask |= 1 << i;
     }
@@ -543,7 +551,7 @@ int add_queue( struct object *obj, struct wait_queue_entry *entry )
 {
     grab_object( obj );
     entry->obj = obj;
-    list_add_tail( &obj->wait_queue, &entry->entry );
+    wine_list_add_tail( &obj->wait_queue, &entry->entry );
     return 1;
 }
 
@@ -784,7 +792,7 @@ done:
 }
 
 /* attempt to wake threads sleeping on the object wait queue */
-void wake_up( struct object *obj, int max )
+void uk_wake_up( struct object *obj, int max )
 {
     struct list *ptr;
 
@@ -867,7 +875,7 @@ static int queue_apc( struct process *process, struct thread *thread, struct thr
     }
 
     grab_object( apc );
-    list_add_tail( queue, &apc->entry );
+    wine_list_add_tail( queue, &apc->entry );
     if (!list_prev( queue, &apc->entry ))  /* first one */
         wake_thread( thread );
 
@@ -899,7 +907,7 @@ void thread_cancel_apc( struct thread *thread, struct object *owner, enum apc_ty
         if (apc->owner != owner) continue;
         list_remove( &apc->entry );
         apc->executed = 1;
-        wake_up( &apc->obj, 0 );
+	uk_wake_up( &apc->obj, 0 );
         release_object( apc );
         return;
     }
@@ -930,7 +938,7 @@ static void clear_apc_queue( struct list *queue )
         struct thread_apc *apc = LIST_ENTRY( ptr, struct thread_apc, entry );
         list_remove( &apc->entry );
         apc->executed = 1;
-        wake_up( &apc->obj, 0 );
+	uk_wake_up( &apc->obj, 0 );
         release_object( apc );
     }
 }
@@ -1011,7 +1019,7 @@ void kill_thread( struct thread *thread, int violent_death )
     kill_console_processes( thread, 0 );
     debug_exit_thread( thread );
     abandon_mutexes( thread );
-    wake_up( &thread->obj, 0 );
+    uk_wake_up( &thread->obj, 0 );
     if (violent_death) send_thread_signal( thread, SIGQUIT );
     cleanup_thread( thread );
     remove_process_thread( thread->process, thread );
@@ -1355,7 +1363,7 @@ DECL_HANDLER(select)
                 async_set_result( apc->owner, apc->result.async_io.status,
                                   apc->result.async_io.total, apc->result.async_io.apc );
         }
-        wake_up( &apc->obj, 0 );
+	uk_wake_up( &apc->obj, 0 );
         close_handle( current_thread->process, req->prev_apc );
         release_object( apc );
     }
@@ -1379,7 +1387,7 @@ DECL_HANDLER(select)
                 break;
             }
             apc->executed = 1;
-            wake_up( &apc->obj, 0 );
+	    uk_wake_up( &apc->obj, 0 );
             release_object( apc );
         }
     }

@@ -102,7 +102,7 @@ void pulse_event( struct event *event )
 {
     event->signaled = 1;
     /* wake up all waiters if manual reset, a single one otherwise */
-    wake_up( &event->obj, !event->manual_reset );
+    uk_wake_up( &event->obj, !event->manual_reset );
     event->signaled = 0;
 }
 
@@ -110,7 +110,7 @@ void set_event( struct event *event )
 {
     event->signaled = 1;
     /* wake up all waiters if manual reset, a single one otherwise */
-    wake_up( &event->obj, !event->manual_reset );
+    uk_wake_up( &event->obj, !event->manual_reset );
 }
 
 void reset_event( struct event *event )

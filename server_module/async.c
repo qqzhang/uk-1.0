@@ -73,7 +73,7 @@ struct async_queue
 {
     struct object        obj;             /* object header */
     struct fd           *fd;              /* file descriptor owning this queue */
-    struct completion   *completion;      /* completion associated with a recently closed file descriptor */
+    struct uk_completion   *completion;      /* completion associated with a recently closed file descriptor */
     apc_param_t          comp_key;        /* completion key associated with a recently closed file descriptor */
     struct list          queue;           /* queue of async objects */
 };
@@ -223,7 +223,7 @@ struct async *create_async( struct thread *thread, struct async_queue *queue, co
     async->timeout = NULL;
     async->queue   = (struct async_queue *)grab_object( queue );
 
-    list_add_tail( &queue->queue, &async->queue_entry );
+    wine_list_add_tail( &queue->queue, &async->queue_entry );
     grab_object( async );
 
     if (queue->fd) set_fd_signaled( queue->fd, 0 );
@@ -249,7 +249,7 @@ static void add_async_completion( struct async_queue *queue, apc_param_t cvalue,
     if (queue->fd)
     {
         apc_param_t ckey;
-        struct completion *completion = fd_get_completion( queue->fd, &ckey );
+        struct uk_completion *completion = fd_get_completion( queue->fd, &ckey );
 
         if (completion)
         {

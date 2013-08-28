@@ -395,7 +395,7 @@ static struct privilege *privilege_add( struct token *token, const LUID *luid, i
     {
         privilege->luid = *luid;
         privilege->def = privilege->enabled = (enabled != 0);
-        list_add_tail( &token->privileges, &privilege->entry );
+        wine_list_add_tail( &token->privileges, &privilege->entry );
     }
     return privilege;
 }
@@ -495,7 +495,7 @@ static struct token *create_token( unsigned primary, const SID *user,
             group->owner = (groups[i].Attributes & SE_GROUP_OWNER) != 0;
             group->resource = FALSE;
             group->deny_only = FALSE;
-            list_add_tail( &token->groups, &group->entry );
+            wine_list_add_tail( &token->groups, &group->entry );
             /* Use first owner capable group as an owner */
             if (!token->primary_group && group->owner)
                 token->primary_group = &group->sid;
@@ -565,7 +565,7 @@ struct token *token_duplicate( struct token *src_token, unsigned primary,
             return NULL;
         }
         memcpy( newgroup, group, size );
-        list_add_tail( &token->groups, &newgroup->entry );
+        wine_list_add_tail( &token->groups, &newgroup->entry );
     }
     token->primary_group = src_token->primary_group;
     assert( token->primary_group );

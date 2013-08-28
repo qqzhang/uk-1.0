@@ -65,20 +65,20 @@ struct notify
 };
 
 /* a registry key */
-struct key
+struct reg_key
 {
     struct object     obj;         /* object header */
     WCHAR            *name;        /* key name */
     WCHAR            *class;       /* key class */
     unsigned short    namelen;     /* length of key name */
     unsigned short    classlen;    /* length of class name */
-    struct key       *parent;      /* parent key */
+    struct reg_key       *parent;      /* parent key */
     int               last_subkey; /* last in use subkey */
     int               nb_subkeys;  /* count of allocated subkeys */
-    struct key      **subkeys;     /* subkeys array */
+    struct reg_key      **subkeys;     /* subkeys array */
     int               last_value;  /* last in use value */
     int               nb_values;   /* count of allocated values in array */
-    struct key_value *values;      /* values array */
+    struct reg_key_value *values;      /* values array */
     unsigned int      flags;       /* flags */
     timeout_t         modif;       /* last modification time */
     struct list       notify_list; /* list of notifications */
@@ -93,7 +93,7 @@ struct key
 #define KEY_WOWSHARE 0x0020  /* key is a Wow64 shared key (used for Software\Classes) */
 
 /* a key value */
-struct key_value
+struct reg_key_value
 {
     WCHAR            *name;    /* value name */
     unsigned short    namelen; /* length of value name */
@@ -109,7 +109,7 @@ struct key_value
 #define MAX_VALUE_LEN 16383  /* max. length of a value name */
 
 /* the root of the registry tree */
-static struct key *root_key;
+static struct reg_key *root_key;
 
 static const timeout_t ticks_1601_to_1970 = (timeout_t)86400 * (369 * 365 + 89) * TICKS_PER_SEC;
 static const timeout_t save_period = 30 * -TICKS_PER_SEC;  /* delay between periodic saves */
@@ -122,12 +122,12 @@ static const WCHAR symlink_value[] = {'S','y','m','b','o','l','i','c','L','i','n
 static const struct unicode_str symlink_str = { symlink_value, sizeof(symlink_value) };
 
 static void set_periodic_save_timer(void);
-static struct key_value *find_value( const struct key *key, const struct unicode_str *name, int *index );
+static struct reg_key_value *find_value( const struct reg_key *key, const struct unicode_str *name, int *index );
 
 /* information about where to save a registry branch */
 struct save_branch_info
 {
-    struct key  *key;
+    struct reg_key  *key;
     const char  *path;
 };
 
@@ -157,7 +157,7 @@ static void key_destroy( struct object *obj );
 
 static const struct object_ops key_ops =
 {
-    sizeof(struct key),      /* size */
+    sizeof(struct reg_key),      /* size */
     key_dump,                /* dump */
     no_get_type,             /* get_type */
     no_add_queue,            /* add_queue */
@@ -192,7 +192,7 @@ static inline int is_wow6432node( const WCHAR *name, unsigned int len )
  */
 
 /* dump the full path of a key */
-static void dump_path( const struct key *key, const struct key *base, FILE *f )
+static void dump_path( const struct reg_key *key, const struct reg_key *base, FILE *f )
 {
     if (key->parent && key->parent != base)
     {
@@ -203,7 +203,7 @@ static void dump_path( const struct key *key, const struct key *base, FILE *f )
 }
 
 /* dump a value to a text file */
-static void dump_value( const struct key_value *value, FILE *f )
+static void dump_value( const struct reg_key_value *value, FILE *f )
 {
     unsigned int i, dw;
     int count;
@@ -257,7 +257,7 @@ static void dump_value( const struct key_value *value, FILE *f )
 }
 
 /* save a registry and all its subkeys to a text file */
-static void save_subkeys( const struct key *key, const struct key *base, FILE *f )
+static void save_subkeys( const struct reg_key *key, const struct reg_key *base, FILE *f )
 {
     int i;
 
@@ -287,7 +287,7 @@ static void save_subkeys( const struct key *key, const struct key *base, FILE *f
     for (i = 0; i <= key->last_subkey; i++) save_subkeys( key->subkeys[i], base, f );
 }
 
-static void dump_operation( const struct key *key, const struct key_value *value, const char *op )
+static void dump_operation( const struct reg_key *key, const struct reg_key_value *value, const char *op )
 {
     fprintf( stderr, "%s key ", op );
     if (key) dump_path( key, NULL, stderr );
@@ -302,7 +302,7 @@ static void dump_operation( const struct key *key, const struct key_value *value
 
 static void key_dump( struct object *obj, int verbose )
 {
-    struct key *key = (struct key *)obj;
+    struct reg_key *key = (struct reg_key *)obj;
     assert( obj->ops == &key_ops );
     fprintf( stderr, "Key flags=%x ", key->flags );
     dump_path( key, NULL, stderr );
@@ -310,7 +310,7 @@ static void key_dump( struct object *obj, int verbose )
 }
 
 /* notify waiter and maybe delete the notification */
-static void do_notification( struct key *key, struct notify *notify, int del )
+static void do_notification( struct reg_key *key, struct notify *notify, int del )
 {
     if (notify->event)
     {
@@ -325,7 +325,7 @@ static void do_notification( struct key *key, struct notify *notify, int del )
     }
 }
 
-static inline struct notify *find_notify( struct key *key, struct process *process, obj_handle_t hkey )
+static inline struct notify *find_notify( struct reg_key *key, struct process *process, obj_handle_t hkey )
 {
     struct notify *notify;
 
@@ -396,7 +396,7 @@ static struct security_descriptor *key_get_sd( struct object *obj )
 /* close the notification associated with a handle */
 static int key_close_handle( struct object *obj, struct process *process, obj_handle_t handle )
 {
-    struct key * key = (struct key *) obj;
+    struct reg_key * key = (struct reg_key *) obj;
     struct notify *notify = find_notify( key, process, handle );
     if (notify) do_notification( key, notify, 1 );
     return 1;  /* ok to close */
@@ -406,7 +406,7 @@ static void key_destroy( struct object *obj )
 {
     int i;
     struct list *ptr;
-    struct key *key = (struct key *)obj;
+    struct reg_key *key = (struct reg_key *)obj;
     assert( obj->ops == &key_ops );
 
     free( key->name );
@@ -473,9 +473,9 @@ static struct unicode_str *get_path_token( const struct unicode_str *path, struc
 }
 
 /* allocate a key object */
-static struct key *alloc_key( const struct unicode_str *name, timeout_t modif )
+static struct reg_key *alloc_key( const struct unicode_str *name, timeout_t modif )
 {
-    struct key *key;
+    struct reg_key *key;
     if ((key = alloc_object( &key_ops )))
     {
         key->name        = NULL;
@@ -502,7 +502,7 @@ static struct key *alloc_key( const struct unicode_str *name, timeout_t modif )
 }
 
 /* mark a key and all its parents as dirty (modified) */
-static void make_dirty( struct key *key )
+static void make_dirty( struct reg_key *key )
 {
     while (key)
     {
@@ -513,7 +513,7 @@ static void make_dirty( struct key *key )
 }
 
 /* mark a key and all its subkeys as clean (not modified) */
-static void make_clean( struct key *key )
+static void make_clean( struct reg_key *key )
 {
     int i;
 
@@ -524,7 +524,7 @@ static void make_clean( struct key *key )
 }
 
 /* go through all the notifications and send them if necessary */
-static void check_notify( struct key *key, unsigned int change, int not_subtree )
+static void check_notify( struct reg_key *key, unsigned int change, int not_subtree )
 {
     struct list *ptr, *next;
 
@@ -537,9 +537,9 @@ static void check_notify( struct key *key, unsigned int change, int not_subtree 
 }
 
 /* update key modification time */
-static void touch_key( struct key *key, unsigned int change )
+static void touch_key( struct reg_key *key, unsigned int change )
 {
-    struct key *k;
+    struct reg_key *k;
 
     key->modif = current_time;
     make_dirty( key );
@@ -551,9 +551,9 @@ static void touch_key( struct key *key, unsigned int change )
 }
 
 /* try to grow the array of subkeys; return 1 if OK, 0 on error */
-static int grow_subkeys( struct key *key )
+static int grow_subkeys( struct reg_key *key )
 {
-    struct key **new_subkeys;
+    struct reg_key **new_subkeys;
     int nb_subkeys;
 
     if (key->nb_subkeys)
@@ -576,10 +576,10 @@ static int grow_subkeys( struct key *key )
 }
 
 /* allocate a subkey for a given key, and return its index */
-static struct key *alloc_subkey( struct key *parent, const struct unicode_str *name,
+static struct reg_key *alloc_subkey( struct reg_key *parent, const struct unicode_str *name,
                                  int index, timeout_t modif )
 {
-    struct key *key;
+    struct reg_key *key;
     int i;
 
     if (name->len > MAX_NAME_LEN * sizeof(WCHAR))
@@ -605,9 +605,9 @@ static struct key *alloc_subkey( struct key *parent, const struct unicode_str *n
 }
 
 /* free a subkey of a given key */
-static void free_subkey( struct key *parent, int index )
+static void free_subkey( struct reg_key *parent, int index )
 {
-    struct key *key;
+    struct reg_key *key;
     int i, nb_subkeys;
 
     assert( index >= 0 );
@@ -625,7 +625,7 @@ static void free_subkey( struct key *parent, int index )
     nb_subkeys = parent->nb_subkeys;
     if (nb_subkeys > MIN_SUBKEYS && parent->last_subkey < nb_subkeys / 2)
     {
-        struct key **new_subkeys;
+        struct reg_key **new_subkeys;
         nb_subkeys -= nb_subkeys / 3;  /* shrink by 33% */
         if (nb_subkeys < MIN_SUBKEYS) nb_subkeys = MIN_SUBKEYS;
         if (!(new_subkeys = realloc( parent->subkeys, nb_subkeys * sizeof(*new_subkeys) ))) return;
@@ -635,7 +635,7 @@ static void free_subkey( struct key *parent, int index )
 }
 
 /* find the named child of a given key and return its index */
-static struct key *find_subkey( const struct key *key, const struct unicode_str *name, int *index )
+static struct reg_key *find_subkey( const struct reg_key *key, const struct unicode_str *name, int *index )
 {
     int i, min, max, res;
     data_size_t len;
@@ -661,7 +661,7 @@ static struct key *find_subkey( const struct key *key, const struct unicode_str 
 }
 
 /* return the wow64 variant of the key, or the key itself if none */
-static struct key *find_wow64_subkey( struct key *key, const struct unicode_str *name )
+static struct reg_key *find_wow64_subkey( struct reg_key *key, const struct unicode_str *name )
 {
     static const struct unicode_str wow6432node_str = { wow6432node, sizeof(wow6432node) };
     int index;
@@ -677,10 +677,10 @@ static struct key *find_wow64_subkey( struct key *key, const struct unicode_str 
 
 
 /* follow a symlink and return the resolved key */
-static struct key *follow_symlink( struct key *key, int iteration )
+static struct reg_key *follow_symlink( struct reg_key *key, int iteration )
 {
     struct unicode_str path, token;
-    struct key_value *value;
+    struct reg_key_value *value;
     int index;
 
     if (iteration > 16) return NULL;
@@ -708,7 +708,7 @@ static struct key *follow_symlink( struct key *key, int iteration )
 
 /* open a key until we find an element that doesn't exist */
 /* helper for open_key and create_key */
-static struct key *open_key_prefix( struct key *key, const struct unicode_str *name,
+static struct reg_key *open_key_prefix( struct reg_key *key, const struct unicode_str *name,
                                     unsigned int access, struct unicode_str *token, int *index )
 {
     token->str = NULL;
@@ -716,7 +716,7 @@ static struct key *open_key_prefix( struct key *key, const struct unicode_str *n
     if (access & KEY_WOW64_32KEY) key = find_wow64_subkey( key, token );
     while (token->len)
     {
-        struct key *subkey;
+        struct reg_key *subkey;
         if (!(subkey = find_subkey( key, token, index )))
         {
             if ((key->flags & KEY_WOWSHARE) && !(access & KEY_WOW64_64KEY))
@@ -741,7 +741,7 @@ static struct key *open_key_prefix( struct key *key, const struct unicode_str *n
 }
 
 /* open a subkey */
-static struct key *open_key( struct key *key, const struct unicode_str *name, unsigned int access,
+static struct reg_key *open_key( struct reg_key *key, const struct unicode_str *name, unsigned int access,
                              unsigned int attributes )
 {
     int index;
@@ -766,7 +766,7 @@ static struct key *open_key( struct key *key, const struct unicode_str *name, un
 }
 
 /* create a subkey */
-static struct key *create_key( struct key *key, const struct unicode_str *name,
+static struct reg_key *create_key( struct reg_key *key, const struct unicode_str *name,
                                const struct unicode_str *class, unsigned int options,
                                unsigned int access, unsigned int attributes, int *created )
 {
@@ -828,9 +828,9 @@ static struct key *create_key( struct key *key, const struct unicode_str *name,
 }
 
 /* recursively create a subkey (for internal use only) */
-static struct key *create_key_recursive( struct key *key, const struct unicode_str *name, timeout_t modif )
+static struct reg_key *create_key_recursive( struct reg_key *key, const struct unicode_str *name, timeout_t modif )
 {
-    struct key *base;
+    struct reg_key *base;
     int index;
     struct unicode_str token;
 
@@ -838,7 +838,7 @@ static struct key *create_key_recursive( struct key *key, const struct unicode_s
     if (!get_path_token( name, &token )) return NULL;
     while (token.len)
     {
-        struct key *subkey;
+        struct reg_key *subkey;
         if (!(subkey = find_subkey( key, &token, &index ))) break;
         key = subkey;
         if (!(key = follow_symlink( key, 0 )))
@@ -871,7 +871,7 @@ static struct key *create_key_recursive( struct key *key, const struct unicode_s
 }
 
 /* query information about a key or a subkey */
-static void enum_key( const struct key *key, int index, int info_class,
+static void enum_key( const struct reg_key *key, int index, int info_class,
                       struct enum_key_reply *reply )
 {
     int i;
@@ -907,7 +907,7 @@ static void enum_key( const struct key *key, int index, int info_class,
     case KeyFullInformation:
         for (i = 0; i <= key->last_subkey; i++)
         {
-            struct key *subkey = key->subkeys[i];
+            struct reg_key *subkey = key->subkeys[i];
             len = subkey->namelen / sizeof(WCHAR);
             if (len > max_subkey) max_subkey = len;
             len = subkey->classlen / sizeof(WCHAR);
@@ -954,10 +954,10 @@ static void enum_key( const struct key *key, int index, int info_class,
 }
 
 /* delete a key and its values */
-static int delete_key( struct key *key, int recurse )
+static int delete_key( struct reg_key *key, int recurse )
 {
     int index;
-    struct key *parent = key->parent;
+    struct reg_key *parent = key->parent;
 
     /* must find parent and index */
     if (key == root_key)
@@ -989,9 +989,9 @@ static int delete_key( struct key *key, int recurse )
 }
 
 /* try to grow the array of values; return 1 if OK, 0 on error */
-static int grow_values( struct key *key )
+static int grow_values( struct reg_key *key )
 {
-    struct key_value *new_val;
+    struct reg_key_value *new_val;
     int nb_values;
 
     if (key->nb_values)
@@ -1014,7 +1014,7 @@ static int grow_values( struct key *key )
 }
 
 /* find the named value of a given key and return its index in the array */
-static struct key_value *find_value( const struct key *key, const struct unicode_str *name, int *index )
+static struct reg_key_value *find_value( const struct reg_key *key, const struct unicode_str *name, int *index )
 {
     int i, min, max, res;
     data_size_t len;
@@ -1040,9 +1040,9 @@ static struct key_value *find_value( const struct key *key, const struct unicode
 }
 
 /* insert a new value; the index must have been returned by find_value */
-static struct key_value *insert_value( struct key *key, const struct unicode_str *name, int index )
+static struct reg_key_value *insert_value( struct reg_key *key, const struct unicode_str *name, int index )
 {
-    struct key_value *value;
+    struct reg_key_value *value;
     WCHAR *new_name = NULL;
     int i;
 
@@ -1066,10 +1066,10 @@ static struct key_value *insert_value( struct key *key, const struct unicode_str
 }
 
 /* set a key value */
-static void set_value( struct key *key, const struct unicode_str *name,
+static void set_value( struct reg_key *key, const struct unicode_str *name,
                        int type, const void *data, data_size_t len )
 {
-    struct key_value *value;
+    struct reg_key_value *value;
     void *ptr = NULL;
     int index;
 
@@ -1114,9 +1114,9 @@ static void set_value( struct key *key, const struct unicode_str *name,
 }
 
 /* get a key value */
-static void get_value( struct key *key, const struct unicode_str *name, int *type, data_size_t *len )
+static void get_value( struct reg_key *key, const struct unicode_str *name, int *type, data_size_t *len )
 {
-    struct key_value *value;
+    struct reg_key_value *value;
     int index;
 
     if ((value = find_value( key, name, &index )))
@@ -1134,9 +1134,9 @@ static void get_value( struct key *key, const struct unicode_str *name, int *typ
 }
 
 /* enumerate a key value */
-static void enum_value( struct key *key, int i, int info_class, struct enum_key_value_reply *reply )
+static void enum_value( struct reg_key *key, int i, int info_class, struct enum_key_value_reply *reply )
 {
-    struct key_value *value;
+    struct reg_key_value *value;
 
     if (i < 0 || i > key->last_value) set_error( STATUS_NO_MORE_ENTRIES );
     else
@@ -1185,9 +1185,9 @@ static void enum_value( struct key *key, int i, int info_class, struct enum_key_
 }
 
 /* delete a value */
-static void delete_value( struct key *key, const struct unicode_str *name )
+static void delete_value( struct reg_key *key, const struct unicode_str *name )
 {
-    struct key_value *value;
+    struct reg_key_value *value;
     int i, index, nb_values;
 
     if (!(value = find_value( key, name, &index )))
@@ -1206,7 +1206,7 @@ static void delete_value( struct key *key, const struct unicode_str *name )
     nb_values = key->nb_values;
     if (nb_values > MIN_VALUES && key->last_value < nb_values / 2)
     {
-        struct key_value *new_val;
+        struct reg_key_value *new_val;
         nb_values -= nb_values / 3;  /* shrink by 33% */
         if (nb_values < MIN_VALUES) nb_values = MIN_VALUES;
         if (!(new_val = realloc( key->values, nb_values * sizeof(*new_val) ))) return;
@@ -1216,9 +1216,9 @@ static void delete_value( struct key *key, const struct unicode_str *name )
 }
 
 /* get the registry key corresponding to an hkey handle */
-static struct key *get_hkey_obj( obj_handle_t hkey, unsigned int access )
+static struct reg_key *get_hkey_obj( obj_handle_t hkey, unsigned int access )
 {
-    struct key *key = (struct key *)get_handle_obj( current_thread->process, hkey, access, &key_ops );
+    struct reg_key *key = (struct reg_key *)get_handle_obj( current_thread->process, hkey, access, &key_ops );
 
     if (key && key->flags & KEY_DELETED)
     {
@@ -1230,9 +1230,9 @@ static struct key *get_hkey_obj( obj_handle_t hkey, unsigned int access )
 }
 
 /* get the registry key corresponding to a parent key handle */
-static inline struct key *get_parent_hkey_obj( obj_handle_t hkey )
+static inline struct reg_key *get_parent_hkey_obj( obj_handle_t hkey )
 {
-    if (!hkey) return (struct key *)grab_object( root_key );
+    if (!hkey) return (struct reg_key *)grab_object( root_key );
     return get_hkey_obj( hkey, 0 );
 }
 
@@ -1327,7 +1327,7 @@ static int get_data_type( const char *buffer, int *type, int *parse_type )
 }
 
 /* load and create a key from the input file */
-static struct key *load_key( struct key *base, const char *buffer,
+static struct reg_key *load_key( struct reg_key *base, const char *buffer,
                              int prefix_len, struct file_load_info *info )
 {
     WCHAR *p;
@@ -1359,7 +1359,7 @@ static struct key *load_key( struct key *base, const char *buffer,
             return NULL;
         }
         /* empty key name, return base key */
-        return (struct key *)grab_object( base );
+        return (struct reg_key *)grab_object( base );
     }
     name.str = p;
     name.len = len - (p - info->tmp + 1) * sizeof(WCHAR);
@@ -1396,7 +1396,7 @@ static int load_global_option( const char *buffer, struct file_load_info *info )
 }
 
 /* load a key option from the input file */
-static int load_key_option( struct key *key, const char *buffer, struct file_load_info *info )
+static int load_key_option( struct reg_key *key, const char *buffer, struct file_load_info *info )
 {
     const char *p;
     data_size_t len;
@@ -1440,10 +1440,10 @@ static int parse_hex( unsigned char *dest, data_size_t *len, const char *buffer 
 }
 
 /* parse a value name and create the corresponding value */
-static struct key_value *parse_value_name( struct key *key, const char *buffer, data_size_t *len,
+static struct reg_key_value *parse_value_name( struct reg_key *key, const char *buffer, data_size_t *len,
                                            struct file_load_info *info )
 {
-    struct key_value *value;
+    struct reg_key_value *value;
     struct unicode_str name;
     int index;
 
@@ -1475,13 +1475,13 @@ static struct key_value *parse_value_name( struct key *key, const char *buffer, 
 }
 
 /* load a value from the input file */
-static int load_value( struct key *key, const char *buffer, struct file_load_info *info )
+static int load_value( struct reg_key *key, const char *buffer, struct file_load_info *info )
 {
     DWORD dw;
     void *ptr, *newptr;
     int res, type, parse_type;
     data_size_t maxlen, len;
-    struct key_value *value;
+    struct reg_key_value *value;
 
     if (!(value = parse_value_name( key, buffer, &len, info ))) return 0;
     if (!(res = get_data_type( buffer + len, &type, &parse_type ))) goto error;
@@ -1544,7 +1544,7 @@ static int load_value( struct key *key, const char *buffer, struct file_load_inf
 
 /* return the length (in path elements) of name that is part of the key name */
 /* for instance if key is USER\foo\bar and name is foo\bar\baz, return 2 */
-static int get_prefix_len( struct key *key, const char *name, struct file_load_info *info )
+static int get_prefix_len( struct reg_key *key, const char *name, struct file_load_info *info )
 {
     WCHAR *p;
     int res;
@@ -1571,9 +1571,9 @@ static int get_prefix_len( struct key *key, const char *name, struct file_load_i
 
 /* load all the keys from the input file */
 /* prefix_len is the number of key name prefixes to skip, or -1 for autodetection */
-static void load_keys( struct key *key, const char *filename, FILE *f, int prefix_len )
+static void load_keys( struct reg_key *key, const char *filename, FILE *f, int prefix_len )
 {
-    struct key *subkey = NULL;
+    struct reg_key *subkey = NULL;
     struct file_load_info info;
     char *p;
 
@@ -1633,7 +1633,7 @@ static void load_keys( struct key *key, const char *filename, FILE *f, int prefi
 }
 
 /* load a part of the registry from a file */
-static void load_registry( struct key *key, obj_handle_t handle )
+static void load_registry( struct reg_key *key, obj_handle_t handle )
 {
     struct file *file;
     int fd;
@@ -1654,7 +1654,7 @@ static void load_registry( struct key *key, obj_handle_t handle )
 }
 
 /* load one of the initial registry files */
-static int load_init_registry_from_file( const char *filename, struct key *key )
+static int load_init_registry_from_file( const char *filename, struct reg_key *key )
 {
     FILE *f;
 
@@ -1672,7 +1672,7 @@ static int load_init_registry_from_file( const char *filename, struct key *key )
     assert( save_branch_count < MAX_SAVE_BRANCH_INFO );
 
     save_branch_info[save_branch_count].path = filename;
-    save_branch_info[save_branch_count++].key = (struct key *)grab_object( key );
+    save_branch_info[save_branch_count++].key = (struct reg_key *)grab_object( key );
     make_object_static( &key->obj );
     return (f != NULL);
 }
@@ -1743,7 +1743,7 @@ void init_registry(void)
 
     WCHAR *current_user_path;
     struct unicode_str current_user_str;
-    struct key *key, *hklm, *hkcu;
+    struct reg_key *key, *hklm, *hkcu;
 
     /* switch to the config dir */
 
@@ -1804,7 +1804,7 @@ void init_registry(void)
 }
 
 /* save a registry branch to a file */
-static void save_all_subkeys( struct key *key, FILE *f )
+static void save_all_subkeys( struct reg_key *key, FILE *f )
 {
     fprintf( f, "WINE REGISTRY Version 2\n" );
     fprintf( f, ";; All keys relative to " );
@@ -1825,7 +1825,7 @@ static void save_all_subkeys( struct key *key, FILE *f )
 }
 
 /* save a registry branch to a file handle */
-static void save_registry( struct key *key, obj_handle_t handle )
+static void save_registry( struct reg_key *key, obj_handle_t handle )
 {
     struct file *file;
     int fd;
@@ -1850,7 +1850,7 @@ static void save_registry( struct key *key, obj_handle_t handle )
 }
 
 /* save a registry branch to a file */
-static int save_branch( struct key *key, const char *path )
+static int save_branch( struct reg_key *key, const char *path )
 {
     struct stat st;
     char *p, *tmp = NULL;
@@ -1971,7 +1971,7 @@ static int is_wow64_thread( struct thread *thread )
 /* create a registry key */
 DECL_HANDLER(create_key)
 {
-    struct key *key = NULL, *parent;
+    struct reg_key *key = NULL, *parent;
     struct unicode_str name, class;
     unsigned int access = req->access;
 
@@ -2010,7 +2010,7 @@ DECL_HANDLER(create_key)
 /* open a registry key */
 DECL_HANDLER(open_key)
 {
-    struct key *key, *parent;
+    struct reg_key *key, *parent;
     struct unicode_str name;
     unsigned int access = req->access;
 
@@ -2033,7 +2033,7 @@ DECL_HANDLER(open_key)
 /* delete a registry key */
 DECL_HANDLER(delete_key)
 {
-    struct key *key;
+    struct reg_key *key;
 
     if ((key = get_hkey_obj( req->hkey, DELETE )))
     {
@@ -2045,7 +2045,7 @@ DECL_HANDLER(delete_key)
 /* flush a registry key */
 DECL_HANDLER(flush_key)
 {
-    struct key *key = get_hkey_obj( req->hkey, 0 );
+    struct reg_key *key = get_hkey_obj( req->hkey, 0 );
     if (key)
     {
         /* we don't need to do anything here with the current_thread implementation */
@@ -2056,7 +2056,7 @@ DECL_HANDLER(flush_key)
 /* enumerate registry subkeys */
 DECL_HANDLER(enum_key)
 {
-    struct key *key;
+    struct reg_key *key;
 
     if ((key = get_hkey_obj( req->hkey,
                              req->index == -1 ? KEY_QUERY_VALUE : KEY_ENUMERATE_SUB_KEYS )))
@@ -2069,7 +2069,7 @@ DECL_HANDLER(enum_key)
 /* set a value of a registry key */
 DECL_HANDLER(set_key_value)
 {
-    struct key *key;
+    struct reg_key *key;
     struct unicode_str name;
 
     if (req->namelen > get_req_data_size())
@@ -2093,7 +2093,7 @@ DECL_HANDLER(set_key_value)
 /* retrieve the value of a registry key */
 DECL_HANDLER(get_key_value)
 {
-    struct key *key;
+    struct reg_key *key;
     struct unicode_str name;
 
     reply->total = 0;
@@ -2108,7 +2108,7 @@ DECL_HANDLER(get_key_value)
 /* enumerate the value of a registry key */
 DECL_HANDLER(enum_key_value)
 {
-    struct key *key;
+    struct reg_key *key;
 
     if ((key = get_hkey_obj( req->hkey, KEY_QUERY_VALUE )))
     {
@@ -2120,7 +2120,7 @@ DECL_HANDLER(enum_key_value)
 /* delete a value of a registry key */
 DECL_HANDLER(delete_key_value)
 {
-    struct key *key;
+    struct reg_key *key;
     struct unicode_str name;
 
     if ((key = get_hkey_obj( req->hkey, KEY_SET_VALUE )))
@@ -2134,7 +2134,7 @@ DECL_HANDLER(delete_key_value)
 /* load a registry branch from a file */
 DECL_HANDLER(load_registry)
 {
-    struct key *key, *parent;
+    struct reg_key *key, *parent;
     struct token *token = thread_get_impersonation_token( current_thread );
     struct unicode_str name;
 
@@ -2166,7 +2166,7 @@ DECL_HANDLER(load_registry)
 
 DECL_HANDLER(unload_registry)
 {
-    struct key *key;
+    struct reg_key *key;
     struct token *token = thread_get_impersonation_token( current_thread );
 
     const LUID_AND_ATTRIBUTES privs[] =
@@ -2192,7 +2192,7 @@ DECL_HANDLER(unload_registry)
 /* save a registry branch to a file */
 DECL_HANDLER(save_registry)
 {
-    struct key *key;
+    struct reg_key *key;
 
     if (!thread_single_check_privilege( current_thread, &SeBackupPrivilege ))
     {
@@ -2210,7 +2210,7 @@ DECL_HANDLER(save_registry)
 /* add a registry key change notification */
 DECL_HANDLER(set_registry_notification)
 {
-    struct key *key;
+    struct reg_key *key;
     struct event *event;
     struct notify *notify;
 

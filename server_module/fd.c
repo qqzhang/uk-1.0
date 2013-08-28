@@ -189,7 +189,7 @@ struct fd
     struct async_queue  *read_q;      /* async readers of this fd */
     struct async_queue  *write_q;     /* async writers of this fd */
     struct async_queue  *wait_q;      /* other async waiters of this fd */
-    struct completion   *completion;  /* completion object attached to this fd */
+    struct uk_completion   *completion;  /* completion object attached to this fd */
     apc_param_t          comp_key;    /* completion key to set in completion events */
 };
 
@@ -861,7 +861,7 @@ static int get_next_timeout(void)
             if (timeout->when <= current_time)
             {
                 list_remove( &timeout->entry );
-                list_add_tail( &expired_list, &timeout->entry );
+                wine_list_add_tail( &expired_list, &timeout->entry );
             }
             else break;
         }
@@ -1343,9 +1343,9 @@ static struct file_lock *add_lock( struct fd *fd, int shared, file_pos_t start, 
         release_object( lock );
         return NULL;
     }
-    list_add_tail( &fd->locks, &lock->fd_entry );
-    list_add_tail( &fd->inode->locks, &lock->inode_entry );
-    list_add_tail( &lock->process->locks, &lock->proc_entry );
+    wine_list_add_tail( &fd->locks, &lock->fd_entry );
+    wine_list_add_tail( &fd->inode->locks, &lock->inode_entry );
+    wine_list_add_tail( &lock->process->locks, &lock->proc_entry );
     return lock;
 }
 
@@ -1360,7 +1360,7 @@ static void remove_lock( struct file_lock *lock, int remove_unix )
     if (remove_unix) remove_unix_locks( lock->fd, lock->start, lock->end );
     if (list_empty( &inode->locks )) inode_close_pending( inode, 1 );
     lock->process = NULL;
-    wake_up( &lock->obj, 0 );
+    uk_wake_up( &lock->obj, 0 );
     release_object( lock );
 }
 
@@ -1960,7 +1960,7 @@ int is_fd_removable( struct fd *fd )
 void set_fd_signaled( struct fd *fd, int signaled )
 {
     fd->signaled = signaled;
-    if (signaled) wake_up( fd->user, 0 );
+    if (signaled) uk_wake_up( fd->user, 0 );
 }
 
 /* set or clear the fd signaled state */
@@ -2215,10 +2215,10 @@ static struct fd *get_handle_fd_obj( struct process *process, obj_handle_t handl
     return fd;
 }
 
-struct completion *fd_get_completion( struct fd *fd, apc_param_t *p_key )
+struct uk_completion *fd_get_completion( struct fd *fd, apc_param_t *p_key )
 {
     *p_key = fd->comp_key;
-    return fd->completion ? (struct completion *)grab_object( fd->completion ) : NULL;
+    return fd->completion ? (struct uk_completion *)grab_object( fd->completion ) : NULL;
 }
 
 void fd_copy_completion( struct fd *src, struct fd *dst )

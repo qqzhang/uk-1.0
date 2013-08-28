@@ -26,7 +26,7 @@
 struct fd;
 struct mapping;
 struct async_queue;
-struct completion;
+struct uk_completion;
 
 /* operations valid on file descriptor objects */
 struct fd_ops
@@ -141,8 +141,8 @@ extern struct dir *get_dir_obj( struct process *process, obj_handle_t handle, un
 
 /* completion */
 
-extern struct completion *get_completion_obj( struct process *process, obj_handle_t handle, unsigned int access );
-extern void add_completion( struct completion *completion, apc_param_t ckey, apc_param_t cvalue,
+extern struct uk_completion *get_completion_obj( struct process *process, obj_handle_t handle, unsigned int access );
+extern void add_completion( struct uk_completion *completion, apc_param_t ckey, apc_param_t cvalue,
                             unsigned int status, unsigned int information );
 
 /* serial port functions */
@@ -164,7 +164,7 @@ extern void async_terminate( struct async *async, unsigned int status );
 extern int async_wake_up_by( struct async_queue *queue, struct process *process,
                              struct thread *thread, client_ptr_t iosb, unsigned int status );
 extern void async_wake_up( struct async_queue *queue, unsigned int status );
-extern struct completion *fd_get_completion( struct fd *fd, apc_param_t *p_key );
+extern struct uk_completion *fd_get_completion( struct fd *fd, apc_param_t *p_key );
 extern void fd_copy_completion( struct fd *src, struct fd *dst );
 
 /* access rights that require Unix read permission */

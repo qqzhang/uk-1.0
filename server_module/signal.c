@@ -45,29 +45,6 @@
 # define SIG_PTHREAD_CANCEL (__SIGRTMIN+1)
 #endif
 
-#ifdef CONFIG_UNIFIED_KERNEL
-/*sigaddset, sigemptyset*/
-static inline int sigemptyset(sigset_t *set)
-{
-	if (set == NULL)
-	{
-		return -1;
-	}
-
-	memset (set, 0, sizeof (sigset_t));
-
-	return 0;
-}
-
-#define	__sigmask(sig)	(((sigset_t) 1) << ((sig) - 1))
-static inline int sigaddset (sigset_t *set, int sig)
-{
-	sigset_t mask = __sigmask (sig);
-	*set |= mask;
-	return 0;
-}
-#endif
-
 typedef void (*signal_callback)(void);
 
 struct handler
@@ -337,7 +314,8 @@ void init_signals(void)
     action.sa_handler = SIG_IGN;
     sigaction( SIGXFSZ, &action, NULL );
 #ifdef HAVE_SIGINFO_T_SI_FD
-    action.sa_sigaction = do_sigio;
+    /* fixme: struct sigaction is user struct*/
+    //action.sa_sigaction = do_sigio;
     action.sa_flags = SA_SIGINFO;
     sigaction( SIGIO, &action, NULL );
 #endif

@@ -136,7 +136,7 @@ static void timer_callback( void *private )
 
     /* wake up waiters */
     timer->signaled = 1;
-    wake_up( &timer->obj, 0 );
+    uk_wake_up( &timer->obj, 0 );
 }
 
 /* cancel a running timer */

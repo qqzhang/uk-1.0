@@ -1,6 +1,12 @@
 #ifndef _SYS_PTRACE_H_
 #define _SYS_PTRACE_H_
 
+#include <linux/ptrace.h>
+
+#define PTRACE_PEEKUSER 3
+#define PTRACE_POKEUSER 6 
+
+#if 0
 enum __ptrace_request
 {
   /* Indicate that the process making this request should be traced.
@@ -96,5 +102,6 @@ enum __ptrace_request
      the contents of the `struct fpa_regs' at ADDR.  */
   PTRACE_SETFPAREGS
 };
+#endif
 
 #endif
