@@ -191,22 +191,22 @@ static inline struct hook *get_first_hook( struct hook_table *table, int index )
     return elem ? HOOK_ENTRY( elem ) : NULL;
 }
 
-/* check if a given hook should run in the owner thread instead of the current thread */
+/* check if a given hook should run in the owner thread instead of the current_thread thread */
 static inline int run_hook_in_owner_thread( struct hook *hook )
 {
     if ((hook->index == WH_MOUSE_LL - WH_MINHOOK ||
          hook->index == WH_KEYBOARD_LL - WH_MINHOOK))
-        return hook->owner != current;
+        return hook->owner != current_thread;
     return 0;
 }
 
-/* check if a given hook should run in the current thread */
+/* check if a given hook should run in the current_thread thread */
 static inline int run_hook_in_current_thread( struct hook *hook )
 {
-    if (hook->process && hook->process != current->process) return 0;
-    if ((hook->flags & WINEVENT_SKIPOWNPROCESS) && hook->process == current->process) return 0;
-    if (hook->thread && hook->thread != current) return 0;
-    if ((hook->flags & WINEVENT_SKIPOWNTHREAD) && hook->thread == current) return 0;
+    if (hook->process && hook->process != current_thread->process) return 0;
+    if ((hook->flags & WINEVENT_SKIPOWNPROCESS) && hook->process == current_thread->process) return 0;
+    if (hook->thread && hook->thread != current_thread) return 0;
+    if ((hook->flags & WINEVENT_SKIPOWNTHREAD) && hook->thread == current_thread) return 0;
     /* don't run low-level hooks in processes suspended for debugging */
     if (run_hook_in_owner_thread( hook ) && hook->owner->process->suspend) return 0;
     return 1;
@@ -351,11 +351,11 @@ static int is_hook_active( struct hook_table *table, int index )
     return 0;
 }
 
-/* get a bitmap of all active hooks for the current thread */
+/* get a bitmap of all active hooks for the current_thread thread */
 unsigned int get_active_hooks(void)
 {
-    struct hook_table *table = get_queue_hooks( current );
-    struct hook_table *global_hooks = get_global_hooks( current );
+    struct hook_table *table = get_queue_hooks( current_thread );
+    struct hook_table *global_hooks = get_global_hooks( current_thread );
     unsigned int ret = 1 << 31;  /* set high bit to indicate that the bitmap is valid */
     int id;
 
@@ -372,7 +372,7 @@ unsigned int get_active_hooks(void)
 struct thread *get_first_global_hook( int id )
 {
     struct hook *hook;
-    struct hook_table *global_hooks = get_global_hooks( current );
+    struct hook_table *global_hooks = get_global_hooks( current_thread );
 
     if (!global_hooks) return NULL;
     if (!(hook = get_first_valid_hook( global_hooks, id - WH_MINHOOK, EVENT_MIN, 0, 0, 0 ))) return NULL;
@@ -396,7 +396,7 @@ DECL_HANDLER(set_hook)
         return;
     }
 
-    if (!(desktop = get_thread_desktop( current, DESKTOP_HOOKCONTROL ))) return;
+    if (!(desktop = get_thread_desktop( current_thread, DESKTOP_HOOKCONTROL ))) return;
 
     if (req->pid && !(process = get_process_from_id( req->pid ))) goto done;
 
@@ -434,11 +434,11 @@ DECL_HANDLER(set_hook)
     }
     else
     {
-        /* module is optional only if hook is in current process */
+        /* module is optional only if hook is in current_thread process */
         if (!module_size)
         {
             module = NULL;
-            if (thread->process != current->process)
+            if (thread->process != current_thread->process)
             {
                 set_error( STATUS_INVALID_PARAMETER );
                 goto done;
@@ -450,7 +450,7 @@ DECL_HANDLER(set_hook)
 
     if ((hook = add_hook( desktop, thread, req->id - WH_MINHOOK, global )))
     {
-        hook->owner = (struct thread *)grab_object( current );
+        hook->owner = (struct thread *)grab_object( current_thread );
         hook->process = process ? (struct process *)grab_object( process ) : NULL;
         hook->event_min   = req->event_min;
         hook->event_max   = req->event_max;
@@ -491,7 +491,7 @@ DECL_HANDLER(remove_hook)
             set_error( STATUS_INVALID_PARAMETER );
             return;
         }
-        if (!(hook = find_hook( current, req->id - WH_MINHOOK, req->proc )))
+        if (!(hook = find_hook( current_thread, req->id - WH_MINHOOK, req->proc )))
         {
             set_error( STATUS_INVALID_PARAMETER );
             return;
@@ -506,8 +506,8 @@ DECL_HANDLER(remove_hook)
 DECL_HANDLER(start_hook_chain)
 {
     struct hook *hook;
-    struct hook_table *table = get_queue_hooks( current );
-    struct hook_table *global_table = get_global_hooks( current );
+    struct hook_table *table = get_queue_hooks( current_thread );
+    struct hook_table *global_table = get_global_hooks( current_thread );
 
     if (req->id < WH_MINHOOK || req->id > WH_WINEVENT)
     {
@@ -548,8 +548,8 @@ DECL_HANDLER(start_hook_chain)
 /* finished calling a hook chain */
 DECL_HANDLER(finish_hook_chain)
 {
-    struct hook_table *table = get_queue_hooks( current );
-    struct hook_table *global_hooks = get_global_hooks( current );
+    struct hook_table *table = get_queue_hooks( current_thread );
+    struct hook_table *global_hooks = get_global_hooks( current_thread );
     int index = req->id - WH_MINHOOK;
 
     if (req->id < WH_MINHOOK || req->id > WH_WINEVENT)
@@ -568,12 +568,12 @@ DECL_HANDLER(get_hook_info)
     struct hook *hook;
 
     if (!(hook = get_user_object( req->handle, USER_HOOK ))) return;
-    if (hook->thread && (hook->thread != current))
+    if (hook->thread && (hook->thread != current_thread))
     {
         set_error( STATUS_INVALID_HANDLE );
         return;
     }
-    if (req->get_next && !(hook = get_next_hook( current, hook, req->event, req->window,
+    if (req->get_next && !(hook = get_next_hook( current_thread, hook, req->event, req->window,
                                                  req->object_id, req->child_id )))
         return;
 

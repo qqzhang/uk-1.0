@@ -41,7 +41,7 @@ struct timer
 {
     struct object        obj;       /* object header */
     int                  manual;    /* manual reset */
-    int                  signaled;  /* current signaled state */
+    int                  signaled;  /* current_thread signaled state */
     unsigned int         period;    /* timer period in ms */
     timeout_t            when;      /* next expiration */
     struct timeout_user *timeout;   /* timeout user */
@@ -172,7 +172,7 @@ static int set_timer( struct timer *timer, timeout_t expire, unsigned int period
     timer->period   = period;
     timer->callback = callback;
     timer->arg      = arg;
-    if (callback) timer->thread = (struct thread *)grab_object( current );
+    if (callback) timer->thread = (struct thread *)grab_object( current_thread );
     timer->timeout = add_timeout_user( timer->when, timer_callback, timer );
     return signaled;
 }
@@ -236,12 +236,12 @@ DECL_HANDLER(create_timer)
 
     reply->handle = 0;
     get_req_unicode_str( &name );
-    if (req->rootdir && !(root = get_directory_obj( current->process, req->rootdir, 0 )))
+    if (req->rootdir && !(root = get_directory_obj( current_thread->process, req->rootdir, 0 )))
         return;
 
     if ((timer = create_timer( root, &name, req->attributes, req->manual )))
     {
-        reply->handle = alloc_handle( current->process, timer, req->access, req->attributes );
+        reply->handle = alloc_handle( current_thread->process, timer, req->access, req->attributes );
         release_object( timer );
     }
 
@@ -256,12 +256,12 @@ DECL_HANDLER(open_timer)
     struct timer *timer;
 
     get_req_unicode_str( &name );
-    if (req->rootdir && !(root = get_directory_obj( current->process, req->rootdir, 0 )))
+    if (req->rootdir && !(root = get_directory_obj( current_thread->process, req->rootdir, 0 )))
         return;
 
     if ((timer = open_object_dir( root, &name, req->attributes, &timer_ops )))
     {
-        reply->handle = alloc_handle( current->process, &timer->obj, req->access, req->attributes );
+        reply->handle = alloc_handle( current_thread->process, &timer->obj, req->access, req->attributes );
         release_object( timer );
     }
 
@@ -273,7 +273,7 @@ DECL_HANDLER(set_timer)
 {
     struct timer *timer;
 
-    if ((timer = (struct timer *)get_handle_obj( current->process, req->handle,
+    if ((timer = (struct timer *)get_handle_obj( current_thread->process, req->handle,
                                                  TIMER_MODIFY_STATE, &timer_ops )))
     {
         reply->signaled = set_timer( timer, req->expire, req->period, req->callback, req->arg );
@@ -286,7 +286,7 @@ DECL_HANDLER(cancel_timer)
 {
     struct timer *timer;
 
-    if ((timer = (struct timer *)get_handle_obj( current->process, req->handle,
+    if ((timer = (struct timer *)get_handle_obj( current_thread->process, req->handle,
                                                  TIMER_MODIFY_STATE, &timer_ops )))
     {
         reply->signaled = cancel_timer( timer );
@@ -299,7 +299,7 @@ DECL_HANDLER(get_timer_info)
 {
     struct timer *timer;
 
-    if ((timer = (struct timer *)get_handle_obj( current->process, req->handle,
+    if ((timer = (struct timer *)get_handle_obj( current_thread->process, req->handle,
                                                  TIMER_QUERY_STATE, &timer_ops )))
     {
         reply->when      = timer->when;

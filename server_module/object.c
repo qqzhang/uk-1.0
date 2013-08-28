@@ -442,7 +442,7 @@ int default_set_sd( struct object *obj, const struct security_descriptor *sd,
         new_sd.owner_len = sd->owner_len;
     else
     {
-        owner = token_get_user( current->process->token );
+        owner = token_get_user( current_thread->process->token );
         new_sd.owner_len = security_sid_len( owner );
         new_sd.control |= SE_OWNER_DEFAULTED;
     }
@@ -452,7 +452,7 @@ int default_set_sd( struct object *obj, const struct security_descriptor *sd,
         new_sd.group_len = sd->group_len;
     else
     {
-        group = token_get_primary_group( current->process->token );
+        group = token_get_primary_group( current_thread->process->token );
         new_sd.group_len = security_sid_len( group );
         new_sd.control |= SE_GROUP_DEFAULTED;
     }
@@ -486,7 +486,7 @@ int default_set_sd( struct object *obj, const struct security_descriptor *sd,
             new_sd.dacl_len = obj->sd->dacl_len;
         else
         {
-            dacl = token_get_default_dacl( current->process->token );
+            dacl = token_get_default_dacl( current_thread->process->token );
             new_sd.dacl_len = dacl->AclSize;
             new_sd.control |= SE_DACL_DEFAULTED;
         }

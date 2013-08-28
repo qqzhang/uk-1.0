@@ -82,11 +82,11 @@ static void clipboard_dump( struct object *obj, int verbose )
              clipboard->owner_win, clipboard->viewer, clipboard->seqno );
 }
 
-/* retrieve the clipboard info for the current process, allocating it if needed */
+/* retrieve the clipboard info for the current_thread process, allocating it if needed */
 static struct clipboard *get_process_clipboard(void)
 {
     struct clipboard *clipboard;
-    struct winstation *winstation = get_process_winstation( current->process, WINSTA_ACCESSCLIPBOARD );
+    struct winstation *winstation = get_process_winstation( current_thread->process, WINSTA_ACCESSCLIPBOARD );
 
     if (!winstation) return NULL;
 
@@ -136,7 +136,7 @@ void cleanup_clipboard_thread(struct thread *thread)
 
 static int set_clipboard_window( struct clipboard *clipboard, user_handle_t win, int clear )
 {
-    if (clipboard->open_thread && clipboard->open_thread != current)
+    if (clipboard->open_thread && clipboard->open_thread != current_thread)
     {
         set_error(STATUS_WAS_LOCKED);
         return 0;
@@ -144,7 +144,7 @@ static int set_clipboard_window( struct clipboard *clipboard, user_handle_t win,
     else if (!clear)
     {
         clipboard->open_win = win;
-        clipboard->open_thread = current;
+        clipboard->open_thread = current_thread;
     }
     else
     {
@@ -157,7 +157,7 @@ static int set_clipboard_window( struct clipboard *clipboard, user_handle_t win,
 
 static int set_clipboard_owner( struct clipboard *clipboard, user_handle_t win, int clear )
 {
-    if (clipboard->open_thread && clipboard->open_thread->process != current->process)
+    if (clipboard->open_thread && clipboard->open_thread->process != current_thread->process)
     {
         set_error(STATUS_WAS_LOCKED);
         return 0;
@@ -165,7 +165,7 @@ static int set_clipboard_owner( struct clipboard *clipboard, user_handle_t win, 
     else if (!clear)
     {
         clipboard->owner_win = win;
-        clipboard->owner_thread = current;
+        clipboard->owner_thread = current_thread;
     }
     else
     {
@@ -212,7 +212,7 @@ DECL_HANDLER(set_clipboard_info)
     }
     else if (req->flags & SET_CB_CLOSE)
     {
-        if (clipboard->open_thread != current)
+        if (clipboard->open_thread != current_thread)
         {
             set_win32_error(ERROR_CLIPBOARD_NOT_OPEN);
             return;
@@ -236,8 +236,8 @@ DECL_HANDLER(set_clipboard_info)
 
     reply->seqno = get_seqno( clipboard );
 
-    if (clipboard->open_thread == current) reply->flags |= CB_OPEN;
-    if (clipboard->owner_thread == current) reply->flags |= CB_OWNER;
-    if (clipboard->owner_thread && clipboard->owner_thread->process == current->process)
+    if (clipboard->open_thread == current_thread) reply->flags |= CB_OPEN;
+    if (clipboard->owner_thread == current_thread) reply->flags |= CB_OWNER;
+    if (clipboard->owner_thread && clipboard->owner_thread->process == current_thread->process)
         reply->flags |= CB_PROCESS;
 }

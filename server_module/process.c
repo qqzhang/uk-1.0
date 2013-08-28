@@ -55,7 +55,7 @@ static struct list process_list = LIST_INIT(process_list);
 static int running_processes, user_processes;
 static struct event *shutdown_event;           /* signaled when shutdown starts */
 static struct timeout_user *shutdown_timeout;  /* timeout for server shutdown */
-static int shutdown_stage;  /* current stage in the shutdown process */
+static int shutdown_stage;  /* current_thread stage in the shutdown process */
 
 /* process operations */
 
@@ -367,7 +367,7 @@ struct thread *create_process( int fd, struct thread *parent_thread, int inherit
         process->handles = inherit_all ? copy_handle_table( process, parent )
                                        : alloc_handle_table( process, 0 );
         /* Note: for security reasons, starting a new process does not attempt
-         * to use the current impersonation token for the new process */
+         * to use the current_thread impersonation token for the new process */
         process->token = token_duplicate( parent->token, TRUE, 0 );
         process->affinity = parent->affinity;
     }
@@ -399,7 +399,7 @@ struct thread *create_process( int fd, struct thread *parent_thread, int inherit
     return NULL;
 }
 
-/* initialize the current process and fill in the request */
+/* initialize the current_thread process and fill in the request */
 data_size_t init_process( struct thread *thread )
 {
     struct process *process = thread->process;
@@ -502,7 +502,7 @@ struct process *get_process_from_id( process_id_t id )
 /* get a process from a handle (and increment the refcount) */
 struct process *get_process_from_handle( obj_handle_t handle, unsigned int access )
 {
-    return (struct process *)get_handle_obj( current->process, handle,
+    return (struct process *)get_handle_obj( current_thread->process, handle,
                                              access, &process_ops );
 }
 
@@ -560,7 +560,7 @@ static void process_unload_dll( struct process *process, mod_handle_t base )
         free( dll->filename );
         list_remove( &dll->entry );
         free( dll );
-        generate_debug_event( current, UNLOAD_DLL_DEBUG_EVENT, &base );
+        generate_debug_event( current_thread, UNLOAD_DLL_DEBUG_EVENT, &base );
     }
     else set_error( STATUS_INVALID_PARAMETER );
 }
@@ -878,8 +878,8 @@ DECL_HANDLER(new_process)
     struct startup_info *info;
     struct thread *thread;
     struct process *process;
-    struct process *parent = current->process;
-    int socket_fd = thread_get_inflight_fd( current, req->socket_fd );
+    struct process *parent = current_thread->process;
+    int socket_fd = thread_get_inflight_fd( current_thread, req->socket_fd );
 
     if (socket_fd == -1)
     {
@@ -912,7 +912,7 @@ DECL_HANDLER(new_process)
     info->data     = NULL;
 
     if (req->exe_file &&
-        !(info->exe_file = get_file_obj( current->process, req->exe_file, FILE_READ_DATA )))
+        !(info->exe_file = get_file_obj( current_thread->process, req->exe_file, FILE_READ_DATA )))
         goto done;
 
     info->data_size = get_req_data_size();
@@ -948,13 +948,13 @@ DECL_HANDLER(new_process)
 #undef FIXUP_LEN
     }
 
-    if (!(thread = create_process( socket_fd, current, req->inherit_all ))) goto done;
+    if (!(thread = create_process( socket_fd, current_thread, req->inherit_all ))) goto done;
     process = thread->process;
     process->debug_children = !!(req->create_flags & DEBUG_PROCESS);
     process->startup_info = (struct startup_info *)grab_object( info );
 
     /* connect to the window station */
-    connect_process_winstation( process, current );
+    connect_process_winstation( process, current_thread );
 
     /* thread will be actually suspended in init_done */
     if (req->create_flags & CREATE_SUSPENDED) thread->suspend++;
@@ -966,7 +966,7 @@ DECL_HANDLER(new_process)
          * like if hConOut and hConIn are console handles, then they should be on the same
          * physical console
          */
-        inherit_console( current, process, req->inherit_all ? info->data->hstdin : 0 );
+        inherit_console( current_thread, process, req->inherit_all ? info->data->hstdin : 0 );
     }
 
     if (!req->inherit_all && !(req->create_flags & CREATE_NEW_CONSOLE))
@@ -984,7 +984,7 @@ DECL_HANDLER(new_process)
 
     /* attach to the debugger if requested */
     if (req->create_flags & (DEBUG_PROCESS | DEBUG_ONLY_THIS_PROCESS))
-        set_process_debugger( process, current );
+        set_process_debugger( process, current_thread );
     else if (parent->debugger && parent->debug_children)
         set_process_debugger( process, parent->debugger );
 
@@ -992,7 +992,7 @@ DECL_HANDLER(new_process)
         process->group_id = parent->group_id;
 
     info->process = (struct process *)grab_object( process );
-    reply->info = alloc_handle( current->process, info, SYNCHRONIZE, 0 );
+    reply->info = alloc_handle( current_thread->process, info, SYNCHRONIZE, 0 );
     reply->pid = get_process_id( process );
     reply->tid = get_thread_id( thread );
     reply->phandle = alloc_handle( parent, process, req->process_access, req->process_attr );
@@ -1007,7 +1007,7 @@ DECL_HANDLER(get_new_process_info)
 {
     struct startup_info *info;
 
-    if ((info = (struct startup_info *)get_handle_obj( current->process, req->info,
+    if ((info = (struct startup_info *)get_handle_obj( current_thread->process, req->info,
                                                        0, &startup_info_ops )))
     {
         reply->success = is_process_init_done( info->process );
@@ -1019,7 +1019,7 @@ DECL_HANDLER(get_new_process_info)
 /* Retrieve the new process startup info */
 DECL_HANDLER(get_startup_info)
 {
-    struct process *process = current->process;
+    struct process *process = current_thread->process;
     struct startup_info *info = process->startup_info;
     data_size_t size;
 
@@ -1041,7 +1041,7 @@ DECL_HANDLER(get_startup_info)
 DECL_HANDLER(init_process_done)
 {
     struct process_dll *dll;
-    struct process *process = current->process;
+    struct process *process = current_thread->process;
 
     if (is_process_init_done(process))
     {
@@ -1064,7 +1064,7 @@ DECL_HANDLER(init_process_done)
     set_process_startup_state( process, STARTUP_DONE );
 
     if (req->gui) process->idle_event = create_event( NULL, NULL, 0, 1, 0, NULL );
-    stop_thread_if_suspended( current );
+    stop_thread_if_suspended( current_thread );
     if (process->debugger) set_process_debug_flag( process, 1 );
 }
 
@@ -1075,7 +1075,7 @@ DECL_HANDLER(open_process)
     reply->handle = 0;
     if (process)
     {
-        reply->handle = alloc_handle( current->process, process, req->access, req->attributes );
+        reply->handle = alloc_handle( current_thread->process, process, req->access, req->attributes );
         release_object( process );
     }
 }
@@ -1090,10 +1090,10 @@ DECL_HANDLER(terminate_process)
         process = get_process_from_handle( req->handle, PROCESS_TERMINATE );
         if (!process) return;
     }
-    else process = (struct process *)grab_object( current->process );
+    else process = (struct process *)grab_object( current_thread->process );
 
-    reply->self = (current->process == process);
-    terminate_process( process, current, req->exit_code );
+    reply->self = (current_thread->process == process);
+    terminate_process( process, current_thread, req->exit_code );
     release_object( process );
 }
 
@@ -1191,10 +1191,10 @@ DECL_HANDLER(load_dll)
     struct process_dll *dll;
     struct mapping *mapping = NULL;
 
-    if (req->mapping && !(mapping = get_mapping_obj( current->process, req->mapping, SECTION_QUERY )))
+    if (req->mapping && !(mapping = get_mapping_obj( current_thread->process, req->mapping, SECTION_QUERY )))
         return;
 
-    if ((dll = process_load_dll( current->process, mapping, req->base,
+    if ((dll = process_load_dll( current_thread->process, mapping, req->base,
                                  get_req_data(), get_req_data_size() )))
     {
         dll->size       = req->size;
@@ -1202,8 +1202,8 @@ DECL_HANDLER(load_dll)
         dll->dbg_size   = req->dbg_size;
         dll->name       = req->name;
         /* only generate event if initialization is done */
-        if (is_process_init_done( current->process ))
-            generate_debug_event( current, LOAD_DLL_DEBUG_EVENT, dll );
+        if (is_process_init_done( current_thread->process ))
+            generate_debug_event( current_thread, LOAD_DLL_DEBUG_EVENT, dll );
     }
     if (mapping) release_object( mapping );
 }
@@ -1211,7 +1211,7 @@ DECL_HANDLER(load_dll)
 /* notify the server that a dll is being unloaded */
 DECL_HANDLER(unload_dll)
 {
-    process_unload_dll( current->process, req->base );
+    process_unload_dll( current_thread->process, req->base );
 }
 
 /* retrieve information about a module in a process */
@@ -1257,17 +1257,17 @@ DECL_HANDLER(get_process_idle_event)
     reply->event = 0;
     if ((process = get_process_from_handle( req->handle, PROCESS_QUERY_INFORMATION )))
     {
-        if (process->idle_event && process != current->process)
-            reply->event = alloc_handle( current->process, process->idle_event,
+        if (process->idle_event && process != current_thread->process)
+            reply->event = alloc_handle( current_thread->process, process->idle_event,
                                          EVENT_ALL_ACCESS, 0 );
         release_object( process );
     }
 }
 
-/* make the current process a system process */
+/* make the current_thread process a system process */
 DECL_HANDLER(make_process_system)
 {
-    struct process *process = current->process;
+    struct process *process = current_thread->process;
 
     if (!shutdown_event)
     {
@@ -1275,7 +1275,7 @@ DECL_HANDLER(make_process_system)
         make_object_static( (struct object *)shutdown_event );
     }
 
-    if (!(reply->event = alloc_handle( current->process, shutdown_event, SYNCHRONIZE, 0 )))
+    if (!(reply->event = alloc_handle( current_thread->process, shutdown_event, SYNCHRONIZE, 0 )))
         return;
 
     if (!process->is_system)

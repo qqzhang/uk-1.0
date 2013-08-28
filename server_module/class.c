@@ -165,7 +165,7 @@ DECL_HANDLER(create_class)
         if (!grab_global_atom( NULL, atom )) return;
     }
 
-    class = find_class( current->process, atom, req->instance );
+    class = find_class( current_thread->process, atom, req->instance );
     if (class && !class->local == !req->local)
     {
         set_win32_error( ERROR_CLASS_ALREADY_EXISTS );
@@ -180,7 +180,7 @@ DECL_HANDLER(create_class)
         return;
     }
 
-    if (!(class = create_class( current->process, req->extra, req->local )))
+    if (!(class = create_class( current_thread->process, req->extra, req->local )))
     {
         release_global_atom( NULL, atom );
         return;
@@ -203,7 +203,7 @@ DECL_HANDLER(destroy_class)
     get_req_unicode_str( &name );
     if (name.len) atom = find_global_atom( NULL, &name );
 
-    if (!(class = find_class( current->process, atom, req->instance )))
+    if (!(class = find_class( current_thread->process, atom, req->instance )))
         set_win32_error( ERROR_CLASS_DOES_NOT_EXIST );
     else if (class->count)
         set_win32_error( ERROR_CLASS_HAS_WINDOWS );
@@ -222,7 +222,7 @@ DECL_HANDLER(set_class_info)
 
     if (!class) return;
 
-    if (req->flags && class->process != current->process)
+    if (req->flags && class->process != current_thread->process)
     {
         set_error( STATUS_ACCESS_DENIED );
         return;

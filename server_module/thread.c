@@ -227,7 +227,7 @@ struct thread *create_thread( int fd, struct process *process )
     thread->process = (struct process *)grab_object( process );
     thread->desktop = process->desktop;
     thread->affinity = process->affinity;
-    if (!current) current = thread;
+    if (!current_thread) current_thread = thread;
 
     list_add_head( &thread_list, &thread->entry );
 
@@ -386,7 +386,7 @@ struct thread *get_thread_from_id( thread_id_t id )
 /* get a thread from a handle (and increment the refcount) */
 struct thread *get_thread_from_handle( obj_handle_t handle, unsigned int access )
 {
-    return (struct thread *)get_handle_obj( current->process, handle,
+    return (struct thread *)get_handle_obj( current_thread->process, handle,
                                             access, &thread_ops );
 }
 
@@ -577,22 +577,22 @@ static int wait_on( unsigned int count, struct object *objects[], int flags, tim
     unsigned int i;
 
     if (!(wait = mem_alloc( FIELD_OFFSET(struct thread_wait, queues[count]) ))) return 0;
-    wait->next    = current->wait;
-    wait->thread  = current;
+    wait->next    = current_thread->wait;
+    wait->thread  = current_thread;
     wait->count   = count;
     wait->flags   = flags;
     wait->user    = NULL;
     wait->timeout = timeout;
-    current->wait = wait;
+    current_thread->wait = wait;
 
     for (i = 0, entry = wait->queues; i < count; i++, entry++)
     {
         struct object *obj = objects[i];
-        entry->thread = current;
+        entry->thread = current_thread;
         if (!obj->ops->add_queue( obj, entry ))
         {
             wait->count = i;
-            end_wait( current );
+            end_wait( current_thread );
             return 0;
         }
     }
@@ -712,10 +712,10 @@ static int signal_object( obj_handle_t handle )
     struct object *obj;
     int ret = 0;
 
-    obj = get_handle_obj( current->process, handle, 0, NULL );
+    obj = get_handle_obj( current_thread->process, handle, 0, NULL );
     if (obj)
     {
-        ret = obj->ops->signal( obj, get_handle_access( current->process, handle ));
+        ret = obj->ops->signal( obj, get_handle_access( current_thread->process, handle ));
         release_object( obj );
     }
     return ret;
@@ -738,7 +738,7 @@ static timeout_t select_on( unsigned int count, client_ptr_t cookie, const obj_h
     }
     for (i = 0; i < count; i++)
     {
-        if (!(objects[i] = get_handle_obj( current->process, handles[i], SYNCHRONIZE, NULL )))
+        if (!(objects[i] = get_handle_obj( current_thread->process, handles[i], SYNCHRONIZE, NULL )))
             break;
     }
 
@@ -750,32 +750,32 @@ static timeout_t select_on( unsigned int count, client_ptr_t cookie, const obj_h
     {
         if (!signal_object( signal_obj ))
         {
-            end_wait( current );
+            end_wait( current_thread );
             goto done;
         }
         /* check if we woke ourselves up */
-        if (!current->wait) goto done;
+        if (!current_thread->wait) goto done;
     }
 
-    if ((ret = check_wait( current )) != -1)
+    if ((ret = check_wait( current_thread )) != -1)
     {
         /* condition is already satisfied */
-        end_wait( current );
+        end_wait( current_thread );
         set_error( ret );
         goto done;
     }
 
     /* now we need to wait */
-    if (current->wait->timeout != TIMEOUT_INFINITE)
+    if (current_thread->wait->timeout != TIMEOUT_INFINITE)
     {
-        if (!(current->wait->user = add_timeout_user( current->wait->timeout,
-                                                      thread_timeout, current->wait )))
+        if (!(current_thread->wait->user = add_timeout_user( current_thread->wait->timeout,
+                                                      thread_timeout, current_thread->wait )))
         {
-            end_wait( current );
+            end_wait( current_thread );
             goto done;
         }
     }
-    current->wait->cookie = cookie;
+    current_thread->wait->cookie = cookie;
     set_error( STATUS_PENDING );
 
 done:
@@ -997,7 +997,7 @@ void kill_thread( struct thread *thread, int violent_death )
     if (thread->state == TERMINATED) return;  /* already killed */
     thread->state = TERMINATED;
     thread->exit_time = current_time;
-    if (current == thread) current = NULL;
+    if (current_thread == thread) current_thread = NULL;
     if (debug_level)
         fprintf( stderr,"%04x: *killed* exit_code=%d\n",
                  thread->id, thread->exit_code );
@@ -1103,7 +1103,7 @@ struct thread_snapshot *thread_snap( int *count )
     return snapshot;
 }
 
-/* gets the current impersonation token */
+/* gets the current_thread impersonation token */
 struct token *thread_get_impersonation_token( struct thread *thread )
 {
     if (thread->token)
@@ -1116,7 +1116,7 @@ struct token *thread_get_impersonation_token( struct thread *thread )
 DECL_HANDLER(new_thread)
 {
     struct thread *thread;
-    int request_fd = thread_get_inflight_fd( current, req->request_fd );
+    int request_fd = thread_get_inflight_fd( current_thread, req->request_fd );
 
     if (request_fd == -1 || fcntl( request_fd, F_SETFL, O_NONBLOCK ) == -1)
     {
@@ -1125,11 +1125,11 @@ DECL_HANDLER(new_thread)
         return;
     }
 
-    if ((thread = create_thread( request_fd, current->process )))
+    if ((thread = create_thread( request_fd, current_thread->process )))
     {
         if (req->suspend) thread->suspend++;
         reply->tid = get_thread_id( thread );
-        if ((reply->handle = alloc_handle( current->process, thread, req->access, req->attributes )))
+        if ((reply->handle = alloc_handle( current_thread->process, thread, req->access, req->attributes )))
         {
             /* thread object will be released when the thread gets killed */
             return;
@@ -1142,21 +1142,21 @@ DECL_HANDLER(new_thread)
 DECL_HANDLER(init_thread)
 {
     unsigned int prefix_cpu_mask = get_prefix_cpu_mask();
-    struct process *process = current->process;
+    struct process *process = current_thread->process;
     int wait_fd, reply_fd;
 
-    if ((reply_fd = thread_get_inflight_fd( current, req->reply_fd )) == -1)
+    if ((reply_fd = thread_get_inflight_fd( current_thread, req->reply_fd )) == -1)
     {
         set_error( STATUS_TOO_MANY_OPENED_FILES );
         return;
     }
-    if ((wait_fd = thread_get_inflight_fd( current, req->wait_fd )) == -1)
+    if ((wait_fd = thread_get_inflight_fd( current_thread, req->wait_fd )) == -1)
     {
         set_error( STATUS_TOO_MANY_OPENED_FILES );
         goto error;
     }
 
-    if (current->reply_fd)  /* already initialised */
+    if (current_thread->reply_fd)  /* already initialised */
     {
         set_error( STATUS_INVALID_PARAMETER );
         goto error;
@@ -1164,9 +1164,9 @@ DECL_HANDLER(init_thread)
 
     if (fcntl( reply_fd, F_SETFL, O_NONBLOCK ) == -1) goto error;
 
-    current->reply_fd = create_anonymous_fd( &thread_fd_ops, reply_fd, &current->obj, 0 );
-    current->wait_fd  = create_anonymous_fd( &thread_fd_ops, wait_fd, &current->obj, 0 );
-    if (!current->reply_fd || !current->wait_fd) return;
+    current_thread->reply_fd = create_anonymous_fd( &thread_fd_ops, reply_fd, &current_thread->obj, 0 );
+    current_thread->wait_fd  = create_anonymous_fd( &thread_fd_ops, wait_fd, &current_thread->obj, 0 );
+    if (!current_thread->reply_fd || !current_thread->wait_fd) return;
 
     if (!is_valid_address(req->teb))
     {
@@ -1174,9 +1174,9 @@ DECL_HANDLER(init_thread)
         return;
     }
 
-    current->unix_pid = req->unix_pid;
-    current->unix_tid = req->unix_tid;
-    current->teb      = req->teb;
+    current_thread->unix_pid = req->unix_pid;
+    current_thread->unix_tid = req->unix_tid;
+    current_thread->teb      = req->teb;
 
     if (!process->peb)  /* first thread, initialize the process too */
     {
@@ -1188,14 +1188,14 @@ DECL_HANDLER(init_thread)
                 set_error( STATUS_NOT_REGISTRY_FILE );  /* server supports it but not the prefix */
             return;
         }
-        process->unix_pid = current->unix_pid;
+        process->unix_pid = current_thread->unix_pid;
         process->peb      = req->entry;
         process->cpu      = req->cpu;
-        reply->info_size  = init_process( current );
+        reply->info_size  = init_process( current_thread );
         if (!process->parent)
-            process->affinity = current->affinity = get_thread_affinity( current );
+            process->affinity = current_thread->affinity = get_thread_affinity( current_thread );
         else
-            set_thread_affinity( current, current->affinity );
+            set_thread_affinity( current_thread, current_thread->affinity );
     }
     else
     {
@@ -1204,16 +1204,16 @@ DECL_HANDLER(init_thread)
             set_error( STATUS_INVALID_PARAMETER );
             return;
         }
-        if (process->unix_pid != current->unix_pid)
+        if (process->unix_pid != current_thread->unix_pid)
             process->unix_pid = -1;  /* can happen with linuxthreads */
-        stop_thread_if_suspended( current );
-        generate_debug_event( current, CREATE_THREAD_DEBUG_EVENT, &req->entry );
-        set_thread_affinity( current, current->affinity );
+        stop_thread_if_suspended( current_thread );
+        generate_debug_event( current_thread, CREATE_THREAD_DEBUG_EVENT, &req->entry );
+        set_thread_affinity( current_thread, current_thread->affinity );
     }
     debug_level = max( debug_level, req->debug_level );
 
     reply->pid     = get_process_id( process );
-    reply->tid     = get_thread_id( current );
+    reply->tid     = get_thread_id( current_thread );
     reply->version = SERVER_PROTOCOL_VERSION;
     reply->server_start = server_start_time;
     reply->all_cpus     = supported_cpus & prefix_cpu_mask;
@@ -1234,7 +1234,7 @@ DECL_HANDLER(terminate_thread)
     if ((thread = get_thread_from_handle( req->handle, THREAD_TERMINATE )))
     {
         thread->exit_code = req->exit_code;
-        if (thread != current) kill_thread( thread, 1 );
+        if (thread != current_thread) kill_thread( thread, 1 );
         else
         {
             reply->self = 1;
@@ -1252,7 +1252,7 @@ DECL_HANDLER(open_thread)
     reply->handle = 0;
     if (thread)
     {
-        reply->handle = alloc_handle( current->process, thread, req->access, req->attributes );
+        reply->handle = alloc_handle( current_thread->process, thread, req->access, req->attributes );
         release_object( thread );
     }
 }
@@ -1337,15 +1337,15 @@ DECL_HANDLER(select)
     /* first store results of previous apc */
     if (req->prev_apc)
     {
-        if (!(apc = (struct thread_apc *)get_handle_obj( current->process, req->prev_apc,
+        if (!(apc = (struct thread_apc *)get_handle_obj( current_thread->process, req->prev_apc,
                                                          0, &thread_apc_ops ))) return;
         apc->result = *result;
         apc->executed = 1;
         if (apc->result.type == APC_CREATE_THREAD)  /* transfer the handle to the caller process */
         {
-            obj_handle_t handle = duplicate_handle( current->process, apc->result.create_thread.handle,
+            obj_handle_t handle = duplicate_handle( current_thread->process, apc->result.create_thread.handle,
                                                     apc->caller->process, 0, 0, DUP_HANDLE_SAME_ACCESS );
-            close_handle( current->process, apc->result.create_thread.handle );
+            close_handle( current_thread->process, apc->result.create_thread.handle );
             apc->result.create_thread.handle = handle;
             clear_error();  /* ignore errors from the above calls */
         }
@@ -1356,7 +1356,7 @@ DECL_HANDLER(select)
                                   apc->result.async_io.total, apc->result.async_io.apc );
         }
         wake_up( &apc->obj, 0 );
-        close_handle( current->process, req->prev_apc );
+        close_handle( current_thread->process, req->prev_apc );
         release_object( apc );
     }
 
@@ -1366,14 +1366,14 @@ DECL_HANDLER(select)
     {
         for (;;)
         {
-            if (!(apc = thread_dequeue_apc( current, !(req->flags & SELECT_ALERTABLE) )))
+            if (!(apc = thread_dequeue_apc( current_thread, !(req->flags & SELECT_ALERTABLE) )))
                 break;
             /* Optimization: ignore APC_NONE calls, they are only used to
              * wake up a thread, but since we got here the thread woke up already.
              */
             if (apc->call.type != APC_NONE)
             {
-                if ((reply->apc_handle = alloc_handle( current->process, apc, SYNCHRONIZE, 0 )))
+                if ((reply->apc_handle = alloc_handle( current_thread->process, apc, SYNCHRONIZE, 0 )))
                     reply->call = apc->call;
                 release_object( apc );
                 break;
@@ -1414,10 +1414,10 @@ DECL_HANDLER(queue_apc)
         break;
     case APC_MAP_VIEW:
         process = get_process_from_handle( req->handle, PROCESS_VM_OPERATION );
-        if (process && process != current->process)
+        if (process && process != current_thread->process)
         {
             /* duplicate the handle into the target process */
-            obj_handle_t handle = duplicate_handle( current->process, apc->call.map_view.handle,
+            obj_handle_t handle = duplicate_handle( current_thread->process, apc->call.map_view.handle,
                                                     process, 0, 0, DUP_HANDLE_SAME_ACCESS );
             if (handle) apc->call.map_view.handle = handle;
             else
@@ -1442,20 +1442,20 @@ DECL_HANDLER(queue_apc)
     }
     else if (process)
     {
-        reply->self = (process == current->process);
+        reply->self = (process == current_thread->process);
         if (!reply->self)
         {
-            obj_handle_t handle = alloc_handle( current->process, apc, SYNCHRONIZE, 0 );
+            obj_handle_t handle = alloc_handle( current_thread->process, apc, SYNCHRONIZE, 0 );
             if (handle)
             {
                 if (queue_apc( process, NULL, apc ))
                 {
-                    apc->caller = (struct thread *)grab_object( current );
+                    apc->caller = (struct thread *)grab_object( current_thread );
                     reply->handle = handle;
                 }
                 else
                 {
-                    close_handle( current->process, handle );
+                    close_handle( current_thread->process, handle );
                     set_error( STATUS_PROCESS_IS_TERMINATING );
                 }
             }
@@ -1471,19 +1471,19 @@ DECL_HANDLER(get_apc_result)
 {
     struct thread_apc *apc;
 
-    if (!(apc = (struct thread_apc *)get_handle_obj( current->process, req->handle,
+    if (!(apc = (struct thread_apc *)get_handle_obj( current_thread->process, req->handle,
                                                      0, &thread_apc_ops ))) return;
     if (!apc->executed) set_error( STATUS_PENDING );
     else
     {
         reply->result = apc->result;
         /* close the handle directly to avoid an extra round-trip */
-        close_handle( current->process, req->handle );
+        close_handle( current_thread->process, req->handle );
     }
     release_object( apc );
 }
 
-/* retrieve the current context of a thread */
+/* retrieve the current_thread context of a thread */
 DECL_HANDLER(get_thread_context)
 {
     struct thread *thread;
@@ -1495,9 +1495,9 @@ DECL_HANDLER(get_thread_context)
         return;
     }
     if (!(thread = get_thread_from_handle( req->handle, THREAD_GET_CONTEXT ))) return;
-    reply->self = (thread == current);
+    reply->self = (thread == current_thread);
 
-    if (thread != current && !thread->context)
+    if (thread != current_thread && !thread->context)
     {
         /* thread is not suspended, retry (if it's still running) */
         if (thread->state == RUNNING)
@@ -1525,7 +1525,7 @@ DECL_HANDLER(get_thread_context)
     release_object( thread );
 }
 
-/* set the current context of a thread */
+/* set the current_thread context of a thread */
 DECL_HANDLER(set_thread_context)
 {
     struct thread *thread;
@@ -1537,9 +1537,9 @@ DECL_HANDLER(set_thread_context)
         return;
     }
     if (!(thread = get_thread_from_handle( req->handle, THREAD_SET_CONTEXT ))) return;
-    reply->self = (thread == current);
+    reply->self = (thread == current_thread);
 
-    if (thread != current && !thread->context)
+    if (thread != current_thread && !thread->context)
     {
         /* thread is not suspended, retry (if it's still running) */
         if (thread->state == RUNNING)
@@ -1577,15 +1577,15 @@ DECL_HANDLER(get_suspend_context)
         return;
     }
 
-    if (current->suspend_context)
+    if (current_thread->suspend_context)
     {
-        set_reply_data_ptr( current->suspend_context, sizeof(context_t) );
-        if (current->context == current->suspend_context)
+        set_reply_data_ptr( current_thread->suspend_context, sizeof(context_t) );
+        if (current_thread->context == current_thread->suspend_context)
         {
-            current->context = NULL;
-            stop_thread_if_suspended( current );
+            current_thread->context = NULL;
+            stop_thread_if_suspended( current_thread );
         }
-        current->suspend_context = NULL;
+        current_thread->suspend_context = NULL;
     }
     else set_error( STATUS_INVALID_PARAMETER );  /* not suspended, shouldn't happen */
 }
@@ -1601,16 +1601,16 @@ DECL_HANDLER(set_suspend_context)
         return;
     }
 
-    if (current->context || context->cpu != current->process->cpu)
+    if (current_thread->context || context->cpu != current_thread->process->cpu)
     {
         /* nested suspend or exception, shouldn't happen */
         set_error( STATUS_INVALID_PARAMETER );
     }
-    else if ((current->suspend_context = mem_alloc( sizeof(context_t) )))
+    else if ((current_thread->suspend_context = mem_alloc( sizeof(context_t) )))
     {
-        memcpy( current->suspend_context, get_req_data(), sizeof(context_t) );
-        current->context = current->suspend_context;
-        if (current->debug_break) break_thread( current );
+        memcpy( current_thread->suspend_context, get_req_data(), sizeof(context_t) );
+        current_thread->context = current_thread->suspend_context;
+        if (current_thread->debug_break) break_thread( current_thread );
     }
 }
 

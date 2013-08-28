@@ -655,9 +655,9 @@ struct rawinput_device
 @REPLY
     obj_handle_t info;           /* new process info handle */
     process_id_t pid;            /* process id */
-    obj_handle_t phandle;        /* process handle (in the current process) */
+    obj_handle_t phandle;        /* process handle (in the current_thread process) */
     thread_id_t  tid;            /* thread id */
-    obj_handle_t thandle;        /* thread handle (in the current process) */
+    obj_handle_t thandle;        /* thread handle (in the current_thread process) */
 @END
 
 
@@ -678,7 +678,7 @@ struct rawinput_device
     int          request_fd;   /* fd for request pipe */
 @REPLY
     thread_id_t  tid;          /* thread id */
-    obj_handle_t handle;       /* thread handle (in the current process) */
+    obj_handle_t handle;       /* thread handle (in the current_thread process) */
 @END
 
 
@@ -862,7 +862,7 @@ struct rawinput_device
 @END
 
 
-/* Close a handle for the current process */
+/* Close a handle for the current_thread process */
 @REQ(close_handle)
     obj_handle_t handle;       /* handle to close */
 @END
@@ -888,7 +888,7 @@ struct rawinput_device
     unsigned int options;      /* duplicate options (see below) */
 @REPLY
     obj_handle_t handle;       /* duplicated handle in dst process */
-    int          self;         /* is the source the current process? */
+    int          self;         /* is the source the current_thread process? */
     int          closed;       /* whether the source handle has been closed */
 @END
 #define DUP_HANDLE_CLOSE_SOURCE  DUPLICATE_CLOSE_SOURCE
@@ -1198,14 +1198,14 @@ enum server_fd_type
     unsigned int access;        /* wanted access rights */
     unsigned int attributes;    /* object attributes */
     process_id_t pid;           /* pid of process which shall be attached to the console */
-    int          input_fd;      /* if pid=-1 (bare console to current process), fd for input */
+    int          input_fd;      /* if pid=-1 (bare console to current_thread process), fd for input */
 @REPLY
     obj_handle_t handle_in;     /* handle to console input */
     obj_handle_t event;         /* handle to renderer events change notification */
 @END
 
 
-/* Free the console of the current process */
+/* Free the console of the current_thread process */
 @REQ(free_console)
 @END
 
@@ -1264,7 +1264,7 @@ struct console_renderer_event
 
 /* Open a handle to the process console */
 @REQ(open_console)
-    obj_handle_t from;          /* 0 (resp 1) input (resp output) of current process console */
+    obj_handle_t from;          /* 0 (resp 1) input (resp output) of current_thread process console */
                                 /* otherwise console_in handle to get active screen buffer? */
     unsigned int access;        /* wanted access rights */
     unsigned int attributes;    /* object attributes */
@@ -1748,7 +1748,7 @@ enum char_info_mode
 /* Enumerate registry subkeys */
 @REQ(enum_key)
     obj_handle_t hkey;         /* handle to registry key */
-    int          index;        /* index of subkey (or -1 for current key) */
+    int          index;        /* index of subkey (or -1 for current_thread key) */
     int          info_class;   /* requested information class */
 @REPLY
     int          subkeys;      /* number of subkeys */
@@ -1886,24 +1886,24 @@ enum char_info_mode
 @END
 
 
-/* Retrieve the current context of a thread */
+/* Retrieve the current_thread context of a thread */
 @REQ(get_thread_context)
     obj_handle_t handle;       /* thread handle */
     unsigned int flags;        /* context flags */
     int          suspend;      /* suspend the thread if needed */
 @REPLY
-    int          self;         /* was it a handle to the current thread? */
+    int          self;         /* was it a handle to the current_thread thread? */
     VARARG(context,context);   /* thread context */
 @END
 
 
-/* Set the current context of a thread */
+/* Set the current_thread context of a thread */
 @REQ(set_thread_context)
     obj_handle_t handle;       /* thread handle */
     int          suspend;      /* suspend the thread if needed */
     VARARG(context,context);   /* thread context */
 @REPLY
-    int          self;         /* was it a handle to the current thread? */
+    int          self;         /* was it a handle to the current_thread thread? */
 @END
 
 
@@ -1978,31 +1978,31 @@ enum char_info_mode
 @END
 
 
-/* Get the message queue of the current thread */
+/* Get the message queue of the current_thread thread */
 @REQ(get_msg_queue)
 @REPLY
     obj_handle_t handle;       /* handle to the queue */
 @END
 
 
-/* Set the file descriptor associated to the current thread queue */
+/* Set the file descriptor associated to the current_thread thread queue */
 @REQ(set_queue_fd)
     obj_handle_t handle;       /* handle to the file descriptor */
 @END
 
 
-/* Set the current message queue wakeup mask */
+/* Set the current_thread message queue wakeup mask */
 @REQ(set_queue_mask)
     unsigned int wake_mask;    /* wakeup bits mask */
     unsigned int changed_mask; /* changed bits mask */
     int          skip_wait;    /* will we skip waiting if signaled? */
 @REPLY
-    unsigned int wake_bits;    /* current wake bits */
-    unsigned int changed_bits; /* current changed bits */
+    unsigned int wake_bits;    /* current_thread wake bits */
+    unsigned int changed_bits; /* current_thread changed bits */
 @END
 
 
-/* Get the current message queue status */
+/* Get the current_thread message queue status */
 @REQ(get_queue_status)
     int          clear;        /* should we clear the change bits? */
 @REPLY
@@ -2068,7 +2068,7 @@ enum message_type
 #define SEND_HWMSG_INJECTED    0x01
 
 
-/* Get a message from the current queue */
+/* Get a message from the current_thread queue */
 @REQ(get_message)
     unsigned int    flags;     /* PM_* flags */
     user_handle_t   get_win;   /* window handle to get */
@@ -2098,11 +2098,11 @@ enum message_type
 @END
 
 
-/* Accept the current hardware message */
+/* Accept the current_thread hardware message */
 @REQ(accept_hardware_message)
     unsigned int    hw_id;     /* id of the hardware message */
     int             remove;    /* should we remove the message? */
-    user_handle_t   new_win;   /* new destination window for current message */
+    user_handle_t   new_win;   /* new destination window for current_thread message */
 @END
 
 
@@ -2270,7 +2270,7 @@ enum message_type
 @END
 
 
-/* Retrieve the desktop window for the current thread */
+/* Retrieve the desktop window for the current_thread thread */
 @REQ(get_desktop_window)
     int            force;       /* force creation if it doesn't exist */
 @REPLY
@@ -2592,14 +2592,14 @@ enum coords_relative
 @END
 
 
-/* Get the process current window station */
+/* Get the process current_thread window station */
 @REQ(get_process_winstation)
 @REPLY
     obj_handle_t handle;          /* handle to the window station */
 @END
 
 
-/* Set the process current window station */
+/* Set the process current_thread window station */
 @REQ(set_process_winstation)
     obj_handle_t handle;          /* handle to the window station */
 @END
@@ -2607,7 +2607,7 @@ enum coords_relative
 
 /* Enumerate window stations */
 @REQ(enum_winstation)
-    unsigned int index;           /* current index */
+    unsigned int index;           /* current_thread index */
 @REPLY
     unsigned int next;            /* next index */
     VARARG(name,unicode_str);     /* window station name */
@@ -2643,7 +2643,7 @@ enum coords_relative
 @END
 
 
-/* Get the thread current desktop */
+/* Get the thread current_thread desktop */
 @REQ(get_thread_desktop)
     thread_id_t  tid;             /* thread id */
 @REPLY
@@ -2651,7 +2651,7 @@ enum coords_relative
 @END
 
 
-/* Set the thread current desktop */
+/* Set the thread current_thread desktop */
 @REQ(set_thread_desktop)
     obj_handle_t handle;          /* handle to the desktop */
 @END
@@ -2660,7 +2660,7 @@ enum coords_relative
 /* Enumerate desktops */
 @REQ(enum_desktop)
     obj_handle_t winstation;      /* handle to the window station */
-    unsigned int index;           /* current index */
+    unsigned int index;           /* current_thread index */
 @REPLY
     unsigned int next;            /* next index */
     VARARG(name,unicode_str);     /* window station name */
@@ -2760,21 +2760,21 @@ enum coords_relative
     int            send_msg_new;  /* whether we have to send a msg to the new window */
 @END
 
-/* Set the current thread focus window */
+/* Set the current_thread thread focus window */
 @REQ(set_focus_window)
     user_handle_t  handle;        /* handle to the focus window */
 @REPLY
     user_handle_t  previous;      /* handle to the previous focus window */
 @END
 
-/* Set the current thread active window */
+/* Set the current_thread thread active window */
 @REQ(set_active_window)
     user_handle_t  handle;        /* handle to the active window */
 @REPLY
     user_handle_t  previous;      /* handle to the previous active window */
 @END
 
-/* Set the current thread capture window */
+/* Set the current_thread thread capture window */
 @REQ(set_capture_window)
     user_handle_t  handle;        /* handle to the capture window */
     unsigned int   flags;         /* capture flags (see below) */
@@ -2786,7 +2786,7 @@ enum coords_relative
 #define CAPTURE_MOVESIZE 0x02  /* capture is for moving/resizing */
 
 
-/* Set the current thread caret window */
+/* Set the current_thread thread caret window */
 @REQ(set_caret_window)
     user_handle_t  handle;        /* handle to the caret window */
     int            width;         /* caret width */
@@ -2799,16 +2799,16 @@ enum coords_relative
 @END
 
 
-/* Set the current thread caret information */
+/* Set the current_thread thread caret information */
 @REQ(set_caret_info)
     unsigned int   flags;         /* caret flags (see below) */
     user_handle_t  handle;        /* handle to the caret window */
     int            x;             /* caret x position */
     int            y;             /* caret y position */
     int            hide;          /* increment for hide count (can be negative to show it) */
-    int            state;         /* caret state (1=on, 0=off, -1=toggle current state) */
+    int            state;         /* caret state (1=on, 0=off, -1=toggle current_thread state) */
 @REPLY
-    user_handle_t  full_handle;   /* handle to the current caret window */
+    user_handle_t  full_handle;   /* handle to the current_thread caret window */
     rectangle_t    old_rect;      /* previous caret rectangle */
     int            old_hide;      /* previous hide count */
     int            old_state;     /* previous caret state (1=on, 0=off) */
@@ -2871,8 +2871,8 @@ enum coords_relative
 
 /* Get the hook information */
 @REQ(get_hook_info)
-    user_handle_t  handle;         /* handle to the current hook */
-    int            get_next;       /* do we want info about current or next hook? */
+    user_handle_t  handle;         /* handle to the current_thread hook */
+    int            get_next;       /* do we want info about current_thread or next hook? */
     int            event;          /* signalled event */
     user_handle_t  window;         /* handle to the event window */
     int            object_id;      /* object id for out of context winevent */
@@ -2951,7 +2951,7 @@ enum coords_relative
     user_handle_t  old_clipboard;   /* old clipboard window */
     user_handle_t  old_owner;       /* old clipboard owner */
     user_handle_t  old_viewer;      /* old clipboard viewer */
-    unsigned int   seqno;           /* current sequence number */
+    unsigned int   seqno;           /* current_thread sequence number */
 @END
 
 #define SET_CB_OPEN      0x001
@@ -3258,7 +3258,7 @@ enum coords_relative
 @END
 
 
-/* Make the current process a system process */
+/* Make the current_thread process a system process */
 @REQ(make_process_system)
 @REPLY
     obj_handle_t event;           /* event signaled when all user processes have exited */
@@ -3379,7 +3379,7 @@ enum coords_relative
 @END
 
 
-/* Set/get the current cursor */
+/* Set/get the current_thread cursor */
 @REQ(set_cursor)
     unsigned int   flags;         /* flags for fields to set (see below) */
     user_handle_t  handle;        /* handle to the cursor */

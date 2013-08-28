@@ -617,11 +617,11 @@ static obj_handle_t pipe_server_ioctl( struct fd *fd, ioctl_code_t code, const a
             if (blocking)
             {
                 async_data_t new_data = *async_data;
-                if (!(wait_handle = alloc_wait_event( current->process ))) break;
+                if (!(wait_handle = alloc_wait_event( current_thread->process ))) break;
                 new_data.event = wait_handle;
                 if (!(async = fd_queue_async( server->ioctl_fd, &new_data, ASYNC_TYPE_WAIT )))
                 {
-                    close_handle( current->process, wait_handle );
+                    close_handle( current_thread->process, wait_handle );
                     break;
                 }
             }
@@ -912,15 +912,15 @@ static obj_handle_t named_pipe_device_ioctl( struct fd *fd, ioctl_code_t code, c
                 if (blocking)
                 {
                     async_data_t new_data = *async_data;
-                    if (!(wait_handle = alloc_wait_event( current->process ))) goto done;
+                    if (!(wait_handle = alloc_wait_event( current_thread->process ))) goto done;
                     new_data.event = wait_handle;
-                    if (!(async = create_async( current, pipe->waiters, &new_data )))
+                    if (!(async = create_async( current_thread, pipe->waiters, &new_data )))
                     {
-                        close_handle( current->process, wait_handle );
+                        close_handle( current_thread->process, wait_handle );
                         wait_handle = 0;
                     }
                 }
-                else async = create_async( current, pipe->waiters, async_data );
+                else async = create_async( current_thread, pipe->waiters, async_data );
 
                 if (async)
                 {
@@ -959,7 +959,7 @@ DECL_HANDLER(create_named_pipe)
 
     reply->handle = 0;
     get_req_unicode_str( &name );
-    if (req->rootdir && !(root = get_directory_obj( current->process, req->rootdir, 0 )))
+    if (req->rootdir && !(root = get_directory_obj( current_thread->process, req->rootdir, 0 )))
         return;
 
     pipe = create_named_pipe( root, &name, req->attributes | OBJ_OPENIF );
@@ -1000,7 +1000,7 @@ DECL_HANDLER(create_named_pipe)
     server = create_pipe_server( pipe, req->options );
     if (server)
     {
-        reply->handle = alloc_handle( current->process, server, req->access, req->attributes );
+        reply->handle = alloc_handle( current_thread->process, server, req->access, req->attributes );
         server->pipe->instances++;
         release_object( server );
     }
@@ -1013,14 +1013,14 @@ DECL_HANDLER(get_named_pipe_info)
     struct pipe_server *server;
     struct pipe_client *client = NULL;
 
-    server = get_pipe_server_obj( current->process, req->handle, FILE_READ_ATTRIBUTES );
+    server = get_pipe_server_obj( current_thread->process, req->handle, FILE_READ_ATTRIBUTES );
     if (!server)
     {
         if (get_error() != STATUS_OBJECT_TYPE_MISMATCH)
             return;
 
         clear_error();
-        client = (struct pipe_client *)get_handle_obj( current->process, req->handle,
+        client = (struct pipe_client *)get_handle_obj( current_thread->process, req->handle,
                                                        0, &pipe_client_ops );
         if (!client) return;
         server = client->server;

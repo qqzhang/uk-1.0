@@ -143,7 +143,7 @@ struct file_load_info
     FILE       *file;     /* input file */
     char       *buffer;   /* line buffer */
     int         len;      /* buffer length */
-    int         line;     /* current input line */
+    int         line;     /* current_thread input line */
     WCHAR      *tmp;      /* temp buffer to use while parsing input */
     size_t      tmplen;   /* length of temp buffer */
 };
@@ -1218,7 +1218,7 @@ static void delete_value( struct key *key, const struct unicode_str *name )
 /* get the registry key corresponding to an hkey handle */
 static struct key *get_hkey_obj( obj_handle_t hkey, unsigned int access )
 {
-    struct key *key = (struct key *)get_handle_obj( current->process, hkey, access, &key_ops );
+    struct key *key = (struct key *)get_handle_obj( current_thread->process, hkey, access, &key_ops );
 
     if (key && key->flags & KEY_DELETED)
     {
@@ -1638,7 +1638,7 @@ static void load_registry( struct key *key, obj_handle_t handle )
     struct file *file;
     int fd;
 
-    if (!(file = get_file_obj( current->process, handle, FILE_READ_DATA ))) return;
+    if (!(file = get_file_obj( current_thread->process, handle, FILE_READ_DATA ))) return;
     fd = dup( get_file_unix_fd( file ) );
     release_object( file );
     if (fd != -1)
@@ -1700,7 +1700,7 @@ static WCHAR *format_user_registry_path( const SID *sid, struct unicode_str *pat
     return p;
 }
 
-/* get the cpu architectures that can be supported in the current prefix */
+/* get the cpu architectures that can be supported in the current_thread prefix */
 unsigned int get_prefix_cpu_mask(void)
 {
     /* Allowed server/client/prefix combinations:
@@ -1830,7 +1830,7 @@ static void save_registry( struct key *key, obj_handle_t handle )
     struct file *file;
     int fd;
 
-    if (!(file = get_file_obj( current->process, handle, FILE_WRITE_DATA ))) return;
+    if (!(file = get_file_obj( current_thread->process, handle, FILE_WRITE_DATA ))) return;
     fd = dup( get_file_unix_fd( file ) );
     release_object( file );
     if (fd != -1)
@@ -1975,7 +1975,7 @@ DECL_HANDLER(create_key)
     struct unicode_str name, class;
     unsigned int access = req->access;
 
-    if (!is_wow64_thread( current )) access = (access & ~KEY_WOW64_32KEY) | KEY_WOW64_64KEY;
+    if (!is_wow64_thread( current_thread )) access = (access & ~KEY_WOW64_32KEY) | KEY_WOW64_64KEY;
 
     reply->hkey = 0;
 
@@ -2000,7 +2000,7 @@ DECL_HANDLER(create_key)
         if ((key = create_key( parent, &name, &class, req->options, access,
                                req->attributes, &reply->created )))
         {
-            reply->hkey = alloc_handle( current->process, key, access, req->attributes );
+            reply->hkey = alloc_handle( current_thread->process, key, access, req->attributes );
             release_object( key );
         }
         release_object( parent );
@@ -2014,7 +2014,7 @@ DECL_HANDLER(open_key)
     struct unicode_str name;
     unsigned int access = req->access;
 
-    if (!is_wow64_thread( current )) access = (access & ~KEY_WOW64_32KEY) | KEY_WOW64_64KEY;
+    if (!is_wow64_thread( current_thread )) access = (access & ~KEY_WOW64_32KEY) | KEY_WOW64_64KEY;
 
     reply->hkey = 0;
     /* NOTE: no access rights are required to open the parent key, only the child key */
@@ -2023,7 +2023,7 @@ DECL_HANDLER(open_key)
         get_req_path( &name, !req->parent );
         if ((key = open_key( parent, &name, access, req->attributes )))
         {
-            reply->hkey = alloc_handle( current->process, key, access, req->attributes );
+            reply->hkey = alloc_handle( current_thread->process, key, access, req->attributes );
             release_object( key );
         }
         release_object( parent );
@@ -2048,7 +2048,7 @@ DECL_HANDLER(flush_key)
     struct key *key = get_hkey_obj( req->hkey, 0 );
     if (key)
     {
-        /* we don't need to do anything here with the current implementation */
+        /* we don't need to do anything here with the current_thread implementation */
         release_object( key );
     }
 }
@@ -2135,7 +2135,7 @@ DECL_HANDLER(delete_key_value)
 DECL_HANDLER(load_registry)
 {
     struct key *key, *parent;
-    struct token *token = thread_get_impersonation_token( current );
+    struct token *token = thread_get_impersonation_token( current_thread );
     struct unicode_str name;
 
     const LUID_AND_ATTRIBUTES privs[] =
@@ -2167,7 +2167,7 @@ DECL_HANDLER(load_registry)
 DECL_HANDLER(unload_registry)
 {
     struct key *key;
-    struct token *token = thread_get_impersonation_token( current );
+    struct token *token = thread_get_impersonation_token( current_thread );
 
     const LUID_AND_ATTRIBUTES privs[] =
     {
@@ -2194,7 +2194,7 @@ DECL_HANDLER(save_registry)
 {
     struct key *key;
 
-    if (!thread_single_check_privilege( current, &SeBackupPrivilege ))
+    if (!thread_single_check_privilege( current_thread, &SeBackupPrivilege ))
     {
         set_error( STATUS_PRIVILEGE_NOT_HELD );
         return;
@@ -2217,10 +2217,10 @@ DECL_HANDLER(set_registry_notification)
     key = get_hkey_obj( req->hkey, KEY_NOTIFY );
     if (key)
     {
-        event = get_event_obj( current->process, req->event, SYNCHRONIZE );
+        event = get_event_obj( current_thread->process, req->event, SYNCHRONIZE );
         if (event)
         {
-            notify = find_notify( key, current->process, req->hkey );
+            notify = find_notify( key, current_thread->process, req->hkey );
             if (notify)
             {
                 if (notify->event)
@@ -2238,7 +2238,7 @@ DECL_HANDLER(set_registry_notification)
                     notify->subtree = req->subtree;
                     notify->filter  = req->filter;
                     notify->hkey    = req->hkey;
-                    notify->process = current->process;
+                    notify->process = current_thread->process;
                     list_add_head( &key->notify_list, &notify->entry );
                 }
             }

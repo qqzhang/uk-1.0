@@ -18,7 +18,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  *
  * FIXME: we use read|write access in all cases. Shouldn't we depend that
- * on the access of the current handle?
+ * on the access of the current_thread handle?
  */
 
 #include "config.h"
@@ -547,7 +547,7 @@ static void sock_queue_async( struct fd *fd, const async_data_t *data, int type,
         return;
     }
 
-    if (!(async = create_async( current, queue, data ))) return;
+    if (!(async = create_async( current_thread, queue, data ))) return;
     release_object( async );
 
     sock_reselect( sock );
@@ -686,7 +686,7 @@ static struct sock *accept_socket( obj_handle_t handle )
     struct sock *sock;
     int	acceptfd;
 
-    sock = (struct sock *)get_handle_obj( current->process, handle, FILE_READ_DATA, &sock_ops );
+    sock = (struct sock *)get_handle_obj( current_thread->process, handle, FILE_READ_DATA, &sock_ops );
     if (!sock)
         return NULL;
 
@@ -911,7 +911,7 @@ DECL_HANDLER(create_socket)
     reply->handle = 0;
     if ((obj = create_socket( req->family, req->type, req->protocol, req->flags )) != NULL)
     {
-        reply->handle = alloc_handle( current->process, obj, req->access, req->attributes );
+        reply->handle = alloc_handle( current_thread->process, obj, req->access, req->attributes );
         release_object( obj );
     }
 }
@@ -924,7 +924,7 @@ DECL_HANDLER(accept_socket)
     reply->handle = 0;
     if ((sock = accept_socket( req->lhandle )) != NULL)
     {
-        reply->handle = alloc_handle( current->process, &sock->obj, req->access, req->attributes );
+        reply->handle = alloc_handle( current_thread->process, &sock->obj, req->access, req->attributes );
         sock->wparam = reply->handle;  /* wparam for message is the socket handle */
         sock_reselect( sock );
         release_object( &sock->obj );
@@ -937,11 +937,11 @@ DECL_HANDLER(accept_into_socket)
     struct sock *sock, *acceptsock;
     const int all_attributes = FILE_READ_ATTRIBUTES|FILE_WRITE_ATTRIBUTES|FILE_READ_DATA;
 
-    if (!(sock = (struct sock *)get_handle_obj( current->process, req->lhandle,
+    if (!(sock = (struct sock *)get_handle_obj( current_thread->process, req->lhandle,
                                                 all_attributes, &sock_ops)))
         return;
 
-    if (!(acceptsock = (struct sock *)get_handle_obj( current->process, req->ahandle,
+    if (!(acceptsock = (struct sock *)get_handle_obj( current_thread->process, req->ahandle,
                                                       all_attributes, &sock_ops)))
     {
         release_object( sock );
@@ -963,7 +963,7 @@ DECL_HANDLER(set_socket_event)
     struct sock *sock;
     struct event *old_event;
 
-    if (!(sock = (struct sock *)get_handle_obj( current->process, req->handle,
+    if (!(sock = (struct sock *)get_handle_obj( current_thread->process, req->handle,
                                                 FILE_WRITE_ATTRIBUTES, &sock_ops))) return;
     old_event = sock->event;
     sock->mask    = req->mask;
@@ -972,7 +972,7 @@ DECL_HANDLER(set_socket_event)
     sock->window  = req->window;
     sock->message = req->msg;
     sock->wparam  = req->handle;  /* wparam is the socket handle */
-    if (req->event) sock->event = get_event_obj( current->process, req->event, EVENT_MODIFY_STATE );
+    if (req->event) sock->event = get_event_obj( current_thread->process, req->event, EVENT_MODIFY_STATE );
 
     if (debug_level && sock->event) fprintf(stderr, "event ptr: %p\n", sock->event);
 
@@ -997,7 +997,7 @@ DECL_HANDLER(get_socket_event)
     int i;
     int errors[FD_MAX_EVENTS];
 
-    sock = (struct sock *)get_handle_obj( current->process, req->handle, FILE_READ_ATTRIBUTES, &sock_ops );
+    sock = (struct sock *)get_handle_obj( current_thread->process, req->handle, FILE_READ_ATTRIBUTES, &sock_ops );
     if (!sock)
     {
         reply->mask  = 0;
@@ -1017,7 +1017,7 @@ DECL_HANDLER(get_socket_event)
     {
         if (req->c_event)
         {
-            struct event *cevent = get_event_obj( current->process, req->c_event,
+            struct event *cevent = get_event_obj( current_thread->process, req->c_event,
                                                   EVENT_MODIFY_STATE );
             if (cevent)
             {
@@ -1036,7 +1036,7 @@ DECL_HANDLER(enable_socket_event)
 {
     struct sock *sock;
 
-    if (!(sock = (struct sock*)get_handle_obj( current->process, req->handle,
+    if (!(sock = (struct sock*)get_handle_obj( current_thread->process, req->handle,
                                                FILE_WRITE_ATTRIBUTES, &sock_ops)))
         return;
 
@@ -1057,11 +1057,11 @@ DECL_HANDLER(set_socket_deferred)
 {
     struct sock *sock, *acceptsock;
 
-    sock=(struct sock *)get_handle_obj( current->process, req->handle, FILE_WRITE_ATTRIBUTES, &sock_ops );
+    sock=(struct sock *)get_handle_obj( current_thread->process, req->handle, FILE_WRITE_ATTRIBUTES, &sock_ops );
     if ( !sock )
         return;
 
-    acceptsock = (struct sock *)get_handle_obj( current->process, req->deferred, 0, &sock_ops );
+    acceptsock = (struct sock *)get_handle_obj( current_thread->process, req->deferred, 0, &sock_ops );
     if ( !acceptsock )
     {
         release_object( sock );

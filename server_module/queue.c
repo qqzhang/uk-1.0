@@ -99,13 +99,13 @@ struct thread_input
     user_handle_t          focus;         /* focus window */
     user_handle_t          capture;       /* capture window */
     user_handle_t          active;        /* active window */
-    user_handle_t          menu_owner;    /* current menu owner window */
-    user_handle_t          move_size;     /* current moving/resizing window */
+    user_handle_t          menu_owner;    /* current_thread menu owner window */
+    user_handle_t          move_size;     /* current_thread moving/resizing window */
     user_handle_t          caret;         /* caret window */
     rectangle_t            caret_rect;    /* caret rectangle */
     int                    caret_hide;    /* caret hide count */
     int                    caret_state;   /* caret on/off state */
-    user_handle_t          cursor;        /* current cursor */
+    user_handle_t          cursor;        /* current_thread cursor */
     int                    cursor_count;  /* cursor show count */
     struct list            msg_list;      /* list of hardware messages */
     unsigned char          keystate[256]; /* state of each key */
@@ -467,11 +467,11 @@ static inline int get_hardware_msg_bit( struct message *msg )
     return QS_MOUSEBUTTON;
 }
 
-/* get the current thread queue, creating it if needed */
+/* get the current_thread thread queue, creating it if needed */
 static inline struct msg_queue *get_current_queue(void)
 {
-    struct msg_queue *queue = current->queue;
-    if (!queue) queue = create_msg_queue( current, NULL );
+    struct msg_queue *queue = current_thread->queue;
+    if (!queue) queue = create_msg_queue( current_thread, NULL );
     return queue;
 }
 
@@ -722,7 +722,7 @@ static void receive_message( struct msg_queue *queue, struct message *msg,
     if (list_empty( &queue->msg_list[SEND_MESSAGE] )) clear_queue_bits( queue, QS_SENDMESSAGE );
 }
 
-/* set the result of the current received message */
+/* set the result of the current_thread received message */
 static void reply_message( struct msg_queue *queue, lparam_t result,
                            unsigned int error, int remove, const void *data, data_size_t len )
 {
@@ -1406,7 +1406,7 @@ static struct rawinput_device_entry *find_rawinput_device( unsigned short usage_
 {
     struct rawinput_device_entry *e;
 
-    LIST_FOR_EACH_ENTRY( e, &current->process->rawinput_devices, struct rawinput_device_entry, entry )
+    LIST_FOR_EACH_ENTRY( e, &current_thread->process->rawinput_devices, struct rawinput_device_entry, entry )
     {
         if (e->device.usage_page != usage_page || e->device.usage != usage) continue;
         return e;
@@ -1422,7 +1422,7 @@ static void update_rawinput_device(const struct rawinput_device *device)
     if (!(e = find_rawinput_device( device->usage_page, device->usage )))
     {
         if (!(e = mem_alloc( sizeof(*e) ))) return;
-        list_add_tail( &current->process->rawinput_devices, &e->entry );
+        list_add_tail( &current_thread->process->rawinput_devices, &e->entry );
     }
 
     if (device->flags & RIDEV_REMOVE)
@@ -1606,7 +1606,7 @@ static int queue_mouse_message( struct desktop *desktop, user_handle_t win, cons
         y = desktop->cursor.y;
     }
 
-    if ((device = current->process->rawinput_mouse))
+    if ((device = current_thread->process->rawinput_mouse))
     {
         if (!(msg = mem_alloc( sizeof(*msg) ))) return 0;
         if (!(msg_data = mem_alloc( sizeof(*msg_data) )))
@@ -1752,7 +1752,7 @@ static int queue_keyboard_message( struct desktop *desktop, user_handle_t win, c
         break;
     }
 
-    if ((device = current->process->rawinput_kbd))
+    if ((device = current_thread->process->rawinput_kbd))
     {
         if (!(msg = mem_alloc( sizeof(*msg) ))) return 0;
         if (!(msg_data = mem_alloc( sizeof(*msg_data) )))
@@ -1970,7 +1970,7 @@ static int get_hardware_message( struct thread *thread, unsigned int hw_id, user
         data->hw_id = msg->unique_id;
         set_reply_data( msg->data, msg->data_size );
         if (msg->msg == WM_INPUT && (flags & PM_REMOVE))
-            release_hardware_message( current->queue, data->hw_id, 1, 0 );
+            release_hardware_message( current_thread->queue, data->hw_id, 1, 0 );
         return 1;
     }
     /* nothing found, clear the hardware queue bits */
@@ -2100,7 +2100,7 @@ void post_win_event( struct thread *thread, unsigned int event,
         if ((data = malloc( sizeof(*data) + module_size )))
         {
             data->hook = hook;
-            data->tid  = get_thread_id( current );
+            data->tid  = get_thread_id( current_thread );
             data->hook_proc = hook_proc;
             memcpy( data + 1, module, module_size );
 
@@ -2149,17 +2149,17 @@ DECL_HANDLER(is_window_hung)
 }
 
 
-/* get the message queue of the current thread */
+/* get the message queue of the current_thread thread */
 DECL_HANDLER(get_msg_queue)
 {
     struct msg_queue *queue = get_current_queue();
 
     reply->handle = 0;
-    if (queue) reply->handle = alloc_handle( current->process, queue, SYNCHRONIZE, 0 );
+    if (queue) reply->handle = alloc_handle( current_thread->process, queue, SYNCHRONIZE, 0 );
 }
 
 
-/* set the file descriptor associated to the current thread queue */
+/* set the file descriptor associated to the current_thread thread queue */
 DECL_HANDLER(set_queue_fd)
 {
     struct msg_queue *queue = get_current_queue();
@@ -2171,7 +2171,7 @@ DECL_HANDLER(set_queue_fd)
         set_error( STATUS_ACCESS_DENIED );
         return;
     }
-    if (!(file = get_file_obj( current->process, req->handle, SYNCHRONIZE ))) return;
+    if (!(file = get_file_obj( current_thread->process, req->handle, SYNCHRONIZE ))) return;
 
     if ((unix_fd = get_file_unix_fd( file )) != -1)
     {
@@ -2184,7 +2184,7 @@ DECL_HANDLER(set_queue_fd)
 }
 
 
-/* set the current message queue wakeup mask */
+/* set the current_thread message queue wakeup mask */
 DECL_HANDLER(set_queue_mask)
 {
     struct msg_queue *queue = get_current_queue();
@@ -2198,17 +2198,17 @@ DECL_HANDLER(set_queue_mask)
         if (is_signaled( queue ))
         {
             /* if skip wait is set, do what would have been done in the subsequent wait */
-            if (req->skip_wait) msg_queue_satisfied( &queue->obj, current );
+            if (req->skip_wait) msg_queue_satisfied( &queue->obj, current_thread );
             else wake_up( &queue->obj, 0 );
         }
     }
 }
 
 
-/* get the current message queue status */
+/* get the current_thread message queue status */
 DECL_HANDLER(get_queue_status)
 {
-    struct msg_queue *queue = current->queue;
+    struct msg_queue *queue = current_thread->queue;
     if (queue)
     {
         reply->wake_bits    = queue->wake_bits;
@@ -2306,7 +2306,7 @@ DECL_HANDLER(send_hardware_message)
     struct msg_queue *sender = get_current_queue();
     data_size_t size = min( 256, get_reply_max_size() );
 
-    if (!(desktop = get_thread_desktop( current, 0 ))) return;
+    if (!(desktop = get_thread_desktop( current_thread, 0 ))) return;
 
     if (req->win)
     {
@@ -2344,7 +2344,7 @@ DECL_HANDLER(send_hardware_message)
     release_object( desktop );
 }
 
-/* post a quit message to the current queue */
+/* post a quit message to the current_thread queue */
 DECL_HANDLER(post_quit_message)
 {
     struct msg_queue *queue = get_current_queue();
@@ -2357,7 +2357,7 @@ DECL_HANDLER(post_quit_message)
     set_queue_bits( queue, QS_POSTMESSAGE|QS_ALLPOSTMESSAGE );
 }
 
-/* get a message from the current queue */
+/* get a message from the current_thread queue */
 DECL_HANDLER(get_message)
 {
     struct timer *timer;
@@ -2407,14 +2407,14 @@ DECL_HANDLER(get_message)
     /* then check for any raw hardware message */
     if ((filter & QS_INPUT) &&
         filter_contains_hw_range( req->get_first, req->get_last ) &&
-        get_hardware_message( current, req->hw_id, get_win, req->get_first, req->get_last, req->flags, reply ))
+        get_hardware_message( current_thread, req->hw_id, get_win, req->get_first, req->get_last, req->flags, reply ))
         return;
 
     /* now check for WM_PAINT */
     if ((filter & QS_PAINT) &&
         queue->paint_count &&
         check_msg_filter( WM_PAINT, req->get_first, req->get_last ) &&
-        (reply->win = find_window_to_repaint( get_win, current )))
+        (reply->win = find_window_to_repaint( get_win, current_thread )))
     {
         reply->type   = MSG_POSTED;
         reply->msg    = WM_PAINT;
@@ -2435,12 +2435,12 @@ DECL_HANDLER(get_message)
         reply->wparam = timer->id;
         reply->lparam = timer->lparam;
         reply->time   = get_tick_count();
-        if (!(req->flags & PM_NOYIELD) && current->process->idle_event)
-            set_event( current->process->idle_event );
+        if (!(req->flags & PM_NOYIELD) && current_thread->process->idle_event)
+            set_event( current_thread->process->idle_event );
         return;
     }
 
-    if (get_win == -1 && current->process->idle_event) set_event( current->process->idle_event );
+    if (get_win == -1 && current_thread->process->idle_event) set_event( current_thread->process->idle_event );
     queue->wake_mask = req->wake_mask;
     queue->changed_mask = req->changed_mask;
     set_error( STATUS_PENDING );  /* FIXME */
@@ -2450,18 +2450,18 @@ DECL_HANDLER(get_message)
 /* reply to a sent message */
 DECL_HANDLER(reply_message)
 {
-    if (!current->queue) set_error( STATUS_ACCESS_DENIED );
-    else if (current->queue->recv_result)
-        reply_message( current->queue, req->result, 0, req->remove,
+    if (!current_thread->queue) set_error( STATUS_ACCESS_DENIED );
+    else if (current_thread->queue->recv_result)
+        reply_message( current_thread->queue, req->result, 0, req->remove,
                        get_req_data(), get_req_data_size() );
 }
 
 
-/* accept the current hardware message */
+/* accept the current_thread hardware message */
 DECL_HANDLER(accept_hardware_message)
 {
-    if (current->queue)
-        release_hardware_message( current->queue, req->hw_id, req->remove, req->new_win );
+    if (current_thread->queue)
+        release_hardware_message( current_thread->queue, req->hw_id, req->remove, req->new_win );
     else
         set_error( STATUS_ACCESS_DENIED );
 }
@@ -2472,7 +2472,7 @@ DECL_HANDLER(get_message_reply)
 {
     struct message_result *result;
     struct list *entry;
-    struct msg_queue *queue = current->queue;
+    struct msg_queue *queue = current_thread->queue;
 
     if (queue)
     {
@@ -2527,7 +2527,7 @@ DECL_HANDLER(set_win_timer)
             set_error( STATUS_INVALID_HANDLE );
             return;
         }
-        if (thread->process != current->process)
+        if (thread->process != current_thread->process)
         {
             release_object( thread );
             set_error( STATUS_ACCESS_DENIED );
@@ -2583,14 +2583,14 @@ DECL_HANDLER(kill_win_timer)
             set_error( STATUS_INVALID_HANDLE );
             return;
         }
-        if (thread->process != current->process)
+        if (thread->process != current_thread->process)
         {
             release_object( thread );
             set_error( STATUS_ACCESS_DENIED );
             return;
         }
     }
-    else thread = (struct thread *)grab_object( current );
+    else thread = (struct thread *)grab_object( current_thread );
 
     if (thread->queue && (timer = find_timer( thread->queue, win, req->msg, req->id )))
         free_timer( thread->queue, timer );
@@ -2609,7 +2609,7 @@ DECL_HANDLER(register_hotkey)
     struct thread *thread;
     const int modifier_flags = MOD_ALT|MOD_CONTROL|MOD_SHIFT|MOD_WIN;
 
-    if (!(desktop = get_thread_desktop( current, 0 ))) return;
+    if (!(desktop = get_thread_desktop( current_thread, 0 ))) return;
 
     if (win_handle)
     {
@@ -2623,7 +2623,7 @@ DECL_HANDLER(register_hotkey)
         thread = get_window_thread( win_handle );
         if (thread) release_object( thread );
 
-        if (thread != current)
+        if (thread != current_thread)
         {
             release_object( desktop );
             set_win32_error( ERROR_WINDOW_OF_OTHER_THREAD );
@@ -2640,7 +2640,7 @@ DECL_HANDLER(register_hotkey)
             set_win32_error( ERROR_HOTKEY_ALREADY_REGISTERED );
             return;
         }
-        if (current->queue == hotkey->queue && win_handle == hotkey->win && req->id == hotkey->id)
+        if (current_thread->queue == hotkey->queue && win_handle == hotkey->win && req->id == hotkey->id)
             new_hotkey = hotkey;
     }
 
@@ -2656,7 +2656,7 @@ DECL_HANDLER(register_hotkey)
         if (new_hotkey)
         {
             list_add_tail( &desktop->hotkeys, &new_hotkey->entry );
-            new_hotkey->queue  = current->queue;
+            new_hotkey->queue  = current_thread->queue;
             new_hotkey->win    = win_handle;
             new_hotkey->id     = req->id;
         }
@@ -2678,7 +2678,7 @@ DECL_HANDLER(unregister_hotkey)
     struct hotkey *hotkey;
     struct thread *thread;
 
-    if (!(desktop = get_thread_desktop( current, 0 ))) return;
+    if (!(desktop = get_thread_desktop( current_thread, 0 ))) return;
 
     if (win_handle)
     {
@@ -2692,7 +2692,7 @@ DECL_HANDLER(unregister_hotkey)
         thread = get_window_thread( win_handle );
         if (thread) release_object( thread );
 
-        if (thread != current)
+        if (thread != current_thread)
         {
             release_object( desktop );
             set_win32_error( ERROR_WINDOW_OF_OTHER_THREAD );
@@ -2702,7 +2702,7 @@ DECL_HANDLER(unregister_hotkey)
 
     LIST_FOR_EACH_ENTRY( hotkey, &desktop->hotkeys, struct hotkey, entry )
     {
-        if (current->queue == hotkey->queue && win_handle == hotkey->win && req->id == hotkey->id)
+        if (current_thread->queue == hotkey->queue && win_handle == hotkey->win && req->id == hotkey->id)
             goto found;
     }
 
@@ -2767,7 +2767,7 @@ DECL_HANDLER(get_thread_input)
     }
     else
     {
-        if (!(desktop = get_thread_desktop( current, 0 ))) return;
+        if (!(desktop = get_thread_desktop( current_thread, 0 ))) return;
         input = desktop->foreground_input;  /* get the foreground thread info */
     }
 
@@ -2800,7 +2800,7 @@ DECL_HANDLER(get_key_state)
 
     if (!req->tid)  /* get global async key state */
     {
-        if (!(desktop = get_thread_desktop( current, 0 ))) return;
+        if (!(desktop = get_thread_desktop( current_thread, 0 ))) return;
         if (req->key >= 0)
         {
             reply->state = desktop->keystate[req->key & 0xff];
@@ -2831,7 +2831,7 @@ DECL_HANDLER(set_key_state)
 
     if (!req->tid)  /* set global async key state */
     {
-        if (!(desktop = get_thread_desktop( current, 0 ))) return;
+        if (!(desktop = get_thread_desktop( current_thread, 0 ))) return;
         memcpy( desktop->keystate, get_req_data(), size );
         release_object( desktop );
     }
@@ -2856,7 +2856,7 @@ DECL_HANDLER(set_foreground_window)
     struct desktop *desktop;
     struct msg_queue *queue = get_current_queue();
 
-    if (!(desktop = get_thread_desktop( current, 0 ))) return;
+    if (!(desktop = get_thread_desktop( current_thread, 0 ))) return;
     reply->previous = desktop->foreground_input ? desktop->foreground_input->active : 0;
     reply->send_msg_old = (reply->previous && desktop->foreground_input != queue->input);
     reply->send_msg_new = FALSE;
@@ -2875,7 +2875,7 @@ DECL_HANDLER(set_foreground_window)
 }
 
 
-/* set the current thread focus window */
+/* set the current_thread thread focus window */
 DECL_HANDLER(set_focus_window)
 {
     struct msg_queue *queue = get_current_queue();
@@ -2889,7 +2889,7 @@ DECL_HANDLER(set_focus_window)
 }
 
 
-/* set the current thread active window */
+/* set the current_thread thread active window */
 DECL_HANDLER(set_active_window)
 {
     struct msg_queue *queue = get_current_queue();
@@ -2907,7 +2907,7 @@ DECL_HANDLER(set_active_window)
 }
 
 
-/* set the current thread capture window */
+/* set the current_thread thread capture window */
 DECL_HANDLER(set_capture_window)
 {
     struct msg_queue *queue = get_current_queue();
@@ -2932,7 +2932,7 @@ DECL_HANDLER(set_capture_window)
 }
 
 
-/* Set the current thread caret window */
+/* Set the current_thread thread caret window */
 DECL_HANDLER(set_caret_window)
 {
     struct msg_queue *queue = get_current_queue();
@@ -2954,7 +2954,7 @@ DECL_HANDLER(set_caret_window)
 }
 
 
-/* Set the current thread caret information */
+/* Set the current_thread thread caret information */
 DECL_HANDLER(set_caret_info)
 {
     struct msg_queue *queue = get_current_queue();
@@ -2998,7 +2998,7 @@ DECL_HANDLER(get_last_input_time)
     reply->time = last_input_time;
 }
 
-/* set/get the current cursor */
+/* set/get the current_thread cursor */
 DECL_HANDLER(set_cursor)
 {
     struct msg_queue *queue = get_current_queue();
@@ -3035,7 +3035,7 @@ DECL_HANDLER(set_cursor)
         struct desktop *desktop = input->desktop;
 
         /* only the desktop owner can set the message */
-        if (req->clip_msg && get_top_window_owner(desktop) == current->process)
+        if (req->clip_msg && get_top_window_owner(desktop) == current_thread->process)
             desktop->cursor.clip_msg = req->clip_msg;
 
         set_clip_rectangle( desktop, (req->flags & SET_CURSOR_NOCLIP) ? NULL : &req->clip );
@@ -3060,7 +3060,7 @@ DECL_HANDLER(update_rawinput_devices)
     }
 
     e = find_rawinput_device( 1, 2 );
-    current->process->rawinput_mouse = e ? &e->device : NULL;
+    current_thread->process->rawinput_mouse = e ? &e->device : NULL;
     e = find_rawinput_device( 1, 6 );
-    current->process->rawinput_kbd   = e ? &e->device : NULL;
+    current_thread->process->rawinput_kbd   = e ? &e->device : NULL;
 }

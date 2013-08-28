@@ -379,11 +379,11 @@ static inline struct object *get_magic_handle( obj_handle_t handle )
 {
     switch(handle)
     {
-        case 0xfffffffe:  /* current thread pseudo-handle */
-            return &current->obj;
-        case 0x7fffffff:  /* current process pseudo-handle */
-        case 0xffffffff:  /* current process pseudo-handle */
-            return (struct object *)current->process;
+        case 0xfffffffe:  /* current_thread thread pseudo-handle */
+            return &current_thread->obj;
+        case 0x7fffffff:  /* current_thread process pseudo-handle */
+        case 0xffffffff:  /* current_thread process pseudo-handle */
+            return (struct object *)current_thread->process;
         default:
             return NULL;
     }
@@ -557,7 +557,7 @@ obj_handle_t open_object( const struct namespace *namespace, const struct unicod
         if (ops && obj->ops != ops)
             set_error( STATUS_OBJECT_TYPE_MISMATCH );
         else
-            handle = alloc_handle( current->process, obj, access, attr );
+            handle = alloc_handle( current_thread->process, obj, access, attr );
         release_object( obj );
     }
     else
@@ -575,14 +575,14 @@ unsigned int get_handle_table_count( struct process *process )
 /* close a handle */
 DECL_HANDLER(close_handle)
 {
-    unsigned int err = close_handle( current->process, req->handle );
+    unsigned int err = close_handle( current_thread->process, req->handle );
     set_error( err );
 }
 
 /* set a handle information */
 DECL_HANDLER(set_handle_info)
 {
-    reply->old_flags = set_handle_flags( current->process, req->handle, req->mask, req->flags );
+    reply->old_flags = set_handle_flags( current_thread->process, req->handle, req->mask, req->flags );
 }
 
 /* duplicate a handle */
@@ -607,7 +607,7 @@ DECL_HANDLER(dup_handle)
         /* close the handle no matter what happened */
         if ((req->options & DUP_HANDLE_CLOSE_SOURCE) && (src != dst || req->src_handle != reply->handle))
             reply->closed = !close_handle( src, req->src_handle );
-        reply->self = (src == current->process);
+        reply->self = (src == current_thread->process);
         release_object( src );
     }
 }
@@ -617,9 +617,9 @@ DECL_HANDLER(get_object_info)
     struct object *obj;
     WCHAR *name;
 
-    if (!(obj = get_handle_obj( current->process, req->handle, 0, NULL ))) return;
+    if (!(obj = get_handle_obj( current_thread->process, req->handle, 0, NULL ))) return;
 
-    reply->access = get_handle_access( current->process, req->handle );
+    reply->access = get_handle_access( current_thread->process, req->handle );
     reply->ref_count = obj->refcount;
     if ((name = get_object_full_name( obj, &reply->total )))
         set_reply_data_ptr( name, min( reply->total, get_reply_max_size() ));
@@ -647,7 +647,7 @@ DECL_HANDLER(set_security_object)
     if (req->security_info & DACL_SECURITY_INFORMATION)
         access |= WRITE_DAC;
 
-    if (!(obj = get_handle_obj( current->process, req->handle, access, NULL ))) return;
+    if (!(obj = get_handle_obj( current_thread->process, req->handle, access, NULL ))) return;
 
     obj->ops->set_sd( obj, sd, req->security_info );
     release_object( obj );
@@ -666,7 +666,7 @@ DECL_HANDLER(get_security_object)
     if (req->security_info & SACL_SECURITY_INFORMATION)
         access |= ACCESS_SYSTEM_SECURITY;
 
-    if (!(obj = get_handle_obj( current->process, req->handle, access, NULL ))) return;
+    if (!(obj = get_handle_obj( current_thread->process, req->handle, access, NULL ))) return;
 
     sd = obj->ops->get_sd( obj );
     if (sd)

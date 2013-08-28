@@ -38,7 +38,7 @@ struct async
     struct thread       *thread;          /* owning thread */
     struct list          queue_entry;     /* entry in async queue list */
     struct async_queue  *queue;           /* queue containing this async */
-    unsigned int         status;          /* current status */
+    unsigned int         status;          /* current_thread status */
     struct timeout_user *timeout;
     unsigned int         timeout_status;  /* status to report upon timeout */
     struct event        *event;

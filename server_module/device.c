@@ -324,10 +324,10 @@ static obj_handle_t device_ioctl( struct fd *fd, ioctl_code_t code, const async_
     if (!(ioctl = create_ioctl( device, code, data, size, get_reply_max_size() )))
         return 0;
 
-    ioctl->thread   = (struct thread *)grab_object( current );
+    ioctl->thread   = (struct thread *)grab_object( current_thread );
     ioctl->user_arg = async_data->arg;
 
-    if (!(handle = alloc_handle( current->process, ioctl, SYNCHRONIZE, 0 )))
+    if (!(handle = alloc_handle( current_thread->process, ioctl, SYNCHRONIZE, 0 )))
     {
         release_object( ioctl );
         return 0;
@@ -335,7 +335,7 @@ static obj_handle_t device_ioctl( struct fd *fd, ioctl_code_t code, const async_
 
     if (!(ioctl->async = fd_queue_async( device->fd, async_data, ASYNC_TYPE_WAIT )))
     {
-        close_handle( current->process, handle );
+        close_handle( current_thread->process, handle );
         release_object( ioctl );
         return 0;
     }
@@ -433,7 +433,7 @@ DECL_HANDLER(create_device_manager)
 
     if (manager)
     {
-        reply->handle = alloc_handle( current->process, manager, req->access, req->attributes );
+        reply->handle = alloc_handle( current_thread->process, manager, req->access, req->attributes );
         release_object( manager );
     }
 }
@@ -447,12 +447,12 @@ DECL_HANDLER(create_device)
     struct device_manager *manager;
     struct directory *root = NULL;
 
-    if (!(manager = (struct device_manager *)get_handle_obj( current->process, req->manager,
+    if (!(manager = (struct device_manager *)get_handle_obj( current_thread->process, req->manager,
                                                              0, &device_manager_ops )))
         return;
 
     get_req_unicode_str( &name );
-    if (req->rootdir && !(root = get_directory_obj( current->process, req->rootdir, 0 )))
+    if (req->rootdir && !(root = get_directory_obj( current_thread->process, req->rootdir, 0 )))
     {
         release_object( manager );
         return;
@@ -461,7 +461,7 @@ DECL_HANDLER(create_device)
     if ((device = create_device( root, &name, manager, req->attributes )))
     {
         device->user_ptr = req->user_ptr;
-        reply->handle = alloc_handle( current->process, device, req->access, req->attributes );
+        reply->handle = alloc_handle( current_thread->process, device, req->access, req->attributes );
         release_object( device );
     }
 
@@ -475,7 +475,7 @@ DECL_HANDLER(delete_device)
 {
     struct device *device;
 
-    if ((device = (struct device *)get_handle_obj( current->process, req->handle, 0, &device_ops )))
+    if ((device = (struct device *)get_handle_obj( current_thread->process, req->handle, 0, &device_ops )))
     {
         delete_device( device );
         release_object( device );
@@ -490,17 +490,17 @@ DECL_HANDLER(get_next_device_request)
     struct device_manager *manager;
     struct list *ptr;
 
-    if (!(manager = (struct device_manager *)get_handle_obj( current->process, req->manager,
+    if (!(manager = (struct device_manager *)get_handle_obj( current_thread->process, req->manager,
                                                              0, &device_manager_ops )))
         return;
 
     if (req->prev)
     {
-        if ((ioctl = (struct ioctl_call *)get_handle_obj( current->process, req->prev,
+        if ((ioctl = (struct ioctl_call *)get_handle_obj( current_thread->process, req->prev,
                                                           0, &ioctl_call_ops )))
         {
             set_ioctl_result( ioctl, req->status, get_req_data(), get_req_data_size() );
-            close_handle( current->process, req->prev );  /* avoid an extra round-trip for close */
+            close_handle( current_thread->process, req->prev );  /* avoid an extra round-trip for close */
             release_object( ioctl );
         }
         clear_error();
@@ -516,7 +516,7 @@ DECL_HANDLER(get_next_device_request)
         reply->in_size = ioctl->in_size;
         reply->out_size = ioctl->out_size;
         if (ioctl->in_size > get_reply_max_size()) set_error( STATUS_BUFFER_OVERFLOW );
-        else if ((reply->next = alloc_handle( current->process, ioctl, 0, 0 )))
+        else if ((reply->next = alloc_handle( current_thread->process, ioctl, 0, 0 )))
         {
             set_reply_data_ptr( ioctl->in_data, ioctl->in_size );
             ioctl->in_data = NULL;
@@ -537,10 +537,10 @@ DECL_HANDLER(get_ioctl_result)
     struct device *device;
     struct ioctl_call *ioctl;
 
-    if (!(device = (struct device *)get_handle_obj( current->process, req->handle, 0, &device_ops )))
+    if (!(device = (struct device *)get_handle_obj( current_thread->process, req->handle, 0, &device_ops )))
         return;
 
-    if ((ioctl = find_ioctl_call( device, current, req->user_arg )))
+    if ((ioctl = find_ioctl_call( device, current_thread, req->user_arg )))
     {
         if (ioctl->out_data)
         {

@@ -179,12 +179,12 @@ DECL_HANDLER(create_completion)
     reply->handle = 0;
 
     get_req_unicode_str( &name );
-    if (req->rootdir && !(root = get_directory_obj( current->process, req->rootdir, 0 )))
+    if (req->rootdir && !(root = get_directory_obj( current_thread->process, req->rootdir, 0 )))
         return;
 
     if ( (completion = create_completion( root, &name, req->attributes, req->concurrent )) != NULL )
     {
-        reply->handle = alloc_handle( current->process, completion, req->access, req->attributes );
+        reply->handle = alloc_handle( current_thread->process, completion, req->access, req->attributes );
         release_object( completion );
     }
 
@@ -201,12 +201,12 @@ DECL_HANDLER(open_completion)
     reply->handle = 0;
 
     get_req_unicode_str( &name );
-    if (req->rootdir && !(root = get_directory_obj( current->process, req->rootdir, 0 )))
+    if (req->rootdir && !(root = get_directory_obj( current_thread->process, req->rootdir, 0 )))
         return;
 
     if ( (completion = open_object_dir( root, &name, req->attributes, &completion_ops )) != NULL )
     {
-        reply->handle = alloc_handle( current->process, completion, req->access, req->attributes );
+        reply->handle = alloc_handle( current_thread->process, completion, req->access, req->attributes );
         release_object( completion );
     }
 
@@ -217,7 +217,7 @@ DECL_HANDLER(open_completion)
 /* add completion to completion port */
 DECL_HANDLER(add_completion)
 {
-    struct completion* completion = get_completion_obj( current->process, req->handle, IO_COMPLETION_MODIFY_STATE );
+    struct completion* completion = get_completion_obj( current_thread->process, req->handle, IO_COMPLETION_MODIFY_STATE );
 
     if (!completion) return;
 
@@ -229,7 +229,7 @@ DECL_HANDLER(add_completion)
 /* get completion from completion port */
 DECL_HANDLER(remove_completion)
 {
-    struct completion* completion = get_completion_obj( current->process, req->handle, IO_COMPLETION_MODIFY_STATE );
+    struct completion* completion = get_completion_obj( current_thread->process, req->handle, IO_COMPLETION_MODIFY_STATE );
     struct list *entry;
     struct comp_msg *msg;
 
@@ -256,7 +256,7 @@ DECL_HANDLER(remove_completion)
 /* get queue depth for completion port */
 DECL_HANDLER(query_completion)
 {
-    struct completion* completion = get_completion_obj( current->process, req->handle, IO_COMPLETION_QUERY_STATE );
+    struct completion* completion = get_completion_obj( current_thread->process, req->handle, IO_COMPLETION_QUERY_STATE );
 
     if (!completion) return;
 

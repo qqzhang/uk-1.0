@@ -215,7 +215,7 @@ static struct object *create_file( struct fd *root, const char *nameptr, data_si
     {
         const SID *owner = sd_get_owner( sd );
         if (!owner)
-            owner = token_get_user( current->process->token );
+            owner = token_get_user( current_thread->process->token );
         mode = sd_to_mode( sd, owner );
     }
     else
@@ -443,7 +443,7 @@ static struct security_descriptor *file_get_sd( struct object *obj )
 
     sd = mode_to_sd( st.st_mode,
                      security_unix_uid_to_sid( st.st_uid ),
-                     token_get_primary_group( current->process->token ));
+                     token_get_primary_group( current_thread->process->token ));
     if (!sd) return obj->sd;
 
     file->mode = st.st_mode;
@@ -471,7 +471,7 @@ mode_t sd_to_mode( const struct security_descriptor *sd, const SID *owner )
     mode_t mode;
     int present;
     const ACL *dacl = sd_get_dacl( sd, &present );
-    const SID *user = token_get_user( current->process->token );
+    const SID *user = token_get_user( current_thread->process->token );
     if (present && dacl)
     {
         const ACE_HEADER *ace = (const ACE_HEADER *)(dacl + 1);
@@ -495,7 +495,7 @@ mode_t sd_to_mode( const struct security_descriptor *sd, const SID *owner )
                         denied_mode |= (mode << 6) | (mode << 3) | mode; /* all */
                     }
                     else if ((security_equal_sid( user, owner ) &&
-                              token_sid_present( current->process->token, sid, TRUE )))
+                              token_sid_present( current_thread->process->token, sid, TRUE )))
                     {
                         denied_mode |= (mode << 6) | (mode << 3);  /* user + group */
                     }
@@ -513,7 +513,7 @@ mode_t sd_to_mode( const struct security_descriptor *sd, const SID *owner )
                         new_mode |= (mode << 6) | (mode << 3) | mode;  /* all */
                     }
                     else if ((security_equal_sid( user, owner ) &&
-                              token_sid_present( current->process->token, sid, FALSE )))
+                              token_sid_present( current_thread->process->token, sid, FALSE )))
                     {
                         new_mode |= (mode << 6) | (mode << 3);  /* user + group */
                     }
@@ -563,7 +563,7 @@ static int file_set_sd( struct object *obj, const struct security_descriptor *sd
     else if (obj->sd)
         owner = sd_get_owner( obj->sd );
     else
-        owner = token_get_user( current->process->token );
+        owner = token_get_user( current_thread->process->token );
 
     /* group and sacl not supported */
 
@@ -662,7 +662,7 @@ DECL_HANDLER(create_file)
     {
         struct dir *root;
 
-        if (!(root = get_dir_obj( current->process, objattr->rootdir, 0 ))) return;
+        if (!(root = get_dir_obj( current_thread->process, objattr->rootdir, 0 ))) return;
         root_fd = get_obj_fd( (struct object *)root );
         release_object( root );
         if (!root_fd) return;
@@ -677,7 +677,7 @@ DECL_HANDLER(create_file)
     if ((file = create_file( root_fd, name, name_len, req->access, req->sharing,
                              req->create, req->options, req->attrs, sd )))
     {
-        reply->handle = alloc_handle( current->process, file, req->access, req->attributes );
+        reply->handle = alloc_handle( current_thread->process, file, req->access, req->attributes );
         release_object( file );
     }
     if (root_fd) release_object( root_fd );
@@ -690,14 +690,14 @@ DECL_HANDLER(alloc_file_handle)
     int fd;
 
     reply->handle = 0;
-    if ((fd = thread_get_inflight_fd( current, req->fd )) == -1)
+    if ((fd = thread_get_inflight_fd( current_thread, req->fd )) == -1)
     {
         set_error( STATUS_INVALID_HANDLE );
         return;
     }
     if ((file = create_file_for_fd( fd, req->access, FILE_SHARE_READ | FILE_SHARE_WRITE )))
     {
-        reply->handle = alloc_handle( current->process, file, req->access, req->attributes );
+        reply->handle = alloc_handle( current_thread->process, file, req->access, req->attributes );
         release_object( file );
     }
 }
@@ -707,7 +707,7 @@ DECL_HANDLER(lock_file)
 {
     struct file *file;
 
-    if ((file = get_file_obj( current->process, req->handle, 0 )))
+    if ((file = get_file_obj( current_thread->process, req->handle, 0 )))
     {
         reply->handle = lock_fd( file->fd, req->offset, req->count, req->shared, req->wait );
         reply->overlapped = is_overlapped( file );
@@ -720,7 +720,7 @@ DECL_HANDLER(unlock_file)
 {
     struct file *file;
 
-    if ((file = get_file_obj( current->process, req->handle, 0 )))
+    if ((file = get_file_obj( current_thread->process, req->handle, 0 )))
     {
         unlock_fd( file->fd, req->offset, req->count );
         release_object( file );

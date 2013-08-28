@@ -321,7 +321,7 @@ static struct atom_table *get_table( obj_handle_t h, int create )
 
     if (h)
     {
-        table = (struct atom_table *)get_handle_obj( current->process, h, 0, &atom_table_ops );
+        table = (struct atom_table *)get_handle_obj( current_thread->process, h, 0, &atom_table_ops );
     }
     else
     {
@@ -460,7 +460,7 @@ DECL_HANDLER(init_atom_table)
 
     if (table)
     {
-        reply->table = alloc_handle( current->process, table, 0, 0 );
+        reply->table = alloc_handle( current_thread->process, table, 0, 0 );
         release_object( table );
     }
 }

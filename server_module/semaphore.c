@@ -39,7 +39,7 @@
 struct semaphore
 {
     struct object  obj;    /* object header */
-    unsigned int   count;  /* current count */
+    unsigned int   count;  /* current_thread count */
     unsigned int   max;    /* maximum possible count */
 };
 
@@ -191,15 +191,15 @@ DECL_HANDLER(create_semaphore)
     sd = objattr->sd_len ? (const struct security_descriptor *)(objattr + 1) : NULL;
     objattr_get_name( objattr, &name );
 
-    if (objattr->rootdir && !(root = get_directory_obj( current->process, objattr->rootdir, 0 )))
+    if (objattr->rootdir && !(root = get_directory_obj( current_thread->process, objattr->rootdir, 0 )))
         return;
 
     if ((sem = create_semaphore( root, &name, req->attributes, req->initial, req->max, sd )))
     {
         if (get_error() == STATUS_OBJECT_NAME_EXISTS)
-            reply->handle = alloc_handle( current->process, sem, req->access, req->attributes );
+            reply->handle = alloc_handle( current_thread->process, sem, req->access, req->attributes );
         else
-            reply->handle = alloc_handle_no_access_check( current->process, sem, req->access, req->attributes );
+            reply->handle = alloc_handle_no_access_check( current_thread->process, sem, req->access, req->attributes );
         release_object( sem );
     }
 
@@ -214,12 +214,12 @@ DECL_HANDLER(open_semaphore)
     struct semaphore *sem;
 
     get_req_unicode_str( &name );
-    if (req->rootdir && !(root = get_directory_obj( current->process, req->rootdir, 0 )))
+    if (req->rootdir && !(root = get_directory_obj( current_thread->process, req->rootdir, 0 )))
         return;
 
     if ((sem = open_object_dir( root, &name, req->attributes, &semaphore_ops )))
     {
-        reply->handle = alloc_handle( current->process, &sem->obj, req->access, req->attributes );
+        reply->handle = alloc_handle( current_thread->process, &sem->obj, req->access, req->attributes );
         release_object( sem );
     }
 
@@ -231,7 +231,7 @@ DECL_HANDLER(release_semaphore)
 {
     struct semaphore *sem;
 
-    if ((sem = (struct semaphore *)get_handle_obj( current->process, req->handle,
+    if ((sem = (struct semaphore *)get_handle_obj( current_thread->process, req->handle,
                                                    SEMAPHORE_MODIFY_STATE, &semaphore_ops )))
     {
         release_semaphore( sem, req->count, &reply->prev_count );

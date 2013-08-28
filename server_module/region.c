@@ -144,7 +144,7 @@ static inline int validate_rectangles( const rectangle_t *rects, unsigned int nb
     return 1;
 }
 
-/* attempt to merge the rects in the current band with those in the */
+/* attempt to merge the rects in the current_thread band with those in the */
 /* previous one. Used only by region_op. */
 static int coalesce_region( struct region *pReg, int prevStart, int curStart )
 {

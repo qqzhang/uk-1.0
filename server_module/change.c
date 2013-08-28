@@ -327,7 +327,7 @@ static struct security_descriptor *dir_get_sd( struct object *obj )
 
     sd = mode_to_sd( st.st_mode,
                      security_unix_uid_to_sid( st.st_uid ),
-                     token_get_primary_group( current->process->token ));
+                     token_get_primary_group( current_thread->process->token ));
     if (!sd) return obj->sd;
 
     dir->mode = st.st_mode;
@@ -368,7 +368,7 @@ static int dir_set_sd( struct object *obj, const struct security_descriptor *sd,
     else if (obj->sd)
         owner = sd_get_owner( obj->sd );
     else
-        owner = token_get_user( current->process->token );
+        owner = token_get_user( current_thread->process->token );
 
     if (set_info & DACL_SECURITY_INFORMATION)
     {
@@ -1131,7 +1131,7 @@ DECL_HANDLER(read_directory_changes)
         return;
     }
 
-    dir = get_dir_obj( current->process, req->async.handle, 0 );
+    dir = get_dir_obj( current_thread->process, req->async.handle, 0 );
     if (!dir)
         return;
 
@@ -1171,7 +1171,7 @@ DECL_HANDLER(read_change)
     char *data, *event;
     int size = 0;
 
-    dir = get_dir_obj( current->process, req->handle, 0 );
+    dir = get_dir_obj( current_thread->process, req->handle, 0 );
     if (!dir)
         return;
 

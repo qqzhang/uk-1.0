@@ -437,9 +437,9 @@ static struct window *create_window( struct window *parent, struct window *owner
     struct desktop *desktop;
     struct window_class *class;
 
-    if (!(desktop = get_thread_desktop( current, DESKTOP_CREATEWINDOW ))) return NULL;
+    if (!(desktop = get_thread_desktop( current_thread, DESKTOP_CREATEWINDOW ))) return NULL;
 
-    if (!(class = grab_class( current->process, atom, instance, &extra_bytes )))
+    if (!(class = grab_class( current_thread->process, atom, instance, &extra_bytes )))
     {
         release_object( desktop );
         return NULL;
@@ -471,7 +471,7 @@ static struct window *create_window( struct window *parent, struct window *owner
 
     win->parent         = parent;
     win->owner          = owner ? owner->handle : 0;
-    win->thread         = current;
+    win->thread         = current_thread;
     win->desktop        = desktop;
     win->class          = class;
     win->atom           = atom;
@@ -499,13 +499,13 @@ static struct window *create_window( struct window *parent, struct window *owner
 
     /* if parent belongs to a different thread and the window isn't */
     /* top-level, attach the two threads */
-    if (parent && parent->thread && parent->thread != current && !is_desktop_window(parent))
+    if (parent && parent->thread && parent->thread != current_thread && !is_desktop_window(parent))
     {
-        if (!attach_thread_input( current, parent->thread )) goto failed;
+        if (!attach_thread_input( current_thread, parent->thread )) goto failed;
     }
     else  /* otherwise just make sure that the thread has a message queue */
     {
-        if (!current->queue && !init_thread_queue( current )) goto failed;
+        if (!current_thread->queue && !init_thread_queue( current_thread )) goto failed;
     }
 
     /* put it on parent unlinked list */
@@ -517,7 +517,7 @@ static struct window *create_window( struct window *parent, struct window *owner
         {
             assert( !desktop->top_window );
             desktop->top_window = win;
-            set_process_default_desktop( current->process, desktop, current->desktop );
+            set_process_default_desktop( current_thread->process, desktop, current_thread->desktop );
         }
         else
         {
@@ -526,7 +526,7 @@ static struct window *create_window( struct window *parent, struct window *owner
         }
     }
 
-    current->desktop_users++;
+    current_thread->desktop_users++;
     return win;
 
 failed:
@@ -1914,16 +1914,16 @@ DECL_HANDLER(destroy_window)
     if (win)
     {
         if (!is_desktop_window(win)) destroy_window( win );
-        else if (win->thread == current) detach_window_thread( win );
+        else if (win->thread == current_thread) detach_window_thread( win );
         else set_error( STATUS_ACCESS_DENIED );
     }
 }
 
 
-/* retrieve the desktop window for the current thread */
+/* retrieve the desktop window for the current_thread thread */
 DECL_HANDLER(get_desktop_window)
 {
-    struct desktop *desktop = get_thread_desktop( current, 0 );
+    struct desktop *desktop = get_thread_desktop( current_thread, 0 );
 
     if (!desktop) return;
 
@@ -2012,7 +2012,7 @@ DECL_HANDLER(set_window_info)
     struct window *win = get_window( req->handle );
 
     if (!win) return;
-    if (req->flags && is_desktop_window(win) && win->thread != current)
+    if (req->flags && is_desktop_window(win) && win->thread != current_thread)
     {
         set_error( STATUS_ACCESS_DENIED );
         return;
@@ -2094,13 +2094,13 @@ DECL_HANDLER(get_window_children)
 
     if (req->desktop)
     {
-        if (!(desktop = get_desktop_obj( current->process, req->desktop, DESKTOP_ENUMERATE ))) return;
+        if (!(desktop = get_desktop_obj( current_thread->process, req->desktop, DESKTOP_ENUMERATE ))) return;
         parent = desktop->top_window;
     }
     else
     {
         if (req->parent && !(parent = get_window( req->parent ))) return;
-        if (!parent && !(desktop = get_thread_desktop( current, 0 ))) return;
+        if (!parent && !(desktop = get_thread_desktop( current_thread, 0 ))) return;
     }
 
     if (parent)

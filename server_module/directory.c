@@ -486,12 +486,12 @@ DECL_HANDLER(create_directory)
 
     reply->handle = 0;
     get_req_unicode_str( &name );
-    if (req->rootdir && !(root = get_directory_obj( current->process, req->rootdir, 0 )))
+    if (req->rootdir && !(root = get_directory_obj( current_thread->process, req->rootdir, 0 )))
         return;
 
     if ((dir = create_directory( root, &name, req->attributes, HASH_SIZE )))
     {
-        reply->handle = alloc_handle( current->process, dir, req->access, req->attributes );
+        reply->handle = alloc_handle( current_thread->process, dir, req->access, req->attributes );
         release_object( dir );
     }
 
@@ -505,12 +505,12 @@ DECL_HANDLER(open_directory)
     struct directory *dir, *root = NULL;
 
     get_req_unicode_str( &name );
-    if (req->rootdir && !(root = get_directory_obj( current->process, req->rootdir, 0 )))
+    if (req->rootdir && !(root = get_directory_obj( current_thread->process, req->rootdir, 0 )))
         return;
 
     if ((dir = open_object_dir( root, &name, req->attributes, &directory_ops )))
     {
-        reply->handle = alloc_handle( current->process, &dir->obj, req->access, req->attributes );
+        reply->handle = alloc_handle( current_thread->process, &dir->obj, req->access, req->attributes );
         release_object( dir );
     }
 
@@ -520,7 +520,7 @@ DECL_HANDLER(open_directory)
 /* get a directory entry by index */
 DECL_HANDLER(get_directory_entry)
 {
-    struct directory *dir = get_directory_obj( current->process, req->handle, DIRECTORY_QUERY );
+    struct directory *dir = get_directory_obj( current_thread->process, req->handle, DIRECTORY_QUERY );
     if (dir)
     {
         struct object *obj = find_object_index( dir->entries, req->index );
@@ -555,7 +555,7 @@ DECL_HANDLER(get_directory_entry)
 /* unlink a named object */
 DECL_HANDLER(unlink_object)
 {
-    struct object *obj = get_handle_obj( current->process, req->handle, 0, NULL );
+    struct object *obj = get_handle_obj( current_thread->process, req->handle, 0, NULL );
 
     if (obj)
     {

@@ -44,10 +44,10 @@ struct snapshot
     struct object             obj;           /* object header */
     struct process_snapshot  *processes;     /* processes snapshot */
     int                       process_count; /* count of processes */
-    int                       process_pos;   /* current position in proc snapshot */
+    int                       process_pos;   /* current_thread position in proc snapshot */
     struct thread_snapshot   *threads;       /* threads snapshot */
     int                       thread_count;  /* count of threads */
-    int                       thread_pos;    /* current position in thread snapshot */
+    int                       thread_pos;    /* current_thread position in thread snapshot */
 };
 
 static void snapshot_dump( struct object *obj, int verbose );
@@ -185,7 +185,7 @@ DECL_HANDLER(create_snapshot)
     reply->handle = 0;
     if ((snapshot = create_snapshot( req->flags )))
     {
-        reply->handle = alloc_handle( current->process, snapshot, 0, req->attributes );
+        reply->handle = alloc_handle( current_thread->process, snapshot, 0, req->attributes );
         release_object( snapshot );
     }
 }
@@ -195,7 +195,7 @@ DECL_HANDLER(next_process)
 {
     struct snapshot *snapshot;
 
-    if ((snapshot = (struct snapshot *)get_handle_obj( current->process, req->handle,
+    if ((snapshot = (struct snapshot *)get_handle_obj( current_thread->process, req->handle,
                                                        0, &snapshot_ops )))
     {
         if (req->reset) snapshot->process_pos = 0;
@@ -209,7 +209,7 @@ DECL_HANDLER(next_thread)
 {
     struct snapshot *snapshot;
 
-    if ((snapshot = (struct snapshot *)get_handle_obj( current->process, req->handle,
+    if ((snapshot = (struct snapshot *)get_handle_obj( current_thread->process, req->handle,
                                                        0, &snapshot_ops )))
     {
         if (req->reset) snapshot->thread_pos = 0;

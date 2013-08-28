@@ -173,12 +173,12 @@ DECL_HANDLER(create_symlink)
     name.len   = (target.str - name.str) * sizeof(WCHAR);
     target.len = ((get_req_data_size() - name.len) / sizeof(WCHAR)) * sizeof(WCHAR);
 
-    if (req->rootdir && !(root = get_directory_obj( current->process, req->rootdir, 0 )))
+    if (req->rootdir && !(root = get_directory_obj( current_thread->process, req->rootdir, 0 )))
         return;
 
     if ((symlink = create_symlink( root, &name, req->attributes, &target )))
     {
-        reply->handle = alloc_handle( current->process, symlink, req->access, req->attributes );
+        reply->handle = alloc_handle( current_thread->process, symlink, req->access, req->attributes );
         release_object( symlink );
     }
 
@@ -193,12 +193,12 @@ DECL_HANDLER(open_symlink)
     struct symlink *symlink;
 
     get_req_unicode_str( &name );
-    if (req->rootdir && !(root = get_directory_obj( current->process, req->rootdir, 0 )))
+    if (req->rootdir && !(root = get_directory_obj( current_thread->process, req->rootdir, 0 )))
         return;
 
     if ((symlink = open_object_dir( root, &name, req->attributes | OBJ_OPENLINK, &symlink_ops )))
     {
-        reply->handle = alloc_handle( current->process, &symlink->obj, req->access, req->attributes );
+        reply->handle = alloc_handle( current_thread->process, &symlink->obj, req->access, req->attributes );
         release_object( symlink );
     }
 
@@ -210,7 +210,7 @@ DECL_HANDLER(query_symlink)
 {
     struct symlink *symlink;
 
-    symlink = (struct symlink *)get_handle_obj( current->process, req->handle,
+    symlink = (struct symlink *)get_handle_obj( current_thread->process, req->handle,
                                                 SYMBOLIC_LINK_QUERY, &symlink_ops );
     if (!symlink) return;
 

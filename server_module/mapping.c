@@ -113,7 +113,7 @@ static size_t page_mask;
 #define ROUND_SIZE(size)  (((size) + page_mask) & ~page_mask)
 
 
-/* extend a file beyond the current end of file */
+/* extend a file beyond the current_thread end of file */
 static int grow_file( int unix_fd, file_pos_t new_size )
 {
     static const char zero;
@@ -135,7 +135,7 @@ static int grow_file( int unix_fd, file_pos_t new_size )
     return 0;
 }
 
-/* check if the current directory allows exec mappings */
+/* check if the current_thread directory allows exec mappings */
 static int check_current_dir_for_exec(void)
 {
     int fd;
@@ -475,7 +475,7 @@ static struct object *create_mapping( struct directory *root, const struct unico
             set_error( STATUS_INVALID_PARAMETER );
             goto error;
         }
-        if (!(file = get_file_obj( current->process, handle, access ))) goto error;
+        if (!(file = get_file_obj( current_thread->process, handle, access ))) goto error;
         fd = get_obj_fd( (struct object *)file );
 
         /* file sharing rules for mappings are different so we use magic the access rights */
@@ -639,15 +639,15 @@ DECL_HANDLER(create_mapping)
     sd = objattr->sd_len ? (const struct security_descriptor *)(objattr + 1) : NULL;
     objattr_get_name( objattr, &name );
 
-    if (objattr->rootdir && !(root = get_directory_obj( current->process, objattr->rootdir, 0 )))
+    if (objattr->rootdir && !(root = get_directory_obj( current_thread->process, objattr->rootdir, 0 )))
         return;
 
     if ((obj = create_mapping( root, &name, req->attributes, req->size, req->protect, req->file_handle, sd )))
     {
         if (get_error() == STATUS_OBJECT_NAME_EXISTS)
-            reply->handle = alloc_handle( current->process, obj, req->access, req->attributes );
+            reply->handle = alloc_handle( current_thread->process, obj, req->access, req->attributes );
         else
-            reply->handle = alloc_handle_no_access_check( current->process, obj, req->access, req->attributes );
+            reply->handle = alloc_handle_no_access_check( current_thread->process, obj, req->access, req->attributes );
         release_object( obj );
     }
 
@@ -662,12 +662,12 @@ DECL_HANDLER(open_mapping)
     struct mapping *mapping;
 
     get_req_unicode_str( &name );
-    if (req->rootdir && !(root = get_directory_obj( current->process, req->rootdir, 0 )))
+    if (req->rootdir && !(root = get_directory_obj( current_thread->process, req->rootdir, 0 )))
         return;
 
     if ((mapping = open_object_dir( root, &name, req->attributes, &mapping_ops )))
     {
-        reply->handle = alloc_handle( current->process, &mapping->obj, req->access, req->attributes );
+        reply->handle = alloc_handle( current_thread->process, &mapping->obj, req->access, req->attributes );
         release_object( mapping );
     }
 
@@ -680,7 +680,7 @@ DECL_HANDLER(get_mapping_info)
     struct mapping *mapping;
     struct fd *fd;
 
-    if ((mapping = get_mapping_obj( current->process, req->handle, req->access )))
+    if ((mapping = get_mapping_obj( current_thread->process, req->handle, req->access )))
     {
         reply->size        = mapping->size;
         reply->protect     = mapping->protect;
@@ -690,15 +690,15 @@ DECL_HANDLER(get_mapping_info)
         if ((fd = get_obj_fd( &mapping->obj )))
         {
             if (!is_fd_removable(fd))
-                reply->mapping = alloc_handle( current->process, mapping, 0, 0 );
+                reply->mapping = alloc_handle( current_thread->process, mapping, 0, 0 );
             release_object( fd );
         }
         if (mapping->shared_file)
         {
-            if (!(reply->shared_file = alloc_handle( current->process, mapping->shared_file,
+            if (!(reply->shared_file = alloc_handle( current_thread->process, mapping->shared_file,
                                                      GENERIC_READ|GENERIC_WRITE, 0 )))
             {
-                if (reply->mapping) close_handle( current->process, reply->mapping );
+                if (reply->mapping) close_handle( current_thread->process, reply->mapping );
             }
         }
         release_object( mapping );
@@ -710,7 +710,7 @@ DECL_HANDLER(get_mapping_committed_range)
 {
     struct mapping *mapping;
 
-    if ((mapping = get_mapping_obj( current->process, req->handle, 0 )))
+    if ((mapping = get_mapping_obj( current_thread->process, req->handle, 0 )))
     {
         if (!(req->offset & page_mask) && req->offset < mapping->size)
             reply->committed = find_committed_range( mapping, req->offset, &reply->size );
@@ -726,7 +726,7 @@ DECL_HANDLER(add_mapping_committed_range)
 {
     struct mapping *mapping;
 
-    if ((mapping = get_mapping_obj( current->process, req->handle, 0 )))
+    if ((mapping = get_mapping_obj( current_thread->process, req->handle, 0 )))
     {
         if (!(req->size & page_mask) &&
             !(req->offset & page_mask) &&

@@ -346,9 +346,9 @@ static void debug_ctx_destroy( struct object *obj )
 /* continue a debug event */
 static int continue_debug_event( struct process *process, struct thread *thread, int status )
 {
-    struct debug_ctx *debug_ctx = current->debug_ctx;
+    struct debug_ctx *debug_ctx = current_thread->debug_ctx;
 
-    if (debug_ctx && process->debugger == current && thread->process == process)
+    if (debug_ctx && process->debugger == current_thread && thread->process == process)
     {
         struct debug_event *event;
 
@@ -562,10 +562,10 @@ void debug_exit_thread( struct thread *thread )
 /* Wait for a debug event */
 DECL_HANDLER(wait_debug_event)
 {
-    struct debug_ctx *debug_ctx = current->debug_ctx;
+    struct debug_ctx *debug_ctx = current_thread->debug_ctx;
     struct debug_event *event;
 
-    if (!debug_ctx)  /* current thread is not a debugger */
+    if (!debug_ctx)  /* current_thread thread is not a debugger */
     {
         set_error( STATUS_INVALID_HANDLE );
         return;
@@ -586,7 +586,7 @@ DECL_HANDLER(wait_debug_event)
         reply->pid  = 0;
         reply->tid  = 0;
         if (req->get_handle)
-            reply->wait = alloc_handle( current->process, debug_ctx, SYNCHRONIZE, 0 );
+            reply->wait = alloc_handle( current_thread->process, debug_ctx, SYNCHRONIZE, 0 );
     }
 }
 
@@ -614,9 +614,9 @@ DECL_HANDLER(debug_process)
 
     if (!req->attach)
     {
-        debugger_detach( process, current );
+        debugger_detach( process, current_thread );
     }
-    else if (debugger_attach( process, current ))
+    else if (debugger_attach( process, current_thread ))
     {
         generate_startup_debug_events( process, 0 );
         break_process( process );
@@ -629,11 +629,11 @@ DECL_HANDLER(debug_process)
 DECL_HANDLER(queue_exception_event)
 {
     reply->handle = 0;
-    if (current->process->debugger)
+    if (current_thread->process->debugger)
     {
         debug_event_t data;
         struct debug_event *event;
-        struct thread *thread = current;
+        struct thread *thread = current_thread;
 
         if ((req->len % sizeof(client_ptr_t)) != 0 ||
             req->len > get_req_data_size() ||
@@ -675,18 +675,18 @@ DECL_HANDLER(get_exception_status)
 {
     struct debug_event *event;
 
-    if ((event = (struct debug_event *)get_handle_obj( current->process, req->handle,
+    if ((event = (struct debug_event *)get_handle_obj( current_thread->process, req->handle,
                                                        0, &debug_event_ops )))
     {
-        close_handle( current->process, req->handle );
+        close_handle( current_thread->process, req->handle );
         if (event->state == EVENT_CONTINUED)
         {
-            if (current->context == &event->context)
+            if (current_thread->context == &event->context)
             {
                 data_size_t size = min( sizeof(context_t), get_reply_max_size() );
                 set_reply_data( &event->context, size );
-                current->context = NULL;
-                stop_thread_if_suspended( current );
+                current_thread->context = NULL;
+                stop_thread_if_suspended( current_thread );
             }
             set_error( event->status );
         }
@@ -702,7 +702,7 @@ DECL_HANDLER(output_debug_string)
 
     data.output_string.string  = req->string;
     data.output_string.length  = req->length;
-    generate_debug_event( current, OUTPUT_DEBUG_STRING_EVENT, &data );
+    generate_debug_event( current_thread, OUTPUT_DEBUG_STRING_EVENT, &data );
 }
 
 /* simulate a breakpoint in a process */
@@ -713,7 +713,7 @@ DECL_HANDLER(debug_break)
     reply->self = 0;
     if ((process = get_process_from_handle( req->handle, PROCESS_SET_INFORMATION /*FIXME*/ )))
     {
-        if (process != current->process) break_process( process );
+        if (process != current_thread->process) break_process( process );
         else reply->self = 1;
         release_object( process );
     }
@@ -722,10 +722,10 @@ DECL_HANDLER(debug_break)
 /* set debugger kill on exit flag */
 DECL_HANDLER(set_debugger_kill_on_exit)
 {
-    if (!current->debug_ctx)
+    if (!current_thread->debug_ctx)
     {
         set_error( STATUS_ACCESS_DENIED );
         return;
     }
-    current->debug_ctx->kill_on_exit = req->kill_on_exit;
+    current_thread->debug_ctx->kill_on_exit = req->kill_on_exit;
 }

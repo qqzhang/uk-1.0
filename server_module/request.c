@@ -124,8 +124,8 @@ static const struct fd_ops master_socket_fd_ops =
 };
 
 
-struct thread *current = NULL;  /* thread handling the current request */
-unsigned int global_error = 0;  /* global error code for when no thread is current */
+struct thread *current_thread = NULL;  /* thread handling the current_thread request */
+unsigned int global_error = 0;  /* global error code for when no thread is current_thread */
 timeout_t server_start_time = 0;  /* server startup time */
 int server_dir_fd = -1;    /* file descriptor for the server dir */
 int config_dir_fd = -1;    /* file descriptor for the config dir */
@@ -162,9 +162,9 @@ void fatal_error( const char *err, ... )
 void *set_reply_data_size( data_size_t size )
 {
     assert( size <= get_reply_max_size() );
-    if (size && !(current->reply_data = mem_alloc( size ))) size = 0;
-    current->reply_size = size;
-    return current->reply_data;
+    if (size && !(current_thread->reply_data = mem_alloc( size ))) size = 0;
+    current_thread->reply_size = size;
+    return current_thread->reply_data;
 }
 
 /* write the remaining part of the reply */
@@ -192,14 +192,14 @@ void write_reply( struct thread *thread )
         fatal_protocol_error( thread, "reply write: %s\n", strerror( errno ));
 }
 
-/* send a reply to the current thread */
+/* send a reply to the current_thread thread */
 static void send_reply( union generic_reply *reply )
 {
     int ret;
 
-    if (!current->reply_size)
+    if (!current_thread->reply_size)
     {
-        if ((ret = write( get_unix_fd( current->reply_fd ),
+        if ((ret = write( get_unix_fd( current_thread->reply_fd ),
                           reply, sizeof(*reply) )) != sizeof(*reply)) goto error;
     }
     else
@@ -208,30 +208,30 @@ static void send_reply( union generic_reply *reply )
 
         vec[0].iov_base = (void *)reply;
         vec[0].iov_len  = sizeof(*reply);
-        vec[1].iov_base = current->reply_data;
-        vec[1].iov_len  = current->reply_size;
+        vec[1].iov_base = current_thread->reply_data;
+        vec[1].iov_len  = current_thread->reply_size;
 
-        if ((ret = writev( get_unix_fd( current->reply_fd ), vec, 2 )) < sizeof(*reply)) goto error;
+        if ((ret = writev( get_unix_fd( current_thread->reply_fd ), vec, 2 )) < sizeof(*reply)) goto error;
 
-        if ((current->reply_towrite = current->reply_size - (ret - sizeof(*reply))))
+        if ((current_thread->reply_towrite = current_thread->reply_size - (ret - sizeof(*reply))))
         {
             /* couldn't write it all, wait for POLLOUT */
-            set_fd_events( current->reply_fd, POLLOUT );
-            set_fd_events( current->request_fd, 0 );
+            set_fd_events( current_thread->reply_fd, POLLOUT );
+            set_fd_events( current_thread->request_fd, 0 );
             return;
         }
     }
-    free( current->reply_data );
-    current->reply_data = NULL;
+    free( current_thread->reply_data );
+    current_thread->reply_data = NULL;
     return;
 
  error:
     if (ret >= 0)
-        fatal_protocol_error( current, "partial write %d\n", ret );
+        fatal_protocol_error( current_thread, "partial write %d\n", ret );
     else if (errno == EPIPE)
-        kill_thread( current, 0 );  /* normal death */
+        kill_thread( current_thread, 0 );  /* normal death */
     else
-        fatal_protocol_error( current, "reply write: %s\n", strerror( errno ));
+        fatal_protocol_error( current_thread, "reply write: %s\n", strerror( errno ));
 }
 
 /* call a request handler */
@@ -240,34 +240,34 @@ static void call_req_handler( struct thread *thread )
     union generic_reply reply;
     enum request req = thread->req.request_header.req;
 
-    current = thread;
-    current->reply_size = 0;
+    current_thread = thread;
+    current_thread->reply_size = 0;
     clear_error();
     memset( &reply, 0, sizeof(reply) );
 
     if (debug_level) trace_request();
 
     if (req < REQ_NB_REQUESTS)
-        req_handlers[req]( &current->req, &reply );
+        req_handlers[req]( &current_thread->req, &reply );
     else
         set_error( STATUS_NOT_IMPLEMENTED );
 
-    if (current)
+    if (current_thread)
     {
-        if (current->reply_fd)
+        if (current_thread->reply_fd)
         {
-            reply.reply_header.error = current->error;
-            reply.reply_header.reply_size = current->reply_size;
+            reply.reply_header.error = current_thread->error;
+            reply.reply_header.reply_size = current_thread->reply_size;
             if (debug_level) trace_reply( req, &reply );
             send_reply( &reply );
         }
         else
         {
-            current->exit_code = 1;
-            kill_thread( current, 1 );  /* no way to continue without reply fd */
+            current_thread->exit_code = 1;
+            kill_thread( current_thread, 1 );  /* no way to continue without reply fd */
         }
     }
-    current = NULL;
+    current_thread = NULL;
 }
 
 /* read a request from a thread */
@@ -439,7 +439,7 @@ int send_client_fd( struct process *process, int fd, obj_handle_t handle )
     vec.iov_len  = sizeof(handle);
 
     if (debug_level)
-        fprintf( stderr, "%04x: *fd* %04x -> %d\n", current ? current->id : process->id, handle, fd );
+        fprintf( stderr, "%04x: *fd* %04x -> %d\n", current_thread ? current_thread->id : process->id, handle, fd );
 
     ret = sendmsg( get_unix_fd( process->msg_fd ), &msghdr, 0 );
 
@@ -463,7 +463,7 @@ int send_client_fd( struct process *process, int fd, obj_handle_t handle )
     return -1;
 }
 
-/* get current tick count to return to client */
+/* get current_thread tick count to return to client */
 unsigned int get_tick_count(void)
 {
 #ifdef HAVE_CLOCK_GETTIME

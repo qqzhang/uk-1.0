@@ -191,15 +191,15 @@ DECL_HANDLER(create_event)
     sd = objattr->sd_len ? (const struct security_descriptor *)(objattr + 1) : NULL;
     objattr_get_name( objattr, &name );
 
-    if (objattr->rootdir && !(root = get_directory_obj( current->process, objattr->rootdir, 0 )))
+    if (objattr->rootdir && !(root = get_directory_obj( current_thread->process, objattr->rootdir, 0 )))
         return;
 
     if ((event = create_event( root, &name, req->attributes, req->manual_reset, req->initial_state, sd )))
     {
         if (get_error() == STATUS_OBJECT_NAME_EXISTS)
-            reply->handle = alloc_handle( current->process, event, req->access, req->attributes );
+            reply->handle = alloc_handle( current_thread->process, event, req->access, req->attributes );
         else
-            reply->handle = alloc_handle_no_access_check( current->process, event, req->access, req->attributes );
+            reply->handle = alloc_handle_no_access_check( current_thread->process, event, req->access, req->attributes );
         release_object( event );
     }
 
@@ -214,12 +214,12 @@ DECL_HANDLER(open_event)
     struct event *event;
 
     get_req_unicode_str( &name );
-    if (req->rootdir && !(root = get_directory_obj( current->process, req->rootdir, 0 )))
+    if (req->rootdir && !(root = get_directory_obj( current_thread->process, req->rootdir, 0 )))
         return;
 
     if ((event = open_object_dir( root, &name, req->attributes, &event_ops )))
     {
-        reply->handle = alloc_handle( current->process, &event->obj, req->access, req->attributes );
+        reply->handle = alloc_handle( current_thread->process, &event->obj, req->access, req->attributes );
         release_object( event );
     }
 
@@ -231,7 +231,7 @@ DECL_HANDLER(event_op)
 {
     struct event *event;
 
-    if (!(event = get_event_obj( current->process, req->handle, EVENT_MODIFY_STATE ))) return;
+    if (!(event = get_event_obj( current_thread->process, req->handle, EVENT_MODIFY_STATE ))) return;
     switch(req->op)
     {
     case PULSE_EVENT:

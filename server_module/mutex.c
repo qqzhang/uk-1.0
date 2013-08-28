@@ -87,7 +87,7 @@ static struct mutex *create_mutex( struct directory *root, const struct unicode_
             mutex->count = 0;
             mutex->owner = NULL;
             mutex->abandoned = 0;
-            if (owned) mutex_satisfied( &mutex->obj, current );
+            if (owned) mutex_satisfied( &mutex->obj, current_thread );
             if (sd) default_set_sd( &mutex->obj, sd, OWNER_SECURITY_INFORMATION|
                                                      GROUP_SECURITY_INFORMATION|
                                                      DACL_SECURITY_INFORMATION|
@@ -180,7 +180,7 @@ static int mutex_signal( struct object *obj, unsigned int access )
         set_error( STATUS_ACCESS_DENIED );
         return 0;
     }
-    if (!mutex->count || (mutex->owner != current))
+    if (!mutex->count || (mutex->owner != current_thread))
     {
         set_error( STATUS_MUTANT_NOT_OWNED );
         return 0;
@@ -216,15 +216,15 @@ DECL_HANDLER(create_mutex)
     sd = objattr->sd_len ? (const struct security_descriptor *)(objattr + 1) : NULL;
     objattr_get_name( objattr, &name );
 
-    if (objattr->rootdir && !(root = get_directory_obj( current->process, objattr->rootdir, 0 )))
+    if (objattr->rootdir && !(root = get_directory_obj( current_thread->process, objattr->rootdir, 0 )))
         return;
 
     if ((mutex = create_mutex( root, &name, req->attributes, req->owned, sd )))
     {
         if (get_error() == STATUS_OBJECT_NAME_EXISTS)
-            reply->handle = alloc_handle( current->process, mutex, req->access, req->attributes );
+            reply->handle = alloc_handle( current_thread->process, mutex, req->access, req->attributes );
         else
-            reply->handle = alloc_handle_no_access_check( current->process, mutex, req->access, req->attributes );
+            reply->handle = alloc_handle_no_access_check( current_thread->process, mutex, req->access, req->attributes );
         release_object( mutex );
     }
 
@@ -239,12 +239,12 @@ DECL_HANDLER(open_mutex)
     struct mutex *mutex;
 
     get_req_unicode_str( &name );
-    if (req->rootdir && !(root = get_directory_obj( current->process, req->rootdir, 0 )))
+    if (req->rootdir && !(root = get_directory_obj( current_thread->process, req->rootdir, 0 )))
         return;
 
     if ((mutex = open_object_dir( root, &name, req->attributes, &mutex_ops )))
     {
-        reply->handle = alloc_handle( current->process, &mutex->obj, req->access, req->attributes );
+        reply->handle = alloc_handle( current_thread->process, &mutex->obj, req->access, req->attributes );
         release_object( mutex );
     }
 
@@ -256,10 +256,10 @@ DECL_HANDLER(release_mutex)
 {
     struct mutex *mutex;
 
-    if ((mutex = (struct mutex *)get_handle_obj( current->process, req->handle,
+    if ((mutex = (struct mutex *)get_handle_obj( current_thread->process, req->handle,
                                                  0, &mutex_ops )))
     {
-        if (!mutex->count || (mutex->owner != current)) set_error( STATUS_MUTANT_NOT_OWNED );
+        if (!mutex->count || (mutex->owner != current_thread)) set_error( STATUS_MUTANT_NOT_OWNED );
         else
         {
             reply->prev_count = mutex->count;

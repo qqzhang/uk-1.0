@@ -202,7 +202,7 @@ void security_set_thread_token( struct thread *thread, obj_handle_t handle )
     }
     else
     {
-        struct token *token = (struct token *)get_handle_obj( current->process,
+        struct token *token = (struct token *)get_handle_obj( current_thread->process,
                                                               handle,
                                                               TOKEN_IMPERSONATE,
                                                               &token_ops );
@@ -217,7 +217,7 @@ void security_set_thread_token( struct thread *thread, obj_handle_t handle )
 
 const SID *security_unix_uid_to_sid( uid_t uid )
 {
-    /* very simple mapping: either the current user or not the current user */
+    /* very simple mapping: either the current_thread user or not the current_thread user */
     if (uid == getuid())
         return (const SID *)&local_user_sid;
     else
@@ -998,7 +998,7 @@ const SID *token_get_primary_group( struct token *token )
 int check_object_access(struct object *obj, unsigned int *access)
 {
     GENERIC_MAPPING mapping;
-    struct token *token = current->token ? current->token : current->process->token;
+    struct token *token = current_thread->token ? current_thread->token : current_thread->process->token;
     LUID_AND_ATTRIBUTES priv;
     unsigned int status, priv_count = 1;
     int res;
@@ -1038,7 +1038,7 @@ DECL_HANDLER(open_token)
                 if (!thread->token->primary && thread->token->impersonation_level <= SecurityAnonymous)
                     set_error( STATUS_CANT_OPEN_ANONYMOUS );
                 else
-                    reply->token = alloc_handle( current->process, thread->token,
+                    reply->token = alloc_handle( current_thread->process, thread->token,
                                                  req->access, req->attributes );
             }
             else
@@ -1052,7 +1052,7 @@ DECL_HANDLER(open_token)
         if (process)
         {
             if (process->token)
-                reply->token = alloc_handle( current->process, process->token, req->access,
+                reply->token = alloc_handle( current_thread->process, process->token, req->access,
                                              req->attributes );
             else
                 set_error( STATUS_NO_TOKEN );
@@ -1069,7 +1069,7 @@ DECL_HANDLER(adjust_token_privileges)
 
     if (req->get_modified_state) access |= TOKEN_QUERY;
 
-    if ((token = (struct token *)get_handle_obj( current->process, req->handle,
+    if ((token = (struct token *)get_handle_obj( current_thread->process, req->handle,
                                                  access, &token_ops )))
     {
         const LUID_AND_ATTRIBUTES *privs = get_req_data();
@@ -1110,7 +1110,7 @@ DECL_HANDLER(get_token_privileges)
 {
     struct token *token;
 
-    if ((token = (struct token *)get_handle_obj( current->process, req->handle,
+    if ((token = (struct token *)get_handle_obj( current_thread->process, req->handle,
                                                  TOKEN_QUERY,
                                                  &token_ops )))
     {
@@ -1147,14 +1147,14 @@ DECL_HANDLER(duplicate_token)
 {
     struct token *src_token;
 
-    if ((src_token = (struct token *)get_handle_obj( current->process, req->handle,
+    if ((src_token = (struct token *)get_handle_obj( current_thread->process, req->handle,
                                                      TOKEN_DUPLICATE,
                                                      &token_ops )))
     {
         struct token *token = token_duplicate( src_token, req->primary, req->impersonation_level );
         if (token)
         {
-            reply->new_handle = alloc_handle( current->process, token, req->access, req->attributes);
+            reply->new_handle = alloc_handle( current_thread->process, token, req->access, req->attributes);
             release_object( token );
         }
         release_object( src_token );
@@ -1166,7 +1166,7 @@ DECL_HANDLER(check_token_privileges)
 {
     struct token *token;
 
-    if ((token = (struct token *)get_handle_obj( current->process, req->handle,
+    if ((token = (struct token *)get_handle_obj( current_thread->process, req->handle,
                                                  TOKEN_QUERY,
                                                  &token_ops )))
     {
@@ -1199,7 +1199,7 @@ DECL_HANDLER(access_check)
         return;
     }
 
-    if ((token = (struct token *)get_handle_obj( current->process, req->handle,
+    if ((token = (struct token *)get_handle_obj( current_thread->process, req->handle,
                                                  TOKEN_QUERY,
                                                  &token_ops )))
     {
@@ -1254,7 +1254,7 @@ DECL_HANDLER(get_token_sid)
 
     reply->sid_len = 0;
 
-    if ((token = (struct token *)get_handle_obj( current->process, req->handle,
+    if ((token = (struct token *)get_handle_obj( current_thread->process, req->handle,
                                                  TOKEN_QUERY,
                                                  &token_ops )))
     {
@@ -1304,7 +1304,7 @@ DECL_HANDLER(get_token_groups)
 
     reply->user_len = 0;
 
-    if ((token = (struct token *)get_handle_obj( current->process, req->handle,
+    if ((token = (struct token *)get_handle_obj( current_thread->process, req->handle,
                                                  TOKEN_QUERY,
                                                  &token_ops )))
     {
@@ -1371,7 +1371,7 @@ DECL_HANDLER(get_token_impersonation_level)
 {
     struct token *token;
 
-    if ((token = (struct token *)get_handle_obj( current->process, req->handle,
+    if ((token = (struct token *)get_handle_obj( current_thread->process, req->handle,
                                                  TOKEN_QUERY,
                                                  &token_ops )))
     {
@@ -1388,7 +1388,7 @@ DECL_HANDLER(get_token_statistics)
 {
     struct token *token;
 
-    if ((token = (struct token *)get_handle_obj( current->process, req->handle,
+    if ((token = (struct token *)get_handle_obj( current_thread->process, req->handle,
                                                  TOKEN_QUERY,
                                                  &token_ops )))
     {
@@ -1409,7 +1409,7 @@ DECL_HANDLER(get_token_default_dacl)
 
     reply->acl_len = 0;
 
-    if ((token = (struct token *)get_handle_obj( current->process, req->handle,
+    if ((token = (struct token *)get_handle_obj( current_thread->process, req->handle,
                                                  TOKEN_QUERY,
                                                  &token_ops )))
     {
@@ -1432,7 +1432,7 @@ DECL_HANDLER(set_token_default_dacl)
 {
     struct token *token;
 
-    if ((token = (struct token *)get_handle_obj( current->process, req->handle,
+    if ((token = (struct token *)get_handle_obj( current_thread->process, req->handle,
                                                  TOKEN_ADJUST_DEFAULT,
                                                  &token_ops )))
     {

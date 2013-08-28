@@ -58,12 +58,12 @@ struct thread
     struct debug_event    *debug_event;   /* debug event being sent to debugger */
     int                    debug_break;   /* debug breakpoint pending? */
     struct msg_queue      *queue;         /* message queue */
-    struct thread_wait    *wait;          /* current wait condition if sleeping */
+    struct thread_wait    *wait;          /* current_thread wait condition if sleeping */
     struct list            system_apc;    /* queue of system async procedure calls */
     struct list            user_apc;      /* queue of user async procedure calls */
     struct inflight_fd     inflight[MAX_INFLIGHT_FDS];  /* fds currently in flight */
-    unsigned int           error;         /* current error code */
-    union generic_request  req;           /* current request */
+    unsigned int           error;         /* current_thread error code */
+    union generic_request  req;           /* current_thread request */
     void                  *req_data;      /* variable-size data for request */
     unsigned int           req_toread;    /* amount of data still to read in request */
     void                  *reply_data;    /* variable-size data for reply */
@@ -76,8 +76,8 @@ struct thread
     int                    exit_code;     /* thread exit code */
     int                    unix_pid;      /* Unix pid of client */
     int                    unix_tid;      /* Unix tid of client */
-    context_t             *context;       /* current context if in an exception handler */
-    context_t             *suspend_context; /* current context if suspended */
+    context_t             *context;       /* current_thread context if in an exception handler */
+    context_t             *suspend_context; /* current_thread context if suspended */
     client_ptr_t           teb;           /* TEB address (in client address space) */
     affinity_t             affinity;      /* affinity mask */
     int                    priority;      /* priority level */
@@ -96,7 +96,7 @@ struct thread_snapshot
     int             priority;  /* priority class */
 };
 
-extern struct thread *current;
+extern struct thread *current_thread;
 
 /* thread functions */
 
@@ -130,10 +130,10 @@ extern int send_thread_signal( struct thread *thread, int sig );
 extern void get_selector_entry( struct thread *thread, int entry, unsigned int *base,
                                 unsigned int *limit, unsigned char *flags );
 
-extern unsigned int global_error;  /* global error code for when no thread is current */
+extern unsigned int global_error;  /* global error code for when no thread is current_thread */
 
-static inline unsigned int get_error(void)       { return current ? current->error : global_error; }
-static inline void set_error( unsigned int err ) { global_error = err; if (current) current->error = err; }
+static inline unsigned int get_error(void)       { return current_thread ? current_thread->error : global_error; }
+static inline void set_error( unsigned int err ) { global_error = err; if (current_thread) current_thread->error = err; }
 static inline void clear_error(void)             { set_error(0); }
 static inline void set_win32_error( unsigned int err ) { set_error( 0xc0010000 | err ); }
 

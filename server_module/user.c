@@ -179,7 +179,7 @@ void free_process_user_handles( struct process *process )
 /* allocate an arbitrary user handle */
 DECL_HANDLER(alloc_user_handle)
 {
-    reply->handle = alloc_user_handle( current->process, USER_CLIENT );
+    reply->handle = alloc_user_handle( current_thread->process, USER_CLIENT );
 }
 
 

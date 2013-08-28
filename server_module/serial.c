@@ -226,7 +226,7 @@ DECL_HANDLER(get_serial_info)
 {
     struct serial *serial;
 
-    if ((serial = get_serial_obj( current->process, req->handle, 0 )))
+    if ((serial = get_serial_obj( current_thread->process, req->handle, 0 )))
     {
         /* timeouts */
         reply->readinterval = serial->readinterval;
@@ -246,7 +246,7 @@ DECL_HANDLER(set_serial_info)
 {
     struct serial *serial;
 
-    if ((serial = get_serial_obj( current->process, req->handle, 0 )))
+    if ((serial = get_serial_obj( current_thread->process, req->handle, 0 )))
     {
         /* timeouts */
         if (req->flags & SERIALINFO_SET_TIMEOUTS)

@@ -448,7 +448,7 @@ DECL_HANDLER(create_winstation)
     get_req_unicode_str( &name );
     if ((winstation = create_winstation( &name, req->attributes, req->flags )))
     {
-        reply->handle = alloc_handle( current->process, winstation, req->access, req->attributes );
+        reply->handle = alloc_handle( current_thread->process, winstation, req->access, req->attributes );
         release_object( winstation );
     }
 }
@@ -472,32 +472,32 @@ DECL_HANDLER(close_winstation)
 {
     struct winstation *winstation;
 
-    if ((winstation = (struct winstation *)get_handle_obj( current->process, req->handle,
+    if ((winstation = (struct winstation *)get_handle_obj( current_thread->process, req->handle,
                                                            0, &winstation_ops )))
     {
-        if (close_handle( current->process, req->handle )) set_error( STATUS_ACCESS_DENIED );
+        if (close_handle( current_thread->process, req->handle )) set_error( STATUS_ACCESS_DENIED );
         release_object( winstation );
     }
 }
 
 
-/* get the process current window station */
+/* get the process current_thread window station */
 DECL_HANDLER(get_process_winstation)
 {
-    reply->handle = current->process->winstation;
+    reply->handle = current_thread->process->winstation;
 }
 
 
-/* set the process current window station */
+/* set the process current_thread window station */
 DECL_HANDLER(set_process_winstation)
 {
     struct winstation *winstation;
 
-    if ((winstation = (struct winstation *)get_handle_obj( current->process, req->handle,
+    if ((winstation = (struct winstation *)get_handle_obj( current_thread->process, req->handle,
                                                            0, &winstation_ops )))
     {
         /* FIXME: should we close the old one? */
-        current->process->winstation = req->handle;
+        current_thread->process->winstation = req->handle;
         release_object( winstation );
     }
 }
@@ -511,11 +511,11 @@ DECL_HANDLER(create_desktop)
 
     reply->handle = 0;
     get_req_unicode_str( &name );
-    if ((winstation = get_process_winstation( current->process, WINSTA_CREATEDESKTOP )))
+    if ((winstation = get_process_winstation( current_thread->process, WINSTA_CREATEDESKTOP )))
     {
         if ((desktop = create_desktop( &name, req->attributes, req->flags, winstation )))
         {
-            reply->handle = alloc_handle( current->process, desktop, req->access, req->attributes );
+            reply->handle = alloc_handle( current_thread->process, desktop, req->access, req->attributes );
             release_object( desktop );
         }
         release_object( winstation );
@@ -532,9 +532,9 @@ DECL_HANDLER(open_desktop)
 
     /* FIXME: check access rights */
     if (!req->winsta)
-        winstation = get_process_winstation( current->process, 0 );
+        winstation = get_process_winstation( current_thread->process, 0 );
     else
-        winstation = (struct winstation *)get_handle_obj( current->process, req->winsta, 0, &winstation_ops );
+        winstation = (struct winstation *)get_handle_obj( current_thread->process, req->winsta, 0, &winstation_ops );
 
     if (winstation)
     {
@@ -558,16 +558,16 @@ DECL_HANDLER(close_desktop)
     struct desktop *desktop;
 
     /* make sure it is a desktop handle */
-    if ((desktop = (struct desktop *)get_handle_obj( current->process, req->handle,
+    if ((desktop = (struct desktop *)get_handle_obj( current_thread->process, req->handle,
                                                      0, &desktop_ops )))
     {
-        if (close_handle( current->process, req->handle )) set_error( STATUS_DEVICE_BUSY );
+        if (close_handle( current_thread->process, req->handle )) set_error( STATUS_DEVICE_BUSY );
         release_object( desktop );
     }
 }
 
 
-/* get the thread current desktop */
+/* get the thread current_thread desktop */
 DECL_HANDLER(get_thread_desktop)
 {
     struct thread *thread;
@@ -578,16 +578,16 @@ DECL_HANDLER(get_thread_desktop)
 }
 
 
-/* set the thread current desktop */
+/* set the thread current_thread desktop */
 DECL_HANDLER(set_thread_desktop)
 {
     struct desktop *old_desktop, *new_desktop;
     struct winstation *winstation;
 
-    if (!(winstation = get_process_winstation( current->process, 0 /* FIXME: access rights? */ )))
+    if (!(winstation = get_process_winstation( current_thread->process, 0 /* FIXME: access rights? */ )))
         return;
 
-    if (!(new_desktop = get_desktop_obj( current->process, req->handle, 0 )))
+    if (!(new_desktop = get_desktop_obj( current_thread->process, req->handle, 0 )))
     {
         release_object( winstation );
         return;
@@ -602,19 +602,19 @@ DECL_HANDLER(set_thread_desktop)
 
     /* check if we are changing to a new desktop */
 
-    if (!(old_desktop = get_desktop_obj( current->process, current->desktop, 0)))
+    if (!(old_desktop = get_desktop_obj( current_thread->process, current_thread->desktop, 0)))
         clear_error();  /* ignore error */
 
-    /* when changing desktop, we can't have any users on the current one */
-    if (old_desktop != new_desktop && current->desktop_users > 0)
+    /* when changing desktop, we can't have any users on the current_thread one */
+    if (old_desktop != new_desktop && current_thread->desktop_users > 0)
         set_error( STATUS_DEVICE_BUSY );
     else
-        current->desktop = req->handle;  /* FIXME: should we close the old one? */
+        current_thread->desktop = req->handle;  /* FIXME: should we close the old one? */
 
-    if (!current->process->desktop)
-        set_process_default_desktop( current->process, new_desktop, req->handle );
+    if (!current_thread->process->desktop)
+        set_process_default_desktop( current_thread->process, new_desktop, req->handle );
 
-    if (old_desktop != new_desktop && current->queue) detach_thread_input( current );
+    if (old_desktop != new_desktop && current_thread->queue) detach_thread_input( current_thread );
 
     if (old_desktop) release_object( old_desktop );
     release_object( new_desktop );
@@ -627,7 +627,7 @@ DECL_HANDLER(set_user_object_info)
 {
     struct object *obj;
 
-    if (!(obj = get_handle_obj( current->process, req->handle, 0, NULL ))) return;
+    if (!(obj = get_handle_obj( current_thread->process, req->handle, 0, NULL ))) return;
 
     if (obj->ops == &desktop_ops)
     {
@@ -681,7 +681,7 @@ DECL_HANDLER(enum_desktop)
     struct desktop *desktop;
     unsigned int index = 0;
 
-    if (!(winstation = (struct winstation *)get_handle_obj( current->process, req->winstation,
+    if (!(winstation = (struct winstation *)get_handle_obj( current_thread->process, req->winstation,
                                                             WINSTA_ENUMDESKTOPS, &winstation_ops )))
         return;
 

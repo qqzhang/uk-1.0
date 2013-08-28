@@ -64,13 +64,13 @@ extern void trace_reply( enum request req, const union generic_reply *reply );
 /* get the request vararg data */
 static inline const void *get_req_data(void)
 {
-    return current->req_data;
+    return current_thread->req_data;
 }
 
 /* get the request vararg size */
 static inline data_size_t get_req_data_size(void)
 {
-    return current->req.request_header.request_size;
+    return current_thread->req.request_header.request_size;
 }
 
 /* get the request vararg as unicode string */
@@ -83,7 +83,7 @@ static inline void get_req_unicode_str( struct unicode_str *str )
 /* get the reply maximum vararg size */
 static inline data_size_t get_reply_max_size(void)
 {
-    return current->req.request_header.reply_size;
+    return current_thread->req.request_header.reply_size;
 }
 
 /* allocate and fill the reply data */
@@ -98,8 +98,8 @@ static inline void *set_reply_data( const void *data, data_size_t size )
 static inline void set_reply_data_ptr( void *data, data_size_t size )
 {
     assert( size <= get_reply_max_size() );
-    current->reply_size = size;
-    current->reply_data = data;
+    current_thread->reply_size = size;
+    current_thread->reply_data = data;
 }
 
 

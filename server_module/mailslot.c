@@ -505,13 +505,13 @@ DECL_HANDLER(create_mailslot)
 
     reply->handle = 0;
     get_req_unicode_str( &name );
-    if (req->rootdir && !(root = get_directory_obj( current->process, req->rootdir, 0 )))
+    if (req->rootdir && !(root = get_directory_obj( current_thread->process, req->rootdir, 0 )))
         return;
 
     if ((mailslot = create_mailslot( root, &name, req->attributes, req->max_msgsize,
                                      req->read_timeout )))
     {
-        reply->handle = alloc_handle( current->process, mailslot, req->access, req->attributes );
+        reply->handle = alloc_handle( current_thread->process, mailslot, req->access, req->attributes );
         release_object( mailslot );
     }
 
@@ -522,7 +522,7 @@ DECL_HANDLER(create_mailslot)
 /* set mailslot information */
 DECL_HANDLER(set_mailslot_info)
 {
-    struct mailslot *mailslot = get_mailslot_obj( current->process, req->handle, 0 );
+    struct mailslot *mailslot = get_mailslot_obj( current_thread->process, req->handle, 0 );
 
     if (mailslot)
     {
