@@ -159,6 +159,8 @@ int main( int argc, char *argv[] )
 #include <linux/uaccess.h>
 #include <linux/device.h>
 
+extern void init_thread_hash_table(void);
+
 static struct class *class;
 static struct device *dev;
 static struct cdev *chardev;
@@ -248,8 +250,10 @@ static void destroy_syscall_chardev(void)
 	kfree(chardev);
 }
 
+/* module entry*/
 static int __init unifiedkernel_init(void)
 {
+	init_thread_hash_table();
 	create_syscall_chardev();
 	return 0;
 }

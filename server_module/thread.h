@@ -56,6 +56,10 @@ struct thread
     struct list_head            proc_entry;    /* entry in per-process thread list */
     struct process        *process;
     thread_id_t            id;            /* thread id */
+#ifdef CONFIG_UNIFIED_KERNEL
+    pid_t                  pid; /* for find_thread_by_pid()*/
+    struct hlist_node      hash_entry;
+#endif
     struct list_head            mutex_list;    /* list of currently owned mutexes */
     struct debug_ctx      *debug_ctx;     /* debugger context if this thread is a debugger */
     struct debug_event    *debug_event;   /* debug event being sent to debugger */

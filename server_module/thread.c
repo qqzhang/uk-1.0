@@ -67,6 +67,110 @@ static const unsigned int supported_cpus = CPU_FLAG(CPU_ARM64);
 #error Unsupported CPU
 #endif
 
+#ifdef CONFIG_UNIFIED_KERNEL
+
+#include <linux/spinlock.h>
+#include <linux/rwlock.h>
+#include <linux/sched.h>
+
+/* for find_thread_by_pid() */
+static DEFINE_RWLOCK(thread_hash_lock);
+
+#define THREAD_HASH_BITS 8
+#define THREAD_HASH_SIZE (1<<THREAD_HASH_BITS)
+#define thread_hashfn(nr) \
+	((nr) % THREAD_HASH_SIZE)
+
+static struct hlist_head thread_hash_table[THREAD_HASH_SIZE];
+
+void init_thread_hash_table(void)
+{
+	int i=0;
+
+	for (i=0; i<THREAD_HASH_SIZE; i++)
+		INIT_HLIST_HEAD(&thread_hash_table[i]);
+}
+
+void add_thread_by_pid(struct thread *thread, pid_t pid)
+{
+	int slot;
+
+	if (thread==NULL) return;
+
+	slot = thread_hashfn(pid);
+	thread->pid = pid;
+
+	write_lock(&thread_hash_lock);
+	hlist_add_head(&thread->hash_entry, &thread_hash_table[slot]);
+	write_unlock(&thread_hash_lock);
+}
+
+void remove_thread_by_pid(struct thread *thread, pid_t pid)
+{
+	int slot;
+	struct hlist_node *pos;
+	struct thread *tmp;
+
+	if (thread==NULL) return;
+
+	if (thread->pid != pid)
+	{
+		printk("%s %d : pid is bad \n",__func__,__LINE__);
+		return;
+	}
+
+	slot = thread_hashfn(pid);
+
+	write_lock(&thread_hash_lock);
+	hlist_for_each_entry(tmp, pos, &thread_hash_table[slot], hash_entry)
+	{
+		if ( tmp && tmp==thread )
+		{
+			tmp->pid = -1;
+			hlist_del(&tmp->hash_entry);
+		}
+	}
+	write_unlock(&thread_hash_lock);
+}
+
+struct thread* find_thread_by_pid(pid_t pid)
+{
+	struct hlist_node *pos;
+	struct thread *thread = NULL;
+	int slot = thread_hashfn(pid);
+
+	read_lock(&thread_hash_lock);
+	hlist_for_each_entry(thread, pos, &thread_hash_table[slot], hash_entry)
+	{
+		if ( thread && thread->pid == pid)
+		{
+			read_unlock(&thread_hash_lock);
+			return thread;
+		}
+	}
+	read_unlock(&thread_hash_lock);
+
+	return NULL;
+}
+
+struct thread* get_thread_by_task(struct task_struct *task)
+{
+	if (task && task->pid)
+	{
+		return find_thread_by_pid(task->pid);
+	}
+	else
+	{
+		return NULL;
+	}
+}
+
+struct thread* get_current_thread(void)
+{
+	return get_thread_by_task(current);
+}
+#endif
+
 /* thread queues */
 
 struct thread_wait
@@ -191,6 +295,10 @@ static inline void init_thread_structure( struct thread *thread )
     thread->suspend         = 0;
     thread->desktop_users   = 0;
     thread->token           = NULL;
+#ifdef CONFIG_UNIFIED_KERNEL
+    thread->pid             = -1;  /* not known yet */
+    INIT_HLIST_NODE( &thread->hash_entry );
+#endif
 
     thread->creation_time = current_time;
     thread->exit_time     = 0;
@@ -244,6 +352,9 @@ struct thread *create_thread( int fd, struct process *process )
 
     set_fd_events( thread->request_fd, POLLIN );  /* start listening to events */
     add_process_thread( thread->process, thread );
+#ifdef CONFIG_UNIFIED_KERNEL
+    add_thread_by_pid( thread, current->pid );
+#endif
     return thread;
 }
 
@@ -304,6 +415,9 @@ static void destroy_thread( struct object *obj )
 
     assert( !thread->debug_ctx );  /* cannot still be debugging something */
     list_remove( &thread->entry );
+#ifdef CONFIG_UNIFIED_KERNEL
+    remove_thread_by_pid( thread, current->pid );
+#endif
     cleanup_thread( thread );
     release_object( thread->process );
     if (thread->id) free_ptid( thread->id );
