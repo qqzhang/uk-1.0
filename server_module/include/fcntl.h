@@ -1,6 +1,9 @@
 #ifndef _FCNTL_H_
 #define _FCNTL_H_
 
+#include <linux/fcntl.h>
+
+#if 0
 #define O_ACCMODE	00000003
 #define O_RDONLY	00000000
 #define O_WRONLY	00000001
@@ -116,6 +119,7 @@
 #ifndef F_EXLCK
 #define F_EXLCK		4	/* or 3 */
 #define F_SHLCK		8	/* or 4 */
+#endif
 #endif
 
 #endif

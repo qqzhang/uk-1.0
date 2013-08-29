@@ -46,6 +46,7 @@ struct statfs
     unsigned int f_spare[6];
   };
   
+#if 0
   struct flock
   {
     short int l_type;	/* Type of lock: F_RDLCK, F_WRLCK, or F_UNLCK.  */
@@ -55,7 +56,6 @@ struct statfs
     pid_t l_pid;	/* Process holding the lock.  */
   };
 
-#if 0
 typedef union sigval
   {
     int sival_int;
