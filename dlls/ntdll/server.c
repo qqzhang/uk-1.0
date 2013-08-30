@@ -945,21 +945,8 @@ static int server_connect(void)
     fd_cwd = open( ".", O_RDONLY );
     if (fd_cwd != -1) fcntl( fd_cwd, F_SETFD, 1 ); /* set close on exec flag */
 
+	/* create .wine */
     setup_config_dir();
-    serverdir = wine_get_server_dir();
-
-    /* chdir to the server directory */
-    if (chdir( serverdir ) == -1)
-    {
-        if (errno != ENOENT) fatal_perror( "chdir to %s", serverdir );
-        start_server();
-        if (chdir( serverdir ) == -1) fatal_perror( "chdir to %s", serverdir );
-    }
-
-    /* make sure we are at the right place */
-    if (stat( ".", &st ) == -1) fatal_perror( "stat %s", serverdir );
-    if (st.st_uid != getuid()) fatal_error( "'%s' is not owned by you\n", serverdir );
-    if (st.st_mode & 077) fatal_error( "'%s' must not be accessible by other users\n", serverdir );
 
     return 1;
 }
