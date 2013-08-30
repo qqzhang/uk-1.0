@@ -4,27 +4,11 @@
 #include <linux/types.h>
 #include "stdarg.h"
 
-#define _IOREAD          0x0001
-#define _IOWRT           0x0002
-#define _IOMYBUF         0x0008
-#define _IOEOF           0x0010
-#define _IOERR           0x0020
-#define _IOSTRG          0x0040
-#define _IORW            0x0080
-
-#define STDIN_FILENO  0
-#define STDOUT_FILENO 1
-#define STDERR_FILENO 2
-
 #define _IOFBF    0x0000
 #define _IONBF    0x0004
 #define _IOLBF    0x0040
 
 #define EOF       (-1)
-#define FILENAME_MAX 260
-#define TMP_MAX   0x7fff
-#define FOPEN_MAX 20
-#define L_tmpnam  260
 
 #define BUFSIZ    512
 
@@ -47,12 +31,9 @@ typedef struct _iobuf
 } FILE;
 
 
-FILE*  __p__iob(void);
-#define _iob (__p__iob())
-
-#define stdin              (_iob+STDIN_FILENO)
-#define stdout             (_iob+STDOUT_FILENO)
-#define stderr             (_iob+STDERR_FILENO)
+#define stdin   ((FILE*)0)
+#define stdout  ((FILE*)1)
+#define stderr  ((FILE*)2)
 
 
 void    clearerr(FILE*);

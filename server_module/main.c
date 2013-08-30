@@ -152,109 +152,21 @@ int main( int argc, char *argv[] )
 #ifdef CONFIG_UNIFIED_KERNEL
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/fs.h>
-#include <linux/errno.h>
-#include <linux/cdev.h>
-#include <linux/slab.h>
-#include <linux/uaccess.h>
-#include <linux/device.h>
 
 extern void init_thread_hash_table(void);
-
-static struct class *class;
-static struct device *dev;
-static struct cdev *chardev;
-static dev_t devno;
-
-static int syscall_chardev_open(struct inode *inode, struct file *file)
-{
-	return 0;
-}
-
-static int syscall_chardev_release(struct inode *inode, struct file *file)
-{
-	return 0;
-}
-
-static int syscall_chardev_ioctl(struct inode *inode, struct file *filp, u_int cmd, u_long arg)
-{
-	return 0;
-}
-
-static const struct file_operations syscall_chardev_fops =
-{
-	.owner 		= THIS_MODULE,
-	.open		= syscall_chardev_open,
-	.release 	= syscall_chardev_release,
-	.ioctl 		= syscall_chardev_ioctl,
-};
-
-static int create_syscall_chardev(void)
-{
-	const char filename[]="syscall";
-	int ret;
-
-	chardev = cdev_alloc();
-	if(chardev == NULL)
-	{
-		return -ENOMEM;
-	}
-
-	ret = alloc_chrdev_region(&devno, 0, 1, filename);
-	if(ret < 0)
-	{
-		printk("alloc_chrdev_region error\n");
-		kfree(chardev);
-		return ret;
-	}
-
-	class = class_create(THIS_MODULE, filename);
-	if(IS_ERR(class))
-	{
-		printk("class_create error\n");
-		unregister_chrdev_region(devno, 1);
-		kfree(chardev);
-		return PTR_ERR(class);
-	}
-
-	dev = device_create(class, NULL, devno, NULL, filename);/*create /dev/syscall*/
-	if (IS_ERR(dev))
-	{
-		printk("device_create error\n");
-		class_destroy(class);
-		unregister_chrdev_region(devno, 1);
-		kfree(chardev);
-		return PTR_ERR(dev);
-	}
-
-	cdev_init(chardev, &syscall_chardev_fops);
-	ret = cdev_add(chardev, devno, 1);
-	if(ret < 0)
-	{
-		printk("Add char dev error\n");
-		class_destroy(class);
-		device_destroy(class, devno);
-		unregister_chrdev_region(devno, 1);
-		kfree(chardev);
-		return ret;
-	}
-
-	return 0;
-}
-
-static void destroy_syscall_chardev(void)
-{
-	class_destroy(class);
-	device_destroy(class, devno);
-	unregister_chrdev_region(devno, 1);
-	kfree(chardev);
-}
+extern int create_syscall_chardev(void);
+extern void destroy_syscall_chardev(void);
+void get_kallsyms_lookup_name(void);
 
 /* module entry*/
 static int __init unifiedkernel_init(void)
 {
+	get_kallsyms_lookup_name();
 	init_thread_hash_table();
 	create_syscall_chardev();
+	init_signals();
+	init_directories();
+	init_registry();
 	return 0;
 }
 

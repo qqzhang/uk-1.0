@@ -1,6 +1,9 @@
 #ifndef _STAT_H
 #define _STAT_H
 
+#include <linux/stat.h>
+
+#if 0
 #define blksize_t int
 struct stat {
     dev_t     st_dev;     /* ID of device containing file */
@@ -60,5 +63,6 @@ struct stat {
 
 #define UTIME_NOW	((1l << 30) - 1l)
 #define UTIME_OMIT	((1l << 30) - 2l)
+#endif
 
 #endif

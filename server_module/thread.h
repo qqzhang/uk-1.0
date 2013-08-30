@@ -103,10 +103,15 @@ struct thread_snapshot
     int             priority;  /* priority class */
 };
 
-extern struct thread *current_thread;
+//extern struct thread *current_thread;
 
 /* thread functions */
 
+#ifdef CONFIG_UNIFIED_KERNEL
+extern struct thread* get_thread_by_task(struct task_struct *task);
+extern struct thread* get_current_thread(void);
+#define current_thread get_current_thread()
+#endif
 extern struct thread *create_thread( int fd, struct process *process );
 extern struct thread *get_thread_from_id( thread_id_t id );
 extern struct thread *get_thread_from_handle( obj_handle_t handle, unsigned int access );

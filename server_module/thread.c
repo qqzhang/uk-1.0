@@ -51,6 +51,7 @@
 #include "request.h"
 #include "user.h"
 #include "security.h"
+#include "log.h"
 
 
 #ifdef __i386__
@@ -91,7 +92,7 @@ void init_thread_hash_table(void)
 		INIT_HLIST_HEAD(&thread_hash_table[i]);
 }
 
-void add_thread_by_pid(struct thread *thread, pid_t pid)
+static void add_thread_by_pid(struct thread *thread, pid_t pid)
 {
 	int slot;
 
@@ -105,7 +106,7 @@ void add_thread_by_pid(struct thread *thread, pid_t pid)
 	write_unlock(&thread_hash_lock);
 }
 
-void remove_thread_by_pid(struct thread *thread, pid_t pid)
+static void remove_thread_by_pid(struct thread *thread, pid_t pid)
 {
 	int slot;
 	struct hlist_node *pos;
@@ -335,7 +336,9 @@ struct thread *create_thread( int fd, struct process *process )
     thread->process = (struct process *)grab_object( process );
     thread->desktop = process->desktop;
     thread->affinity = process->affinity;
+#ifndef CONFIG_UNIFIED_KERNEL
     if (!current_thread) current_thread = thread;
+#endif
 
     wine_list_add_head( &thread_list, &thread->entry );
 
@@ -1090,6 +1093,12 @@ int thread_add_inflight_fd( struct thread *thread, int client, int server )
     return -1;
 }
 
+#ifdef CONFIG_UNIFIED_KERNEL
+int thread_get_inflight_fd( struct thread *thread, int client )
+{
+	return client;
+}
+#else
 /* get an inflight fd and purge it from the list */
 /* the fd must be closed when no longer used */
 int thread_get_inflight_fd( struct thread *thread, int client )
@@ -1112,6 +1121,7 @@ int thread_get_inflight_fd( struct thread *thread, int client )
     } while (!receive_fd( thread->process ));  /* in case it is still in the socket buffer */
     return -1;
 }
+#endif
 
 /* kill a thread on the spot */
 void kill_thread( struct thread *thread, int violent_death )
@@ -1119,7 +1129,9 @@ void kill_thread( struct thread *thread, int violent_death )
     if (thread->state == TERMINATED) return;  /* already killed */
     thread->state = TERMINATED;
     thread->exit_time = current_time;
+#ifndef CONFIG_UNIFIED_KERNEL
     if (current_thread == thread) current_thread = NULL;
+#endif
     if (debug_level)
         fprintf( stderr,"%04x: *killed* exit_code=%d\n",
                  thread->id, thread->exit_code );

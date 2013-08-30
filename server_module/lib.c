@@ -38,22 +38,8 @@
 #include "winternl.h"
 #include "stdio.h"
 #include "assert.h"
+#include "log.h"
 #include "wine/unicode.h"
-
-#ifdef KLOG
-#define REFCNT(obj) \
-	atomic_read(&(BODY_TO_HEADER((obj)))->PointerCount)
-
-#define klog(trace,FMT...) \
-	do { \
-		printk("UK: p %d t %d %s[%d] ", current->tgid, current->pid, __FUNCTION__,__LINE__); \
-		printk(FMT); \
-		if(trace) dump_stack(); \
-	} while (0)
-#else
-#define klog(FMT...) do { } while (0)
-#endif
-
 
 #define PREPARE_KERNEL_CALL	\
 	mm_segment_t oldfs; \
@@ -214,12 +200,12 @@ void* get_kernel_proc_address(char *funcname)
 	void * addr = (void*)kallsyms_lookup_name_ptr(funcname); 
 	if (!addr) 
 	{
-		printk("%s=NULL\n",funcname);
+		printk("%s : %s=NULL\n",__func__,funcname);
 		dump_stack();
 	}
 	else
 	{
-		//		printk("%s=%08x\n",funcname,addr);
+		//printk("%s=%08x\n",funcname,addr);
 	}
 
 	return addr;
@@ -288,7 +274,7 @@ void *realloc(void *ptr, size_t new_size, size_t old_size)
 	return new_ptr;
 }
 
-void           exit(int status)
+void exit(int status)
 {
 	klog(0,"NOT IMPLEMENT!\n");
 }
@@ -328,11 +314,6 @@ void perror(const char *s)
 
 /*stdio.h*/
 
-FILE*  __p__iob(void)
-{
-	klog(0,"NOT IMPLEMENT!\n");
-	return NULL;
-}
 int     fputc(int ch, FILE* fp)
 {
 	klog(0,"NOT IMPLEMENT!\n");
@@ -394,9 +375,15 @@ int     printf(const char* fmt,...)
 
 int fprintf(FILE *fp, const char *fmt, ...)
 {
-	if (fp==stderr) printk("fmt\n");
-
-	klog(0,"NOT IMPLEMENT!\n");
+	if (fp==stderr)
+	{
+		printk("UK: p %d t %d %s[%d] ", current->tgid, current->pid, __FUNCTION__,__LINE__);
+		printk(fmt);
+	}
+	else
+	{
+		klog(0,"NOT IMPLEMENT!\n");
+	}
 	return 0;
 }
 
@@ -2727,7 +2714,6 @@ pid_t waitpid(pid_t pid, int *status, int options)
 	klog(0,"NOT IMPLEMENT!\n");
 	return 0;
 }
-
 
 long ptrace(int request, ...)
 {

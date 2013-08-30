@@ -69,6 +69,16 @@
 #include "request.h"
 
 #ifdef CONFIG_UNIFIED_KERNEL
+#include "wine/server.h" /* for struct __server_request_info */
+#include "log.h" /* for klog */
+#include <linux/kernel.h>
+#include <linux/module.h>
+#include <linux/fs.h>
+#include <linux/errno.h>
+#include <linux/cdev.h>
+#include <linux/slab.h>
+#include <linux/uaccess.h>
+#include <linux/device.h>
 #include <asm/div64.h>
 #endif
 
@@ -124,7 +134,9 @@ static const struct fd_ops master_socket_fd_ops =
 };
 
 
+#ifndef CONFIG_UNIFIED_KERNEL
 struct thread *current_thread = NULL;  /* thread handling the current_thread request */
+#endif
 unsigned int global_error = 0;  /* global error code for when no thread is current_thread */
 timeout_t server_start_time = 0;  /* server startup time */
 int server_dir_fd = -1;    /* file descriptor for the server dir */
@@ -240,7 +252,9 @@ static void call_req_handler( struct thread *thread )
     union generic_reply reply;
     enum request req = thread->req.request_header.req;
 
+#ifndef CONFIG_UNIFIED_KERNEL
     current_thread = thread;
+#endif
     current_thread->reply_size = 0;
     clear_error();
     memset( &reply, 0, sizeof(reply) );
@@ -267,7 +281,9 @@ static void call_req_handler( struct thread *thread )
             kill_thread( current_thread, 1 );  /* no way to continue without reply fd */
         }
     }
+#ifndef CONFIG_UNIFIED_KERNEL
     current_thread = NULL;
+#endif
 }
 
 /* read a request from a thread */
@@ -406,6 +422,12 @@ int receive_fd( struct process *process )
     return -1;
 }
 
+#ifdef CONFIG_UNIFIED_KERNEL
+int send_client_fd( struct process *process, int fd, obj_handle_t handle )
+{
+	return 0;
+}
+#else
 /* send an fd to a client */
 int send_client_fd( struct process *process, int fd, obj_handle_t handle )
 {
@@ -462,6 +484,7 @@ int send_client_fd( struct process *process, int fd, obj_handle_t handle )
     }
     return -1;
 }
+#endif
 
 /* get current_thread tick count to return to client */
 unsigned int get_tick_count(void)
@@ -853,3 +876,237 @@ void close_master_socket( timeout_t timeout )
 
     master_timeout = add_timeout_user( timeout, close_socket_timeout, NULL );
 }
+
+#ifdef CONFIG_UNIFIED_KERNEL
+
+NTSTATUS NtCreateFirstProcess(syscall_fd)
+{
+	create_process(syscall_fd, NULL, 0);
+	return get_error();
+}
+
+extern char *req_names[];
+NTSTATUS NtWineService(int __user *user_req_info)
+{
+	struct thread *thread;
+	struct __server_request_info req_msg;
+	union generic_reply reply;
+	enum request req = -1;
+	NTSTATUS status = STATUS_SUCCESS;
+	int i;
+
+	thread = get_current_thread();
+
+	if(!user_req_info || !thread)
+	{
+		return STATUS_INVALID_PARAMETER;
+	}
+
+	if (copy_from_user(&req_msg, user_req_info, sizeof(req_msg)))
+	{
+		return STATUS_NO_MEMORY;
+	}
+
+	memcpy(&thread->req, &req_msg, sizeof(thread->req));
+	req = thread->req.request_header.req;
+	thread->req_toread = thread->req.request_header.request_size; 
+
+	if (thread->req_toread )
+	{
+		if (!(thread->req_data = malloc(thread->req_toread))) 
+		{
+			return STATUS_NO_MEMORY;
+		}
+
+		for (i=0; i<req_msg.data_count; ++i)
+		{
+			if(copy_from_user(
+			(char *)thread->req_data + thread->req.request_header.request_size - thread->req_toread, 
+			req_msg.data[i].ptr, 
+			req_msg.data[i].size)) 
+			{ 
+				status = STATUS_UNSUCCESSFUL;
+				goto out;
+			}
+
+			thread->req_toread -= req_msg.data[i].size;		
+		}
+	}
+
+	thread->reply_size = 0;
+	clear_error();
+	memset( &reply, 0, sizeof(reply) );
+
+	if (debug_level) trace_request();
+
+	if (req < REQ_NB_REQUESTS)
+	{
+		klog (0, "req=%d : %s \n",req, req_names[req]);
+		req_handlers[req]( &thread->req, &reply ); /* call handle */
+	}
+	else
+	{
+		set_error( STATUS_NOT_IMPLEMENTED );
+	}
+
+	status = get_error();
+	klog (0, "req=%d : %s done ret=%08x\n",req, req_names[req],status);
+
+	if (thread->reply_fd)
+	{
+		reply.reply_header.error = thread->error;
+		reply.reply_header.reply_size = thread->reply_size;
+		if (debug_level) trace_reply( req, &reply );
+	}
+	else
+	{
+		thread->exit_code = 1;
+		kill_thread( thread, 1 );  /* no way to continue without reply fd */
+	}
+
+	/* FIXME */
+	/* make sure : &user_req_info == &ReqMsg.u.reply */
+	if (copy_to_user(user_req_info, &reply, sizeof(reply))) 
+	{
+		status = STATUS_NO_MEMORY;
+		goto out;
+	}
+
+	if (thread->reply_size) 
+	{
+		if (copy_to_user(req_msg.reply_data, thread->reply_data, thread->reply_size)) 
+		{
+			status = STATUS_NO_MEMORY;
+			goto out;
+		}
+	}
+
+out:
+	if (thread->req_data) 
+	{
+		kfree(thread->req_data);
+		thread->req_data = NULL;
+	}
+
+	if (thread->reply_data) 
+	{
+		kfree(thread->reply_data);
+		thread->reply_data = NULL;
+	}
+
+	return status;
+}
+
+
+/* for syscall_chardev_fops */
+static struct class *class;
+static struct device *dev;
+static struct cdev *chardev;
+static dev_t devno;
+
+static int syscall_chardev_open(struct inode *inode, struct file *file)
+{
+	return 0;
+}
+
+static int syscall_chardev_release(struct inode *inode, struct file *file)
+{
+	return 0;
+}
+
+static int syscall_chardev_ioctl(struct inode *inode, struct file *filp, unsigned int cmd, unsigned long arg)
+{
+	int err = 0;
+
+	if ( (cmd > Nt_MaxNum) || (cmd < Nt_None) )
+	{
+		printk("%s %d : bad syscall num \n",__func__,__LINE__);
+		return -1;
+	}
+
+	switch (cmd) 
+	{
+		case Nt_None:
+			break;
+		case Nt_CreateFirstProcess:
+			err = NtCreateFirstProcess(arg);
+			break;
+		case Nt_WineService:
+			err = NtWineService((int __user*)arg);
+			break;
+		default:
+			break;
+	}
+
+	return err;
+}
+
+static const struct file_operations syscall_chardev_fops =
+{
+	.owner 		= THIS_MODULE,
+	.open		= syscall_chardev_open,
+	.release 	= syscall_chardev_release,
+	.ioctl 		= syscall_chardev_ioctl,
+};
+
+int create_syscall_chardev(void)
+{
+	const char filename[]="syscall";
+	int ret;
+
+	chardev = cdev_alloc();
+	if(chardev == NULL)
+	{
+		return -ENOMEM;
+	}
+
+	ret = alloc_chrdev_region(&devno, 0, 1, filename);
+	if(ret < 0)
+	{
+		printk("alloc_chrdev_region error\n");
+		kfree(chardev);
+		return ret;
+	}
+
+	class = class_create(THIS_MODULE, filename);
+	if(IS_ERR(class))
+	{
+		printk("class_create error\n");
+		unregister_chrdev_region(devno, 1);
+		kfree(chardev);
+		return PTR_ERR(class);
+	}
+
+	dev = device_create(class, NULL, devno, NULL, filename);/*create /dev/syscall*/
+	if (IS_ERR(dev))
+	{
+		printk("device_create error\n");
+		class_destroy(class);
+		unregister_chrdev_region(devno, 1);
+		kfree(chardev);
+		return PTR_ERR(dev);
+	}
+
+	cdev_init(chardev, &syscall_chardev_fops);
+	ret = cdev_add(chardev, devno, 1);
+	if(ret < 0)
+	{
+		printk("Add char dev error\n");
+		class_destroy(class);
+		device_destroy(class, devno);
+		unregister_chrdev_region(devno, 1);
+		kfree(chardev);
+		return ret;
+	}
+
+	return 0;
+}
+
+void destroy_syscall_chardev(void)
+{
+	class_destroy(class);
+	device_destroy(class, devno);
+	unregister_chrdev_region(devno, 1);
+	kfree(chardev);
+}
+#endif

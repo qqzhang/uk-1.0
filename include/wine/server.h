@@ -29,6 +29,17 @@
 
 /* client communication functions */
 
+#ifdef CONFIG_UNIFIED_KERNEL
+#define SYSCALL_FILE "/dev/syscall"
+enum syscall
+{
+	Nt_None = 0x2E2E0000,
+	Nt_CreateFirstProcess,
+	Nt_WineService,
+	Nt_MaxNum
+};
+#endif
+
 struct __server_iovec
 {
     const void  *ptr;

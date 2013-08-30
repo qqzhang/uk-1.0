@@ -286,6 +286,7 @@ static inline unsigned int wait_reply( struct __server_request_info *req )
  */
 unsigned int wine_server_call( void *req_ptr )
 {
+#ifndef CONFIG_UNIFIED_KERNEL
     struct __server_request_info * const req = req_ptr;
     sigset_t old_set;
     unsigned int ret;
@@ -295,6 +296,29 @@ unsigned int wine_server_call( void *req_ptr )
     if (!ret) ret = wait_reply( req );
     pthread_sigmask( SIG_SETMASK, &old_set, NULL );
     return ret;
+#else
+    struct __server_request_info * const req = req_ptr;
+    unsigned int ret;
+    int fd = ntdll_get_thread_data()->request_fd;
+
+    if (fd == -1)
+    {
+	    fd = open( SYSCALL_FILE, O_WRONLY);
+	    if (fd == -1)
+	    {
+		    ERR("open SYSCALL_FILE error %d \n",errno);
+		    return errno;
+	    }
+	    else
+	    {
+		    ntdll_get_thread_data()->request_fd = fd;
+	    }
+    }
+
+    ret = ioctl(fd, Nt_WineService, req_ptr);
+
+    return ret;
+#endif
 }
 
 
@@ -317,7 +341,11 @@ void server_leave_uninterrupted_section( RTL_CRITICAL_SECTION *cs, sigset_t *sig
     pthread_sigmask( SIG_SETMASK, sigset, NULL );
 }
 
-
+#ifdef CONFIG_UNIFIED_KERNEL
+void CDECL wine_server_send_fd( int fd )
+{
+}
+#else
 /***********************************************************************
  *           wine_server_send_fd   (NTDLL.@)
  *
@@ -373,6 +401,7 @@ void CDECL wine_server_send_fd( int fd )
         server_protocol_perror( "sendmsg" );
     }
 }
+#endif
 
 
 /***********************************************************************
@@ -824,6 +853,7 @@ static void server_connect_error( const char *serverdir )
  * Attempt to connect to an existing server socket.
  * We need to be in the server directory already.
  */
+#ifndef CONFIG_UNIFIED_KERNEL
 static int server_connect(void)
 {
     const char *serverdir;
@@ -903,6 +933,37 @@ static int server_connect(void)
     }
     server_connect_error( serverdir );
 }
+#else
+static int server_connect(void)
+{
+    const char *serverdir;
+    struct sockaddr_un addr;
+    struct stat st;
+    int s, slen, retry, fd_cwd;
+
+    /* retrieve the current directory */
+    fd_cwd = open( ".", O_RDONLY );
+    if (fd_cwd != -1) fcntl( fd_cwd, F_SETFD, 1 ); /* set close on exec flag */
+
+    setup_config_dir();
+    serverdir = wine_get_server_dir();
+
+    /* chdir to the server directory */
+    if (chdir( serverdir ) == -1)
+    {
+        if (errno != ENOENT) fatal_perror( "chdir to %s", serverdir );
+        start_server();
+        if (chdir( serverdir ) == -1) fatal_perror( "chdir to %s", serverdir );
+    }
+
+    /* make sure we are at the right place */
+    if (stat( ".", &st ) == -1) fatal_perror( "stat %s", serverdir );
+    if (st.st_uid != getuid()) fatal_error( "'%s' is not owned by you\n", serverdir );
+    if (st.st_mode & 077) fatal_error( "'%s' must not be accessible by other users\n", serverdir );
+
+    return 1;
+}
+#endif
 
 
 #ifdef __APPLE__
@@ -984,6 +1045,7 @@ static int get_unix_tid(void)
  *
  * Start the server and create the initial socket pair.
  */
+#ifndef CONFIG_UNIFIED_KERNEL
 void server_init_process(void)
 {
     obj_handle_t version;
@@ -1036,6 +1098,47 @@ void server_init_process(void)
     if (server_pid != -1) prctl( 0x59616d61 /* PR_SET_PTRACER */, server_pid );
 #endif
 }
+#else
+void server_init_process(void)
+{
+    const char *env_socket = getenv( "WINESERVERSOCKET" );
+    int fd;
+
+    if (env_socket)
+    {
+        fd_socket = atoi( env_socket );
+        if (fcntl( fd_socket, F_SETFD, 1 ) == -1)
+            fatal_perror( "Bad server socket %d", fd_socket );
+        unsetenv( "WINESERVERSOCKET" );
+    }
+    else 
+    {
+	    fd_socket = server_connect();
+    }
+
+    /* setup the signal mask */
+    sigemptyset( &server_block_set );
+    sigaddset( &server_block_set, SIGALRM );
+    sigaddset( &server_block_set, SIGIO );
+    sigaddset( &server_block_set, SIGINT );
+    sigaddset( &server_block_set, SIGHUP );
+    sigaddset( &server_block_set, SIGUSR1 );
+    sigaddset( &server_block_set, SIGUSR2 );
+    sigaddset( &server_block_set, SIGCHLD );
+    pthread_sigmask( SIG_BLOCK, &server_block_set, NULL );
+
+    fd = open( SYSCALL_FILE, O_WRONLY);
+    if (fd == -1)
+    {
+	    ERR("open SYSCALL_FILE error %d \n",errno);
+	    return errno;
+    }
+
+    ntdll_get_thread_data()->request_fd = fd;
+
+    ioctl(fd, Nt_CreateFirstProcess, fd);
+}
+#endif
 
 
 /***********************************************************************
