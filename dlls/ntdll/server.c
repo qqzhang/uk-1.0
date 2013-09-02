@@ -1091,6 +1091,15 @@ void server_init_process(void)
     const char *env_socket = getenv( "WINESERVERSOCKET" );
     int fd;
 
+    fd = open( SYSCALL_FILE, O_WRONLY);
+    if (fd == -1)
+    {
+	    ERR("open SYSCALL_FILE error %d \n",errno);
+	    return errno;
+    }
+
+    ntdll_get_thread_data()->request_fd = fd;
+
     if (env_socket)
     {
         fd_socket = atoi( env_socket );
@@ -1099,9 +1108,10 @@ void server_init_process(void)
         unsetenv( "WINESERVERSOCKET" );
     }
     else 
-    {
-	    fd_socket = server_connect();
-    }
+	{
+		fd_socket = server_connect();
+		ioctl(fd, Nt_CreateFirstProcess, fd);
+	}
 
     /* setup the signal mask */
     sigemptyset( &server_block_set );
@@ -1113,17 +1123,6 @@ void server_init_process(void)
     sigaddset( &server_block_set, SIGUSR2 );
     sigaddset( &server_block_set, SIGCHLD );
     pthread_sigmask( SIG_BLOCK, &server_block_set, NULL );
-
-    fd = open( SYSCALL_FILE, O_WRONLY);
-    if (fd == -1)
-    {
-	    ERR("open SYSCALL_FILE error %d \n",errno);
-	    return errno;
-    }
-
-    ntdll_get_thread_data()->request_fd = fd;
-
-    ioctl(fd, Nt_CreateFirstProcess, fd);
 }
 #endif
 

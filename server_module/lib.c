@@ -23,6 +23,7 @@
 #include <linux/syscalls.h>
 #include <linux/slab.h>
 #include <linux/module.h>
+#include <linux/cred.h> /* for getuid() */
 #if 0
 #include <linux/file.h>
 #include <linux/fs.h>
@@ -38,7 +39,9 @@
 #include "winternl.h"
 #include "stdio.h"
 #include "assert.h"
+#include "errno.h"
 #include "log.h"
+#include "thread.h"
 #include "wine/unicode.h"
 
 #define PREPARE_KERNEL_CALL	\
@@ -69,14 +72,26 @@ int getopt_long(int argc, char * const argv[],
 
 __int64 start_time;
 
-static inline unsigned int get_error(void)       { return 0; }
-static inline void set_error( unsigned int err ) { }
-static inline void clear_error(void)             { set_error(0); }
-static inline void set_win32_error( unsigned int err ) { set_error( 0xc0010000 | err ); }
-int*  _errno(void)
+static int dummy_errno=0;
+
+#define SYSCALL_RETURN(ret) \
+	do{ \
+		if(ret<0) { \
+			current_thread ? (current_thread->unix_errno=-ret) : (dummy_errno=-ret); \
+			ret = -1; \
+		} \
+		return ret; \
+	}while(0)
+
+int *_errno(void)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+	return current_thread ? &(current_thread->unix_errno) : &dummy_errno;
+}
+
+void _assert (const char *assertion, const char *file, int line)
+{
+	printk ("Detected: %s %u:Assertion %s failed!\n", file, line, assertion);
+	dump_stack();
 }
 
 struct LIBC_FILE
@@ -128,7 +143,7 @@ unsigned long read_kallsyms(char *symbol_name)
 	char line[MAX_BUF_LEN] = {0};
 	char new_symbol_name[MAX_BUF_LEN] = "T ";
 	strcat(new_symbol_name, symbol_name);
-	printk("new_symbol_name: %s\n", new_symbol_name);
+//	printk("new_symbol_name: %s\n", new_symbol_name);
 	len = strlen(new_symbol_name);
 
 	file = filp_open(PROC_HOME,O_RDONLY,0);
@@ -251,7 +266,7 @@ void free(void *p)
 		kfree(p);
 }
 
-void *realloc(void *ptr, size_t new_size, size_t old_size)
+void *realloc(void *ptr, size_t new_size)
 {
 	void	*new_ptr;
 
@@ -267,7 +282,7 @@ void *realloc(void *ptr, size_t new_size, size_t old_size)
 	new_ptr = malloc(new_size);
 	if (new_ptr) 
 	{
-		memcpy(new_ptr, ptr, new_size > old_size ? old_size : new_size);
+		memcpy(new_ptr, ptr, new_size);
 		free(ptr);
 	}
 
@@ -279,23 +294,23 @@ void exit(int status)
 	klog(0,"NOT IMPLEMENT!\n");
 }
 
-void           _exit(int status)
+void _exit(int status)
 {
 	klog(0,"NOT IMPLEMENT!\n");
 }
 
-void           abort(void)
+void abort(void)
 {
 	klog(0,"NOT IMPLEMENT!\n");
 }
 
-int            atexit(void (*func)(void))
+int atexit(void (*func)(void))
 {
 	klog(0,"NOT IMPLEMENT!\n");
 	return 0;
 }
 
-int            atoi(const char* str)
+int atoi(const char* str)
 {
 	klog(0,"NOT IMPLEMENT!\n");
 	return 0;
@@ -314,22 +329,22 @@ void perror(const char *s)
 
 /*stdio.h*/
 
-int     fputc(int ch, FILE* fp)
+int fputc(int ch, FILE* fp)
 {
 	klog(0,"NOT IMPLEMENT!\n");
 	return 0;
 }
-int     fputs(const char* ch, FILE* fp)
+int fputs(const char* ch, FILE* fp)
 {
 	klog(0,"NOT IMPLEMENT!\n");
 	return 0;
 }
-FILE*   fopen(const char* filename, const char* mode)
+FILE* fopen(const char* filename, const char* mode)
 {
 	klog(0,"NOT IMPLEMENT!\n");
 	return 0;
 }
-FILE *  fdopen(int fd, const char *mode)
+FILE* fdopen(int fd, const char *mode)
 {
 	klog(0,"NOT IMPLEMENT!\n");
 	return 0;
@@ -352,7 +367,7 @@ ssize_t filp_write(struct file *filp, void *buf, size_t size)
 	filp->f_pos = pos;
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 
 int fclose(FILE *fp)
@@ -367,9 +382,9 @@ size_t  fwrite(const void* buf, size_t size, size_t nmemb, FILE*fp)
 	return 0;
 }
 
-int     printf(const char* fmt,...)
+int printf(const char* fmt,...)
 {
-	klog(0,"fmt");
+	klog(0,fmt);
 	return 0;
 }
 
@@ -377,7 +392,7 @@ int fprintf(FILE *fp, const char *fmt, ...)
 {
 	if (fp==stderr)
 	{
-		printk("UK: p %d t %d %s[%d] ", current->tgid, current->pid, __FUNCTION__,__LINE__);
+//		printk("p %d t %d %s[%d] ", current->tgid, current->pid, __FUNCTION__,__LINE__);
 		printk(fmt);
 	}
 	else
@@ -389,24 +404,39 @@ int fprintf(FILE *fp, const char *fmt, ...)
 
 int vfprintf(FILE* fp, const char* fmt, va_list arg)
 {
-	klog(0,"NOT IMPLEMENT!\n");
+	if (fp==stderr)
+	{
+//		printk("p %d t %d %s[%d] ", current->tgid, current->pid, __FUNCTION__,__LINE__);
+		printk(fmt);
+	}
+	else
+	{
+		klog(0,"NOT IMPLEMENT!\n");
+	}
 	return 0;
 }
 
-int     setvbuf(FILE* stream,char*buffer,int mode,size_t size)
+int setvbuf(FILE* stream,char*buffer,int mode,size_t size)
 {
 	klog(0,"NOT IMPLEMENT!\n");
 	return 0;
 }
 
 /*string.h*/
-char* strdup(const char* buf)
+
+/* Duplicate S, returning an identical malloc'd string.  */
+char *strdup(const char *s)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return NULL;
+	size_t len = strlen (s) + 1;
+	void *new = malloc (len);
+
+	if (new == NULL)
+		return NULL;
+
+	return (char *) memcpy (new, s, len);
 }
 
-char*    strerror(int err)
+char *strerror(int err)
 {
 	klog(0,"NOT IMPLEMENT!\n");
 	return NULL;
@@ -2044,13 +2074,27 @@ long close(unsigned int fd)
 		ret = sys_close(fd);
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 
-int open(const char *pathname, int flags, ...)
+int open(const char *filename, int flags, ...)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+	int ret;
+	int mode = 0;
+	asmlinkage long (*sys_open)(const char __user *filename,
+			int flags, int mode) = get_kernel_proc_address("sys_open");
+
+	if (flags & O_CREAT)
+	{
+		va_list arg;
+		va_start(arg, flags);
+		mode = va_arg(arg, int);
+		va_end(arg);
+	}
+
+	ret = sys_open(filename, flags, mode);
+
+	SYSCALL_RETURN(ret);
 }
 
 ssize_t read(unsigned int fd, void *buf, size_t size)
@@ -2062,7 +2106,7 @@ ssize_t read(unsigned int fd, void *buf, size_t size)
 	ret = sys_read(fd, buf, size);
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 
 ssize_t write(int fd, const void *buf, size_t count)
@@ -2116,7 +2160,7 @@ long dup(unsigned int fd)
 	ret = sys_dup(fd);
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 
 long dup2(unsigned int oldfd, unsigned int newfd)
@@ -2128,7 +2172,7 @@ long dup2(unsigned int oldfd, unsigned int newfd)
 	ret = sys_dup2(oldfd, newfd);
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 //int stat(char *filename, struct stat *st)
 int stat(char *filename, void*st)
@@ -2141,7 +2185,7 @@ int stat(char *filename, void*st)
 	ret = sys_newstat(filename, st);
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 
 //long fstat(unsigned int fd, struct stat *st)
@@ -2154,7 +2198,7 @@ long fstat(unsigned int fd, void*st)
 	ret = sys_newfstat(fd, st);
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 
 int lstat(const char *path, void *buf)
@@ -2176,7 +2220,7 @@ int unlink(const char *pathname)
 	ret = sys_unlink(pathname);
 	END_KERNEL_CALL;
 	
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 
 int rename(const char *oldpath, const char *newpath)
@@ -2188,7 +2232,7 @@ int rename(const char *oldpath, const char *newpath)
 	ret = sys_rename(oldpath, newpath);
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 int truncate(const char *path, off_t length)
 {
@@ -2224,7 +2268,7 @@ int mkdir(const char *pathname, mode_t mode)
 	ret = sys_mkdir(pathname, mode);
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 
 int chdir(const char *path)
@@ -2234,8 +2278,12 @@ int chdir(const char *path)
 }
 int fchdir(int fd)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+	int ret;
+	asmlinkage long (*sys_fchdir)(unsigned int fd) = get_kernel_proc_address("sys_fchdir");
+
+	ret = sys_fchdir(fd);
+
+	SYSCALL_RETURN(ret);
 }
 int fsync(int fd)
 {
@@ -2261,7 +2309,7 @@ int fcntl(int fd, int cmd, unsigned long arg)
 	ret = sys_fcntl(fd, cmd, arg);
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 
 pid_t setsid(void)
@@ -2314,11 +2362,18 @@ unsigned int alarm(unsigned int seconds)
 	klog(0,"NOT IMPLEMENT!\n");
 	return 0;
 }
-int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact)
+
+int sigaction(int sig, const struct old_sigaction __user *act, struct old_sigaction __user *oldact)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+	long ret;
+	asmlinkage int (*sys_sigaction)(int sig, const struct old_sigaction __user *act,
+					      struct old_sigaction __user *oact) = get_kernel_proc_address("sys_sigaction");
+
+	ret = sys_sigaction(sig, act, oldact); 
+
+	SYSCALL_RETURN(ret);
 }
+
 int kill(pid_t pid, int sig)
 {
 	long ret;
@@ -2328,9 +2383,8 @@ int kill(pid_t pid, int sig)
 	ret = sys_kill(pid, sig);
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
-
 
 ssize_t filp_pread(struct file *filp, char *buf, size_t count, off_t pos)
 {
@@ -2341,7 +2395,7 @@ ssize_t filp_pread(struct file *filp, char *buf, size_t count, off_t pos)
 	ret = vfs_read(filp, buf, count, &lpos);
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 
 ssize_t filp_pwrite(struct file *filp, const char *buf, size_t count, off_t pos)
@@ -2353,7 +2407,7 @@ ssize_t filp_pwrite(struct file *filp, const char *buf, size_t count, off_t pos)
 	ret = vfs_write(filp, buf, count, &lpos);
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 
 //long filp_truncate(struct file *file, loff_t length, int small)
@@ -2408,7 +2462,7 @@ ssize_t readlink(const char *path, char *buf, size_t bufsiz)
 	ret = sys_readlink(path, buf, bufsiz);
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 
 /*poll.h*/
@@ -2422,32 +2476,49 @@ int poll(struct pollfd *pfds, unsigned int nfds, long timeout_msecs)
 	ret = sys_poll(pfds, nfds, timeout_msecs);
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 
 /*epoll.h*/
 int epoll_create(int size)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+	int ret;
+	asmlinkage long (*sys_epoll_create)(int size) =  get_kernel_proc_address("sys_epoll_create");
+
+	ret = sys_epoll_create(size);
+
+	SYSCALL_RETURN(ret);
 }
+
 int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+	int ret;
+	asmlinkage long (*sys_epoll_ctl)(int epfd, int op, int fd,
+				struct epoll_event __user *event) = get_kernel_proc_address("sys_epoll_ctl");
+
+	ret = sys_epoll_ctl(epfd, op, fd, event);
+
+	SYSCALL_RETURN(ret);
 }
+
 int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+	int ret;
+	asmlinkage long (*sys_epoll_wait)(int epfd, struct epoll_event __user *events,
+			int maxevents, int timeout) = get_kernel_proc_address("sys_epoll_wait");
+
+	ret=sys_epoll_wait(epfd, events, maxevents, timeout);
+
+	SYSCALL_RETURN(ret);
 }
 
 /*socket.h*/
 long socket(int family, int type, int protocol)
 {
-	asmlinkage	long (*sys_socket)(int, int, int) 
-		= get_kernel_proc_address("sys_socket");
-	return sys_socket(family, type, protocol);
+	int ret;
+	asmlinkage	long (*sys_socket)(int, int, int) = get_kernel_proc_address("sys_socket");
+	ret = sys_socket(family, type, protocol);
+	SYSCALL_RETURN(ret);
 }
 
 long bind(int sockfd, const struct sockaddr *addr, int addrlen)
@@ -2475,7 +2546,7 @@ long accept(int fd, struct sockaddr* peer_sockaddr, int* peer_addrlen)
 	ret = sys_accept(fd, peer_sockaddr, peer_addrlen);
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 
 long shutdown(int fd, int how)
@@ -2487,7 +2558,7 @@ long shutdown(int fd, int how)
 	ret = sys_shutdown(fd, how);
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 
 
@@ -2501,7 +2572,7 @@ long recv(int fd, void *buf, size_t size, unsigned flags)
 	ret = sys_recvfrom(fd, buf, size, flags, NULL, NULL);
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
                  struct sockaddr *src_addr, int *addrlen)
@@ -2519,7 +2590,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
 	ret = sys_recvmsg(sockfd,msg,flags);
 	END_KERNEL_CALL;
 
-	return ret;	
+	SYSCALL_RETURN(ret);
 }
 
 ssize_t send(int sockfd, const void *buf, size_t len, int flags)
@@ -2543,7 +2614,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 	ret = sys_sendmsg(sockfd,msg,flags);
 	END_KERNEL_CALL;
 
-	return ret;	
+	SYSCALL_RETURN(ret);
 }
 
 long socketpair(int family, int type, int protocol, int *sockvec)
@@ -2556,7 +2627,7 @@ long socketpair(int family, int type, int protocol, int *sockvec)
 	ret = sys_socketpair(family, type, protocol, sockvec);
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 
 long getsockopt(int fd, int level, int optname, void *optval, unsigned int *optlen)
@@ -2569,7 +2640,7 @@ long getsockopt(int fd, int level, int optname, void *optval, unsigned int *optl
 	ret = sys_getsockopt(fd, level, optname, optval, optlen);
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 
 int setsockopt(int fd, int level, int optname, const void *optval, int optlen)
@@ -2582,7 +2653,7 @@ int setsockopt(int fd, int level, int optname, const void *optval, int optlen)
 	ret = sys_setsockopt(fd, level, optname, (char *)optval, optlen);
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 
 int getsockname(int sockfd, struct sockaddr *addr, int* addrlen )
@@ -2595,7 +2666,7 @@ int getsockname(int sockfd, struct sockaddr *addr, int* addrlen )
 	ret = sys_getsockname(sockfd,addr,addrlen);
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 
 int getpeername(int sockfd, struct sockaddr *addr, int* addrlen )
@@ -2608,7 +2679,7 @@ int getpeername(int sockfd, struct sockaddr *addr, int* addrlen )
 	ret = sys_getpeername(sockfd,addr,addrlen);
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 
 /* 
@@ -2626,7 +2697,7 @@ int inotify_init(void)
 	ret = sys_inotify_init();
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 
 int inotify_add_watch(int fd,const char *pathname,unsigned int mask)
@@ -2639,7 +2710,7 @@ int inotify_add_watch(int fd,const char *pathname,unsigned int mask)
 	ret = sys_inotify_add_watch(fd,pathname,mask);
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 
 int inotify_rm_watch(int fd,int wd)
@@ -2651,13 +2722,14 @@ int inotify_rm_watch(int fd,int wd)
 	ret = sys_inotify_rm_watch(fd,wd);
 	END_KERNEL_CALL;
 
-	return ret;
+	SYSCALL_RETURN(ret);
 }
 
 /*mma.h*/
 void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
 	klog(0,"NOT IMPLEMENT!\n");
+
 	return 0;
 }
 int munmap(void *addr, size_t length)
@@ -2666,10 +2738,14 @@ int munmap(void *addr, size_t length)
 	return 0;
 }
 
-int pipe(int pipefd[2])
+int pipe(int *fildes)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+	int ret;
+	asmlinkage long (*sys_pipe)(int*) = get_kernel_proc_address("sys_pipe");
+
+	ret = sys_pipe(fildes); 
+
+	SYSCALL_RETURN(ret);
 }
 
 pid_t fork(void)
@@ -2680,23 +2756,27 @@ pid_t fork(void)
 
 pid_t getpid(void)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+	return task_tgid_vnr(current);
 }
+
 pid_t getppid(void)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+	int pid;
+
+	rcu_read_lock();
+	pid = task_tgid_vnr(current->real_parent);
+	rcu_read_unlock();
+
+	return pid;
 }
+
 uid_t getuid(void)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+	return current_uid();
 }
 uid_t geteuid(void)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+	return current_euid();
 }
 int setuid(uid_t uid)
 {
@@ -2734,7 +2814,12 @@ int syscall(int number, ...)
 /* sys/resource.h*/
 int getrlimit(int resource, struct rlimit *rlim)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+	int ret;
+	asmlinkage long (*sys_getrlimit)(unsigned int resource,
+			struct rlimit __user *rlim) = get_kernel_proc_address("sys_getrlimit");
+
+	ret = sys_getrlimit(resource, rlim);
+
+	SYSCALL_RETURN(ret);
 }
 

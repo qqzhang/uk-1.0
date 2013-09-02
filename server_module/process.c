@@ -374,20 +374,20 @@ struct thread *create_process( int fd, struct thread *parent_thread, int inherit
     if (!process->handles || !process->token) goto error;
 
     /* create the main thread */
+#ifndef CONFIG_UNIFIED_KERNEL
     if (pipe( request_pipe ) == -1)
     {
         file_set_error();
         goto error;
     }
-#ifndef CONFIG_UNIFIED_KERNEL
     if (send_client_fd( process, request_pipe[1], SERVER_PROTOCOL_VERSION ) == -1)
     {
         close( request_pipe[0] );
         close( request_pipe[1] );
         goto error;
     }
-#endif
     close( request_pipe[1] );
+#endif
     if (!(thread = create_thread( request_pipe[0], process ))) goto error;
 
     set_fd_events( process->msg_fd, POLLIN );  /* start listening to events */

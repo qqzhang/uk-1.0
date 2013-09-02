@@ -156,7 +156,7 @@ int main( int argc, char *argv[] )
 extern void init_thread_hash_table(void);
 extern int create_syscall_chardev(void);
 extern void destroy_syscall_chardev(void);
-void get_kallsyms_lookup_name(void);
+extern void get_kallsyms_lookup_name(void);
 
 /* module entry*/
 static int __init unifiedkernel_init(void)
@@ -164,9 +164,9 @@ static int __init unifiedkernel_init(void)
 	get_kallsyms_lookup_name();
 	init_thread_hash_table();
 	create_syscall_chardev();
-	init_signals();
 	init_directories();
 	init_registry();
+
 	return 0;
 }
 

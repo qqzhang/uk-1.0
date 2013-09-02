@@ -52,6 +52,7 @@
 
 #ifdef CONFIG_UNIFIED_KERNEL
 #include <asm/div64.h>
+#include "log.h"
 #endif
 
 struct notify
@@ -1749,7 +1750,9 @@ void init_registry(void)
 
     /* switch to the config dir */
 
+#ifndef CONFIG_UNIFIED_KERNEL
     if (fchdir( config_dir_fd ) == -1) fatal_error( "chdir to config dir: %s\n", strerror( errno ));
+#endif
 
     /* create the root key */
     root_key = alloc_key( &root_name, current_time );
@@ -1802,7 +1805,9 @@ void init_registry(void)
     set_periodic_save_timer();
 
     /* go back to the server dir */
+#ifndef CONFIG_UNIFIED_KERNEL
     if (fchdir( server_dir_fd ) == -1) fatal_error( "chdir to server dir: %s\n", strerror( errno ));
+#endif
 }
 
 /* save a registry branch to a file */

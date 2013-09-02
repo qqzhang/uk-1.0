@@ -299,6 +299,7 @@ static inline void init_thread_structure( struct thread *thread )
 #ifdef CONFIG_UNIFIED_KERNEL
     thread->pid             = -1;  /* not known yet */
     INIT_HLIST_NODE( &thread->hash_entry );
+    thread->unix_errno      = 0;
 #endif
 
     thread->creation_time = current_time;
@@ -336,7 +337,8 @@ struct thread *create_thread( int fd, struct process *process )
     thread->process = (struct process *)grab_object( process );
     thread->desktop = process->desktop;
     thread->affinity = process->affinity;
-#ifndef CONFIG_UNIFIED_KERNEL
+#ifdef CONFIG_UNIFIED_KERNEL
+#else
     if (!current_thread) current_thread = thread;
 #endif
 
@@ -347,6 +349,9 @@ struct thread *create_thread( int fd, struct process *process )
         release_object( thread );
         return NULL;
     }
+#ifdef CONFIG_UNIFIED_KERNEL
+    thread->request_fd = NULL;
+#else
     if (!(thread->request_fd = create_anonymous_fd( &thread_fd_ops, fd, &thread->obj, 0 )))
     {
         release_object( thread );
@@ -354,6 +359,7 @@ struct thread *create_thread( int fd, struct process *process )
     }
 
     set_fd_events( thread->request_fd, POLLIN );  /* start listening to events */
+#endif
     add_process_thread( thread->process, thread );
 #ifdef CONFIG_UNIFIED_KERNEL
     add_thread_by_pid( thread, current->pid );

@@ -941,7 +941,7 @@ NTSTATUS NtWineService(int __user *user_req_info)
 
 	if (req < REQ_NB_REQUESTS)
 	{
-		klog (0, "req=%d : %s \n",req, req_names[req]);
+	//	klog (0, "req=%d : %s \n",req, req_names[req]);
 		req_handlers[req]( &thread->req, &reply ); /* call handle */
 	}
 	else
@@ -950,7 +950,8 @@ NTSTATUS NtWineService(int __user *user_req_info)
 	}
 
 	status = get_error();
-	klog (0, "req=%d : %s done ret=%08x\n",req, req_names[req],status);
+	if (status)
+		klog (0, "req=%d : %s done ret=%08x\n",req, req_names[req],status);
 
 	if (thread->reply_fd)
 	{
