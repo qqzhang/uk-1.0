@@ -272,11 +272,9 @@ static void save_subkeys( const struct reg_key *key, const struct reg_key *base,
 #ifndef CONFIG_UNIFIED_KERNEL
         fprintf( f, "] %u\n", (unsigned int)((key->modif - ticks_1601_to_1970) / TICKS_PER_SEC) );
 #else
-	{
 	u64 tmp = (key->modif - ticks_1601_to_1970);
 	do_div(tmp, TICKS_PER_SEC);
 	fprintf( f, "] %u\n", (unsigned int)(tmp) );
-	}
 #endif
         if (key->class)
         {
@@ -1731,6 +1729,121 @@ unsigned int get_prefix_cpu_mask(void)
     }
 }
 
+#ifdef CONFIG_UNIFIED_KERNEL
+#include <linux/slab.h>
+#include <linux/uaccess.h>
+
+char * build_reg_name( const char * config_dir , int config_dir_len, const char *regname )
+{
+	int total_len=0;
+	char *ret;
+
+	total_len = config_dir_len + strlen(regname) + 1;
+	ret = kmalloc(total_len, GFP_KERNEL);
+	if (!ret)
+	{
+		printk("%s No Memory \n", __func__);
+		return NULL;
+	}
+	memset(ret, 0, total_len);
+	if (copy_from_user(ret, config_dir, config_dir_len))
+	{
+		printk("%s copy_from_user error\n", __func__);
+		return NULL;
+	}
+	memcpy(ret+config_dir_len, regname, strlen(regname)); 
+	klog(0,"regname=%s\n",ret);
+	return ret;
+}
+
+void destroy_reg_name( void )
+{
+    int i;
+
+    for (i = 0; i < save_branch_count; i++)
+        kfree( save_branch_info[i].path );
+}
+
+void init_registry(const char __user *config_dir, int len)
+{
+    static const WCHAR HKLM[] = { 'M','a','c','h','i','n','e' };
+    static const WCHAR HKU_default[] = { 'U','s','e','r','\\','.','D','e','f','a','u','l','t' };
+    static const WCHAR classes[] = {'S','o','f','t','w','a','r','e','\\',
+                                    'C','l','a','s','s','e','s','\\',
+                                    'W','o','w','6','4','3','2','N','o','d','e'};
+    static const struct unicode_str root_name = { NULL, 0 };
+    static const struct unicode_str HKLM_name = { HKLM, sizeof(HKLM) };
+    static const struct unicode_str HKU_name = { HKU_default, sizeof(HKU_default) };
+    static const struct unicode_str classes_name = { classes, sizeof(classes) };
+
+    WCHAR *current_user_path;
+    struct unicode_str current_user_str;
+    struct reg_key *key, *hklm, *hkcu;
+    char *system, *user, *userdef;
+
+    if (!config_dir || !len)
+	{
+		printk("%s config_dir is NULL \n",__func__);
+		return;
+	}
+	else
+	{
+		system = build_reg_name(config_dir, len, "/sysrem.reg");
+		userdef = build_reg_name(config_dir, len, "/userdef.reg");
+		user = build_reg_name(config_dir, len, "/user.reg");
+	}
+
+    /* create the root key */
+    root_key = alloc_key( &root_name, current_time );
+    assert( root_key );
+    make_object_static( &root_key->obj );
+
+    /* load system.reg into Registry\Machine */
+
+    if (!(hklm = create_key_recursive( root_key, &HKLM_name, current_time )))
+        fatal_error( "could not create Machine registry key\n" );
+
+    if (!load_init_registry_from_file( system, hklm ))
+        prefix_type = sizeof(void *) > sizeof(int) ? PREFIX_64BIT : PREFIX_32BIT;
+    else if (prefix_type == PREFIX_UNKNOWN)
+        prefix_type = PREFIX_32BIT;
+
+    /* load userdef.reg into Registry\User\.Default */
+
+    if (!(key = create_key_recursive( root_key, &HKU_name, current_time )))
+        fatal_error( "could not create User\\.Default registry key\n" );
+
+    load_init_registry_from_file( userdef, key );
+    release_object( key );
+
+    /* load user.reg into HKEY_CURRENT_USER */
+
+    /* FIXME: match default user in token.c. should get from process token instead */
+    current_user_path = format_user_registry_path( security_local_user_sid, &current_user_str );
+    if (!current_user_path ||
+        !(hkcu = create_key_recursive( root_key, &current_user_str, current_time )))
+        fatal_error( "could not create HKEY_CURRENT_USER registry key\n" );
+    free( current_user_path );
+    load_init_registry_from_file( user, hkcu );
+
+    /* set the shared flag on Software\Classes\Wow6432Node */
+    if (prefix_type == PREFIX_64BIT)
+    {
+        if ((key = create_key_recursive( hklm, &classes_name, current_time )))
+        {
+            key->flags |= KEY_WOWSHARE;
+            release_object( key );
+        }
+        /* FIXME: handle HKCU too */
+    }
+
+    release_object( hklm );
+    release_object( hkcu );
+
+    /* start the periodic save timer */
+    set_periodic_save_timer();
+}
+#else
 /* registry initialisation */
 void init_registry(void)
 {
@@ -1750,9 +1863,7 @@ void init_registry(void)
 
     /* switch to the config dir */
 
-#ifndef CONFIG_UNIFIED_KERNEL
     if (fchdir( config_dir_fd ) == -1) fatal_error( "chdir to config dir: %s\n", strerror( errno ));
-#endif
 
     /* create the root key */
     root_key = alloc_key( &root_name, current_time );
@@ -1805,10 +1916,9 @@ void init_registry(void)
     set_periodic_save_timer();
 
     /* go back to the server dir */
-#ifndef CONFIG_UNIFIED_KERNEL
     if (fchdir( server_dir_fd ) == -1) fatal_error( "chdir to server dir: %s\n", strerror( errno ));
-#endif
 }
+#endif
 
 /* save a registry branch to a file */
 static void save_all_subkeys( struct reg_key *key, FILE *f )
@@ -1930,6 +2040,19 @@ done:
     return ret;
 }
 
+#ifdef CONFIG_UNIFIED_KERNEL
+static void periodic_save( void *arg )
+{
+    int i;
+    klog(0,"\n");
+
+    save_timeout_user = NULL;
+    for (i = 0; i < save_branch_count; i++)
+        save_branch( save_branch_info[i].key, save_branch_info[i].path );
+
+    set_periodic_save_timer();
+}
+#else
 /* periodic saving of the registry */
 static void periodic_save( void *arg )
 {
@@ -1942,6 +2065,7 @@ static void periodic_save( void *arg )
     if (fchdir( server_dir_fd ) == -1) fatal_error( "chdir to server dir: %s\n", strerror( errno ));
     set_periodic_save_timer();
 }
+#endif
 
 /* start the periodic save timer */
 static void set_periodic_save_timer(void)

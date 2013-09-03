@@ -1306,6 +1306,9 @@ struct get_handle_fd_reply
     int          cacheable;
     unsigned int access;
     unsigned int options;
+#ifdef CONFIG_UNIFIED_KERNEL
+    int          fd;
+#endif
 };
 enum server_fd_type
 {

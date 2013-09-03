@@ -901,7 +901,12 @@ C_ASSERT( FIELD_OFFSET(struct get_handle_fd_reply, type) == 8 );
 C_ASSERT( FIELD_OFFSET(struct get_handle_fd_reply, cacheable) == 12 );
 C_ASSERT( FIELD_OFFSET(struct get_handle_fd_reply, access) == 16 );
 C_ASSERT( FIELD_OFFSET(struct get_handle_fd_reply, options) == 20 );
+#ifdef CONFIG_UNIFIED_KERNEL
+C_ASSERT( FIELD_OFFSET(struct get_handle_fd_reply, fd) == 24 );
+C_ASSERT( sizeof(struct get_handle_fd_reply) == 28 );
+#else
 C_ASSERT( sizeof(struct get_handle_fd_reply) == 24 );
+#endif
 C_ASSERT( FIELD_OFFSET(struct flush_file_request, handle) == 12 );
 C_ASSERT( sizeof(struct flush_file_request) == 16 );
 C_ASSERT( FIELD_OFFSET(struct flush_file_reply, event) == 8 );

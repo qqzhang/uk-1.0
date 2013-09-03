@@ -3,6 +3,8 @@
 
 #include <linux/time.h>
 
+extern time_t get_current_time(void);
+#define current_time (get_current_time())
 #if 0
 struct timeval {
     long    tv_sec;         /* seconds */

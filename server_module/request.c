@@ -335,6 +335,13 @@ error:
         fatal_protocol_error( thread, "read: %s\n", strerror( errno ));
 }
 
+#ifdef CONFIG_UNIFIED_KERNEL
+int receive_fd( struct process *process )
+{
+	klog(0,"don't need \n");
+	return -1;
+}
+#else
 /* receive a file descriptor on the process socket */
 int receive_fd( struct process *process )
 {
@@ -421,11 +428,13 @@ int receive_fd( struct process *process )
     }
     return -1;
 }
+#endif
 
 #ifdef CONFIG_UNIFIED_KERNEL
 int send_client_fd( struct process *process, int fd, obj_handle_t handle )
 {
-	return 0;
+	klog(1,"don't need \n");
+	return -1;
 }
 #else
 /* send an fd to a client */
@@ -879,10 +888,36 @@ void close_master_socket( timeout_t timeout )
 
 #ifdef CONFIG_UNIFIED_KERNEL
 
-NTSTATUS NtCreateFirstProcess(syscall_fd)
+char __user *current_config_dir;
+extern void init_registry(const char __user* config_dir, int len);
+
+NTSTATUS NtCreateFirstProcess(int __user* init_data_ptr)
 {
+    struct init_data init_data;
+    int syscall_fd;
+
+    memset(&init_data, 0, sizeof(struct init_data));
+    if (copy_from_user(&init_data, init_data_ptr, sizeof(struct init_data)))
+    {
+	klog(0,"copy_from_user error \n");
+	return STATUS_NO_MEMORY;
+    }
+
+    syscall_fd = init_data.syscall_fd;
+    if (syscall_fd != -1)
+    {
 	create_process(syscall_fd, NULL, 0);
-	return get_error();
+    }
+
+    if (!current_config_dir)
+    {
+	current_config_dir = init_data.config_dir;
+	init_registry(init_data.config_dir, init_data.config_dir_len);
+    }
+    /* TODO */
+    //else if (!strcmp(current_config_dir, init_data.config_dir))
+
+    return get_error();
 }
 
 extern char *req_names[];
@@ -953,7 +988,8 @@ NTSTATUS NtWineService(int __user *user_req_info)
 	if (status)
 		klog (0, "req=%d : %s done ret=%08x\n",req, req_names[req],status);
 
-	if (thread->reply_fd)
+	//if (thread->reply_fd)
+	if (thread)
 	{
 		reply.reply_header.error = thread->error;
 		reply.reply_header.reply_size = thread->reply_size;
@@ -966,7 +1002,7 @@ NTSTATUS NtWineService(int __user *user_req_info)
 	}
 
 	/* FIXME */
-	/* make sure : &user_req_info == &ReqMsg.u.reply */
+	/* make sure : &user_req_info == &user_req_info.u.reply */
 	if (copy_to_user(user_req_info, &reply, sizeof(reply))) 
 	{
 		status = STATUS_NO_MEMORY;

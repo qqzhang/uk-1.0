@@ -1930,7 +1930,9 @@ static BOOL create_process( HANDLE hFile, LPCWSTR filename, LPWSTR cmd_line, LPW
 
     if (exec_only)  /* things are much simpler in this case */
     {
+#ifndef CONFIG_UNIFIED_KERNEL
         wine_server_send_fd( socketfd[1] );
+#endif
         close( socketfd[1] );
         SERVER_START_REQ( new_process )
         {
@@ -1973,7 +1975,9 @@ static BOOL create_process( HANDLE hFile, LPCWSTR filename, LPWSTR cmd_line, LPW
     }
     env_end++;
 
+#ifndef CONFIG_UNIFIED_KERNEL
     wine_server_send_fd( socketfd[1] );
+#endif
     close( socketfd[1] );
 
     /* create the process on the server side */

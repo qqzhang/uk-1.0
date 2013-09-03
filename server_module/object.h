@@ -183,7 +183,11 @@ extern void debug_exit_thread( struct thread *thread );
 /* registry functions */
 
 extern unsigned int get_prefix_cpu_mask(void);
+#ifdef CONFIG_UNIFIED_KERNEL
+void init_registry(const char __user *config_dir, int len);
+#else
 extern void init_registry(void);
+#endif
 extern void flush_registry(void);
 
 /* signal functions */

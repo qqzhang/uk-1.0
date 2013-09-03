@@ -144,7 +144,9 @@ int main( int argc, char *argv[] )
     if (debug_level) fprintf( stderr, "wineserver: starting (pid=%ld)\n", (long) getpid() );
     init_signals();
     init_directories();
+#ifndef CONFIG_UNIFIED_KERNEL
     init_registry();
+#endif
     main_loop();
     return 0;
 }
@@ -152,11 +154,17 @@ int main( int argc, char *argv[] )
 #ifdef CONFIG_UNIFIED_KERNEL
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/kthread.h>
+#include "log.h"
 
 extern void init_thread_hash_table(void);
 extern int create_syscall_chardev(void);
 extern void destroy_syscall_chardev(void);
 extern void get_kallsyms_lookup_name(void);
+extern void timer_loop(void);
+extern void destroy_reg_name( void );
+
+struct task_struct* timer_kernel_task = NULL;
 
 /* module entry*/
 static int __init unifiedkernel_init(void)
@@ -165,7 +173,13 @@ static int __init unifiedkernel_init(void)
 	init_thread_hash_table();
 	create_syscall_chardev();
 	init_directories();
-	init_registry();
+	/*init_registry(); */ /* NtCreateFirstProcss call init_registry() */
+
+	timer_kernel_task = kthread_create((void*)timer_loop, NULL, "timer_thread");
+	if(!IS_ERR(timer_kernel_task))
+		wake_up_process(timer_kernel_task);
+	else
+		klog(0, "kthread_create error\n");
 
 	return 0;
 }
@@ -173,6 +187,11 @@ static int __init unifiedkernel_init(void)
 static void __exit unifiedkernel_exit(void)
 {
 	destroy_syscall_chardev();
+
+	wake_up_process(timer_kernel_task);
+	kthread_stop(timer_kernel_task);
+
+	destroy_reg_name();
 }
 
 module_init(unifiedkernel_init);

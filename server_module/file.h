@@ -101,7 +101,9 @@ static inline struct fd *get_obj_fd( struct object *obj ) { return obj->ops->get
 /* timeout functions */
 
 struct timeout_user;
+#ifndef CONFIG_UNIFIED_KERNEL
 extern timeout_t current_time;
+#endif
 
 #define TICKS_PER_SEC 10000000
 

@@ -100,7 +100,9 @@
 #include "winioctl.h"
 
 #ifdef CONFIG_UNIFIED_KERNEL
+#include <linux/kthread.h>
 #include <asm/div64.h>
+#include "log.h"
 #endif
 
 #if defined(HAVE_SYS_EPOLL_H) && defined(HAVE_EPOLL_CREATE)
@@ -354,6 +356,11 @@ struct timeout_user
 };
 
 static struct list_head timeout_list = LIST_INIT(timeout_list);   /* sorted timeouts list */
+#ifdef CONFIG_UNIFIED_KERNEL
+static inline void set_current_time(void)
+{
+}
+#else
 timeout_t current_time;
 
 static inline void set_current_time(void)
@@ -363,6 +370,7 @@ static inline void set_current_time(void)
     gettimeofday( &now, NULL );
     current_time = (timeout_t)now.tv_sec * TICKS_PER_SEC + now.tv_usec * 10 + ticks_1601_to_1970;
 }
+#endif
 
 /* add a timeout user */
 struct timeout_user *add_timeout_user( timeout_t when, timeout_callback func, void *private )
@@ -843,6 +851,35 @@ static void remove_poll_user( struct fd *fd, int user )
     freelist = &poll_users[user];
     active_users--;
 }
+
+#ifdef CONFIG_UNIFIED_KERNEL
+void timer_loop(void)
+{
+	unsigned int msecs, timeout, next;
+
+	msecs = 10000;
+	timeout = msecs_to_jiffies(msecs) + 1;
+	while (1)
+	{
+		next = get_next_timeout();
+		if (kthread_should_stop())
+		{
+			return;
+		}
+
+		set_current_state(TASK_INTERRUPTIBLE);
+		if (next == -1)
+		{
+			schedule_timeout(timeout);
+		}
+		else
+		{
+			next = msecs_to_jiffies(next) + 1;
+			schedule_timeout(next);
+		}
+	}
+}
+#endif
 
 /* process pending timeouts and return the time until the next timeout, in milliseconds */
 static int get_next_timeout(void)
@@ -2301,7 +2338,11 @@ DECL_HANDLER(get_handle_fd)
             reply->cacheable = fd->cacheable;
             reply->options = fd->options;
             reply->access = get_handle_access( current_thread->process, req->handle );
+#ifdef CONFIG_UNIFIED_KERNEL
+	    reply->fd = unix_fd;
+#else
             send_client_fd( current_thread->process, unix_fd, req->handle );
+#endif
         }
         release_object( fd );
     }

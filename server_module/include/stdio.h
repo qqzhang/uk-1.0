@@ -20,14 +20,12 @@
 
 typedef struct _iobuf
 {
-  char* _ptr;
-  int   _cnt;
-  char* _base;
-  int   _flag;
-  int   _file;
-  int   _charbuf;
-  int   _bufsiz;
-  char* _tmpfname;
+    struct file *filp;
+    loff_t pos;
+    char *buf;
+    long buflen;
+    long bufpos;
+    ssize_t validlen;
 } FILE;
 
 

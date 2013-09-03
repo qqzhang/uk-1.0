@@ -888,12 +888,14 @@ DECL_HANDLER(new_process)
         set_error( STATUS_INVALID_PARAMETER );
         return;
     }
+#ifndef CONFIG_UNIFIED_KERNEL
     if (fcntl( socket_fd, F_SETFL, O_NONBLOCK ) == -1)
     {
         set_error( STATUS_INVALID_HANDLE );
         close( socket_fd );
         return;
     }
+#endif
     if (shutdown_stage)
     {
         set_error( STATUS_SHUTDOWN_IN_PROGRESS );

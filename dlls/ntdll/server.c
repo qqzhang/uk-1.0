@@ -106,6 +106,9 @@ static const enum cpu_type client_cpu = CPU_ARM64;
 #error Unsupported CPU
 #endif
 
+#ifdef CONFIG_UNIFIED_KERNEL
+struct init_data init_data;
+#endif
 unsigned int server_cpus = 0;
 int is_wow64 = FALSE;
 
@@ -344,6 +347,7 @@ void server_leave_uninterrupted_section( RTL_CRITICAL_SECTION *cs, sigset_t *sig
 #ifdef CONFIG_UNIFIED_KERNEL
 void CDECL wine_server_send_fd( int fd )
 {
+	fprintf(stderr, "%s don't need \n",__func__);
 }
 #else
 /***********************************************************************
@@ -403,7 +407,12 @@ void CDECL wine_server_send_fd( int fd )
 }
 #endif
 
-
+#ifdef CONFIG_UNIFIED_KERNEL
+static int receive_fd( obj_handle_t *handle )
+{
+	fprintf(stderr, "%s don't need \n",__func__);
+}
+#else
 /***********************************************************************
  *           receive_fd
  *
@@ -462,6 +471,7 @@ static int receive_fd( obj_handle_t *handle )
     /* the server closed the connection; time to die... */
     abort_thread(0);
 }
+#endif
 
 
 /***********************************************************************/
@@ -581,7 +591,9 @@ int server_get_unix_fd( HANDLE handle, unsigned int wanted_access, int *unix_fd,
     *needs_close = 0;
     wanted_access &= FILE_READ_DATA | FILE_WRITE_DATA;
 
+#ifndef CONFIG_UNIFIED_KERNEL
     server_enter_uninterrupted_section( &fd_cache_section, &sigset );
+#endif
 
     fd = get_cached_fd( handle, type, &access, options );
     if (fd != -1) goto done;
@@ -594,6 +606,23 @@ int server_get_unix_fd( HANDLE handle, unsigned int wanted_access, int *unix_fd,
             if (type) *type = reply->type;
             if (options) *options = reply->options;
             access = reply->access;
+#ifdef CONFIG_UNIFIED_KERNEL
+	    fd = reply->fd;
+	    if (fd != -1)
+	    {
+		*needs_close = 0;
+		if(reply->cacheable)
+		{
+		    server_enter_uninterrupted_section( &fd_cache_section, &sigset );
+		    add_fd_to_cache( handle, fd, reply->type,reply->access, reply->options );
+		    server_leave_uninterrupted_section( &fd_cache_section, &sigset );
+		}
+	    }
+	    else
+	    {
+		ret = STATUS_TOO_MANY_OPENED_FILES;
+	    }
+#else
             if ((fd = receive_fd( &fd_handle )) != -1)
             {
                 assert( wine_server_ptr_handle(fd_handle) == handle );
@@ -602,12 +631,15 @@ int server_get_unix_fd( HANDLE handle, unsigned int wanted_access, int *unix_fd,
                                                   reply->access, reply->options ));
             }
             else ret = STATUS_TOO_MANY_OPENED_FILES;
+#endif
         }
     }
     SERVER_END_REQ;
 
 done:
+#ifndef CONFIG_UNIFIED_KERNEL
     server_leave_uninterrupted_section( &fd_cache_section, &sigset );
+#endif
     if (!ret && ((access & wanted_access) != wanted_access))
     {
         ret = STATUS_ACCESS_DENIED;
@@ -637,7 +669,9 @@ int CDECL wine_server_fd_to_handle( int fd, unsigned int access, unsigned int at
     int ret;
 
     *handle = 0;
+#ifndef CONFIG_UNIFIED_KERNEL
     wine_server_send_fd( fd );
+#endif
 
     SERVER_START_REQ( alloc_file_handle )
     {
@@ -936,7 +970,6 @@ static int server_connect(void)
 #else
 static int server_connect(void)
 {
-    const char *serverdir;
     struct sockaddr_un addr;
     struct stat st;
     int s, slen, retry, fd_cwd;
@@ -947,6 +980,8 @@ static int server_connect(void)
 
 	/* create .wine */
     setup_config_dir();
+    init_data.config_dir =  wine_get_config_dir();
+    init_data.config_dir_len = strlen(init_data.config_dir);
 
     return 1;
 }
@@ -1098,6 +1133,8 @@ void server_init_process(void)
 	    return errno;
     }
 
+    memset(&init_data, 0, sizeof(struct init_data));
+
     ntdll_get_thread_data()->request_fd = fd;
 
     if (env_socket)
@@ -1106,12 +1143,16 @@ void server_init_process(void)
         if (fcntl( fd_socket, F_SETFD, 1 ) == -1)
             fatal_perror( "Bad server socket %d", fd_socket );
         unsetenv( "WINESERVERSOCKET" );
+
+	init_data.syscall_fd = -1; /* don't need create_process() */
     }
     else 
-	{
-		fd_socket = server_connect();
-		ioctl(fd, Nt_CreateFirstProcess, fd);
-	}
+    {
+	fd_socket = server_connect();
+	init_data.syscall_fd = fd;
+    }
+
+    ioctl(fd, Nt_CreateFirstProcess, &init_data);
 
     /* setup the signal mask */
     sigemptyset( &server_block_set );
@@ -1185,8 +1226,10 @@ size_t server_init_thread( void *entry_point )
     /* create the server->client communication pipes */
     if (server_pipe( reply_pipe ) == -1) server_protocol_perror( "pipe" );
     if (server_pipe( ntdll_get_thread_data()->wait_fd ) == -1) server_protocol_perror( "pipe" );
+#ifndef CONFIG_UNIFIED_KERNEL
     wine_server_send_fd( reply_pipe[1] );
     wine_server_send_fd( ntdll_get_thread_data()->wait_fd[1] );
+#endif
     ntdll_get_thread_data()->reply_fd = reply_pipe[0];
     close( reply_pipe[1] );
 

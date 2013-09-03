@@ -31,6 +31,16 @@
 
 #ifdef CONFIG_UNIFIED_KERNEL
 #define SYSCALL_FILE "/dev/syscall"
+
+/* Nt_CreateFirstProcess to use to exchange information between 
+ * user space and kernel module*/
+struct init_data
+{
+	int  syscall_fd;
+	char *config_dir;
+	int config_dir_len;
+};
+
 enum syscall
 {
 	Nt_None = 0x2E2E0000,
