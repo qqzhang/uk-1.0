@@ -2837,6 +2837,7 @@ static void dump_get_window_tree_reply( const struct get_window_tree_reply *req 
     fprintf( stderr, ", prev_sibling=%08x", req->prev_sibling );
     fprintf( stderr, ", first_sibling=%08x", req->first_sibling );
     fprintf( stderr, ", last_sibling=%08x", req->last_sibling );
+
     fprintf( stderr, ", first_child=%08x", req->first_child );
     fprintf( stderr, ", last_child=%08x", req->last_child );
 }
