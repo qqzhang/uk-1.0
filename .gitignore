@@ -6,6 +6,7 @@
 *.ok
 *.res
 *.so
+*.cmd
 */*/tests/testlist.c
 /Make.rules
 /Maketest.rules

@@ -43,6 +43,7 @@
 #include "log.h"
 #include "thread.h"
 #include "wine/unicode.h"
+#include "sys/sysctl.h"
 
 #define PREPARE_KERNEL_CALL \
 { \
@@ -312,8 +313,7 @@ int atoi(const char* str)
 
 unsigned long  strtoul(const char* str, char**endptr, int base)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+    return simple_strtoul( str, endptr, base );
 }
 
 void perror(const char *s)
@@ -322,75 +322,6 @@ void perror(const char *s)
 }
 
 /*stdio.h*/
-
-/* vfs_write() wrapper */
-ssize_t filp_write(struct file *filp, void *buf, size_t size)
-{
-    ssize_t ret;
-    loff_t pos;
-
-    PREPARE_KERNEL_CALL;
-    pos = filp->f_pos;
-    ret = vfs_write(filp, buf, size, &pos);
-    filp->f_pos = pos;
-    END_KERNEL_CALL;
-
-    return ret;
-}
-
-int fputc(int ch, FILE* fp)
-{
-    int ret=-1;
-
-    if (fp)
-    {
-	ret = filp_write(fp->filp, (void*)&ch, 1);
-    }
-
-    return ret;
-}
-
-int fputs(const char* s, FILE* fp)
-{
-    int ret=-1;
-
-    if (fp)
-    {
-	ret = filp_write(fp->filp, (void*)s, strlen(s));
-    }
-
-    return ret;
-}
-
-char *fgets(char* buf, int len, FILE *fp) /* for registry.c */
-{
-    char *p;
-    ssize_t nread;
-    struct file *filp;
-
-    if (!len)
-	return NULL;
-
-    filp = fp->filp;
-    nread = kernel_read(filp, filp->f_pos, buf, (size_t)len - 1);
-
-    if (nread <= 0)
-	return NULL;
-
-    p = memchr(buf, '\n', nread);
-    if (!p)
-    {
-	*(buf + nread) = 0;
-	filp->f_pos += nread;
-    }
-    else
-    {
-	*++p = 0;
-	filp->f_pos += (p - buf);
-    }
-
-    return buf;
-}
 
 FILE* fopen(const char* filename, const char* mode) /*for register.c */
 {
@@ -471,6 +402,7 @@ FILE* fdopen(int fd, const char *mode)
     fp = malloc(sizeof(FILE));
     if (!fp)
     {
+	klog(0,"no memory\n");
 	return NULL;
     }
 
@@ -483,11 +415,37 @@ FILE* fdopen(int fd, const char *mode)
     return fp;
 }
 
+/* vfs_write() wrapper */
+ssize_t filp_write(struct file *filp, void *buf, size_t size)
+{
+    ssize_t ret;
+    loff_t pos;
+
+    PREPARE_KERNEL_CALL;
+    pos = filp->f_pos;
+    ret = vfs_write(filp, buf, size, &pos);
+    filp->f_pos = pos;
+    END_KERNEL_CALL;
+
+    return ret;
+}
+
 size_t fwrite(const void* buf, size_t size, size_t nmemb, FILE *fp)
 {
     unsigned int ret=0;
     size_t len = size * nmemb;
     int pos;
+
+    if ((fp==stderr) || (fp==stdout))
+    {
+	klog(0," NOT IMPLEMENT!\n");
+	return 0;
+    }
+    else if (fp==stdin)
+    {
+	klog(0,"stdin NOT IMPLEMENT!\n");
+	return 0;
+    }
 
     if(len <= 0)
 	return 0;
@@ -547,20 +505,8 @@ size_t fwrite(const void* buf, size_t size, size_t nmemb, FILE *fp)
 
 int fclose(FILE *fp)
 {
-#if 0
-    int ret=0;
-    if (fp->filp)
-    {
-	ret = filp_close(fp->filp, NULL);
-	kfree(fp);
-    }
-    else
-    {
-	klog(0,"worning : filp_close NULL file \n");
-    }
-    return ret;
-#endif
     int ret = -1;
+
     if (fp)
     {
 	if (fp->buf)
@@ -595,10 +541,11 @@ int printf(const char* fmt,...)
 
 int fprintf(FILE *fp, const char *fmt, ...)
 {
-    if (fp==stderr || fp==stdout)
+    if ((fp==stderr) || (fp==stdout))
     {
-	//		printk("p %d t %d %s[%d] ", current->tgid, current->pid, __FUNCTION__,__LINE__);
-	return printk(fmt);
+	klog(0," NOT IMPLEMENT!\n");
+	return 0;
+//	return printk(fmt);
     }
     else if (fp==stdin)
     {
@@ -612,14 +559,14 @@ int fprintf(FILE *fp, const char *fmt, ...)
 
 	if(fp->buf==NULL)
 	{
-	    fp->buf = (char *)__get_free_pages(GFP_KERNEL, 1);
+	    fp->buf = (char *)__get_free_pages(GFP_KERNEL, 1); //2^1, alloc two pages
 	    fp->buflen = PAGE_SIZE * 2;
 	    fp->validlen = 0;
 	    fp->bufpos = 0;
 	    if (!fp->buf) 
 	    {
 		set_error(STATUS_NO_MEMORY);
-		perror("no memory");
+		klog(0,"no memory\n");
 		return 0;
 	    }
 	}
@@ -631,7 +578,7 @@ int fprintf(FILE *fp, const char *fmt, ...)
 	if (ret <= 0) 
 	{
 	    set_error(STATUS_INVALID_PARAMETER);
-	    perror("vsnprintf error");
+	    klog(0,"vsnprintf error\n");
 	    return ret;
 	}
 	fp->validlen += (long)ret;
@@ -642,6 +589,7 @@ int fprintf(FILE *fp, const char *fmt, ...)
 	    if (ret < 0)
 	    {
 		set_error(ret);
+		klog(0,"filp_write error\n");
 		return ret;
 	    }
 	    fp->validlen -= ret;
@@ -653,17 +601,49 @@ int fprintf(FILE *fp, const char *fmt, ...)
     }
 }
 
-int vfprintf(FILE* fp, const char* fmt, va_list arg)
+int fputc(int ch, FILE* fp)
 {
-    if (fp==stderr)
+    return fprintf(fp, "%c", ch);
+}
+
+int fputs(const char* s, FILE* fp)
+{
+    return fprintf(fp, "%s", s);
+}
+
+char *fgets(char* buf, int len, FILE *fp) /* for registry.c */
+{
+    char *p;
+    ssize_t nread;
+    struct file *filp;
+
+    if (!len)
+	return NULL;
+
+    filp = fp->filp;
+    nread = kernel_read(filp, filp->f_pos, buf, (size_t)len - 1);
+
+    if (nread <= 0)
+	return NULL;
+
+    p = memchr(buf, '\n', nread);
+    if (!p)
     {
-	//		printk("p %d t %d %s[%d] ", current->tgid, current->pid, __FUNCTION__,__LINE__);
-	printk(fmt);
+	*(buf + nread) = 0;
+	filp->f_pos += nread;
     }
     else
     {
-	klog(0,"NOT IMPLEMENT!\n");
+	*++p = 0;
+	filp->f_pos += (p - buf);
     }
+
+    return buf;
+}
+
+int vfprintf(FILE* fp, const char* fmt, va_list args)
+{
+    klog(0,"NOT IMPLEMENT!\n");
     return 0;
 }
 
@@ -2370,8 +2350,20 @@ ssize_t write(int fd, const void *buf, size_t count)
 
 ssize_t pread(int fd, void *buf, size_t count, off_t offset)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+    struct file *file;
+    ssize_t ret = -EBADF;
+
+    file = fget(fd);
+    if (file)
+    {
+	loff_t pos = offset; /* from start of the file */
+	PREPARE_KERNEL_CALL;
+	ret = vfs_read(file, buf, count, &pos);
+	END_KERNEL_CALL;
+	fput(file);
+    }
+
+    SYSCALL_RETURN(ret);
 }
 
 ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset)
@@ -2667,6 +2659,32 @@ int kill(pid_t pid, int sig)
 
 	SYSCALL_RETURN(ret);
 }
+
+#if 0
+long tgkill(int tgid, int pid, int sig);
+{
+	long ret;
+	asmlinkage long (*sys_tgkill)(int tgid, int pid, int sig) = get_kernel_proc_address("sys_tgkill");
+
+	PREPARE_KERNEL_CALL;
+	ret = sys_tgkill(tgid, pid, sig);
+	END_KERNEL_CALL;
+
+	SYSCALL_RETURN(ret);
+}
+
+long tkill(int pid, int sig);
+{
+	long ret;
+	asmlinkage long (*sys_tkill)(int pid, int sig) = get_kernel_proc_address("sys_tkill");
+
+	PREPARE_KERNEL_CALL;
+	ret = sys_tkill(pid, sig);
+	END_KERNEL_CALL;
+
+	SYSCALL_RETURN(ret);
+}
+#endif
 
 ssize_t filp_pread(struct file *filp, char *buf, size_t count, off_t pos)
 {
@@ -3084,8 +3102,15 @@ long ptrace(int request, ...)
 }
 long sysconf(int name)
 {
+    if (name = _SC_PAGESIZE)
+    {
+	return PAGE_SIZE;
+    }
+    else
+    {
 	klog(0,"NOT IMPLEMENT!\n");
 	return 0;
+    }
 }
 int syscall(int number, ...)
 {

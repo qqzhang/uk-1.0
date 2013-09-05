@@ -32,19 +32,23 @@
 #ifdef CONFIG_UNIFIED_KERNEL
 #define SYSCALL_FILE "/dev/syscall"
 
-/* Nt_CreateFirstProcess to use to exchange information between 
- * user space and kernel module*/
+#define FIRST_PROCESS   0x1
+#define NEW_PROCESS     0x2
+#define NEW_THREAD      0x4
+
+/* used by NtEarlyInit */
 struct init_data
 {
-	int  syscall_fd;
-	char *config_dir;
-	int config_dir_len;
+    char        init_type;
+    thread_id_t thread_id;
+    char *      config_dir;
+    int         config_dir_len;
 };
 
 enum syscall
 {
 	Nt_None = 0x2E2E0000,
-	Nt_CreateFirstProcess,
+	Nt_EarlyInit,
 	Nt_WineService,
 	Nt_MaxNum
 };

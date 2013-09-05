@@ -1185,7 +1185,7 @@ void CDECL __wine_kernel_init(void)
         }
         update_library_argv0( main_exe_name );
         if (!build_command_line( __wine_main_wargv )) goto error;
-        start_wineboot( boot_events );
+        //start_wineboot( boot_events );
     }
 
     /* if there's no extension, append a dot to prevent LoadLibrary from appending .dll */
@@ -2028,7 +2028,9 @@ static BOOL create_process( HANDLE hFile, LPCWSTR filename, LPWSTR cmd_line, LPW
     HeapFree( GetProcessHeap(), 0, startup_info );
 
     /* create the child process */
-
+#ifdef CONFIG_UNIFIED_KERNEL
+    socketfd[0] = info->dwThreadId;
+#endif
     pid = exec_loader( cmd_line, flags, socketfd[0], stdin_fd, stdout_fd, unixdir,
                        winedebug, binary_info, FALSE );
 

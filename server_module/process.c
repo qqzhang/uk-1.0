@@ -390,7 +390,14 @@ struct thread *create_process( int fd, struct thread *parent_thread, int inherit
 #endif
     if (!(thread = create_thread( request_pipe[0], process ))) goto error;
 
+#ifdef CONFIG_UNIFIED_KERNEL
+    if (parent_thread == NULL)
+    {
+	add_thread_by_pid( thread, current->pid );
+    }
+#else
     set_fd_events( process->msg_fd, POLLIN );  /* start listening to events */
+#endif
     release_object( process );
     return thread;
 

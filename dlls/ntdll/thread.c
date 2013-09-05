@@ -399,6 +399,30 @@ static void start_thread( struct startup_info *info )
     thread_data->debug_info = &debug_info;
     thread_data->pthread_id = pthread_self();
 
+#ifdef CONFIG_UNIFIED_KERNEL
+    {
+	struct init_data data;
+	int fd ;
+
+	fd = open( SYSCALL_FILE, O_WRONLY);
+	if (fd == -1)
+	{
+	    ERR("open SYSCALL_FILE failed \n");
+	}
+	else
+	{
+	    //	    thread_data->request_fd = fd;
+
+	    memset( &data, 0, sizeof(data));
+
+	    data.init_type = NEW_THREAD;
+	    data.thread_id = teb->ClientId.UniqueThread;
+	    ioctl(fd, Nt_EarlyInit, &data);
+	    close(fd);
+	}
+    }
+#endif
+
     signal_init_thread( teb );
     server_init_thread( func );
     pthread_sigmask( SIG_UNBLOCK, &server_block_set, NULL );
@@ -461,8 +485,10 @@ NTSTATUS WINAPI RtlCreateUserThread( HANDLE process, const SECURITY_DESCRIPTOR *
         return result.create_thread.status;
     }
 
+#ifndef CONFIG_UNIFIED_KERNEL
     if (server_pipe( request_pipe ) == -1) return STATUS_TOO_MANY_OPENED_FILES;
     wine_server_send_fd( request_pipe[0] );
+#endif
 
     SERVER_START_REQ( new_thread )
     {

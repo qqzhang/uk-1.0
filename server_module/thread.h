@@ -23,6 +23,7 @@
 
 #include "object.h"
 #ifdef CONFIG_UNIFIED_KERNEL
+#include <linux/completion.h>
 #include "wine/list.h"
 #endif
 
@@ -60,6 +61,8 @@ struct thread
     pid_t                  pid; /* for find_thread_by_pid()*/
     struct hlist_node      hash_entry;
     int                    unix_errno; /* for global errno macro */
+    struct completion      completion;
+    struct wake_up_reply   wake_info;
 #endif
     struct list_head            mutex_list;    /* list of currently owned mutexes */
     struct debug_ctx      *debug_ctx;     /* debugger context if this thread is a debugger */
@@ -109,6 +112,7 @@ struct thread_snapshot
 /* thread functions */
 
 #ifdef CONFIG_UNIFIED_KERNEL
+extern void add_thread_by_pid(struct thread *thread, pid_t pid);
 extern struct thread* get_thread_by_task(struct task_struct *task);
 extern struct thread* get_current_thread(void);
 #define current_thread get_current_thread()

@@ -107,7 +107,7 @@ static const enum cpu_type client_cpu = CPU_ARM64;
 #endif
 
 #ifdef CONFIG_UNIFIED_KERNEL
-struct init_data init_data;
+static struct init_data init_data;
 #endif
 unsigned int server_cpus = 0;
 int is_wow64 = FALSE;
@@ -301,24 +301,24 @@ unsigned int wine_server_call( void *req_ptr )
     return ret;
 #else
     struct __server_request_info * const req = req_ptr;
-    unsigned int ret;
-    int fd = ntdll_get_thread_data()->request_fd;
+    unsigned int ret = 0;
+    int fd;
 
+    fd = open( SYSCALL_FILE, O_WRONLY);
     if (fd == -1)
     {
-	    fd = open( SYSCALL_FILE, O_WRONLY);
-	    if (fd == -1)
-	    {
-		    ERR("open SYSCALL_FILE error %d \n",errno);
-		    return errno;
-	    }
-	    else
-	    {
-		    ntdll_get_thread_data()->request_fd = fd;
-	    }
+	ERR("open SYSCALL_FILE error %d \n",errno);
+	return errno;
     }
-
-    ret = ioctl(fd, Nt_WineService, req_ptr);
+    else
+    {
+	ret = ioctl(fd, Nt_WineService, req_ptr);
+	if (ret<0)
+	{
+	    ERR("p %d t %d : ioctl ret=%d error %d \n", getpid(), syscall(224), ret, errno);
+	}
+	close(fd);
+    }
 
     return ret;
 #endif
@@ -1124,6 +1124,7 @@ void server_init_process(void)
 void server_init_process(void)
 {
     const char *env_socket = getenv( "WINESERVERSOCKET" );
+    int thread_id;
     int fd;
 
     fd = open( SYSCALL_FILE, O_WRONLY);
@@ -1132,27 +1133,31 @@ void server_init_process(void)
 	    ERR("open SYSCALL_FILE error %d \n",errno);
 	    return errno;
     }
+    else
+    {
+//    ntdll_get_thread_data()->request_fd = fd;
+    }
 
     memset(&init_data, 0, sizeof(struct init_data));
 
-    ntdll_get_thread_data()->request_fd = fd;
-
     if (env_socket)
     {
-        fd_socket = atoi( env_socket );
-        if (fcntl( fd_socket, F_SETFD, 1 ) == -1)
-            fatal_perror( "Bad server socket %d", fd_socket );
+        thread_id = atoi( env_socket );
         unsetenv( "WINESERVERSOCKET" );
 
-	init_data.syscall_fd = -1; /* don't need create_process() */
+	init_data.init_type = NEW_PROCESS;
+	init_data.thread_id = thread_id; /* don't need create_process() */
     }
     else 
     {
 	fd_socket = server_connect();
-	init_data.syscall_fd = fd;
+
+	init_data.init_type = FIRST_PROCESS;
+	init_data.thread_id = 0;
     }
 
-    ioctl(fd, Nt_CreateFirstProcess, &init_data);
+    ioctl(fd, Nt_EarlyInit, &init_data);
+    close(fd);
 
     /* setup the signal mask */
     sigemptyset( &server_block_set );

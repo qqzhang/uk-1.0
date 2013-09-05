@@ -391,6 +391,10 @@ struct timeout_user *add_timeout_user( timeout_t when, timeout_callback func, vo
         if (timeout->when >= user->when) break;
     }
     wine_list_add_before( ptr, &user->entry );
+#ifdef CONFIG_UNIFIED_KERNEL
+    extern struct task_struct* timer_kernel_task;
+    wake_up_process(timer_kernel_task);
+#endif
     return user;
 }
 

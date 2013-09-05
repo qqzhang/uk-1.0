@@ -891,10 +891,12 @@ void close_master_socket( timeout_t timeout )
 char __user *current_config_dir;
 extern void init_registry(const char __user* config_dir, int len);
 
-NTSTATUS NtCreateFirstProcess(int __user* init_data_ptr)
+NTSTATUS NtEarlyInit(int __user* init_data_ptr)
 {
     struct init_data init_data;
-    int syscall_fd;
+    struct thread *new_thread;
+    int thread_id;
+    char type;
 
     memset(&init_data, 0, sizeof(struct init_data));
     if (copy_from_user(&init_data, init_data_ptr, sizeof(struct init_data)))
@@ -903,21 +905,42 @@ NTSTATUS NtCreateFirstProcess(int __user* init_data_ptr)
 	return STATUS_NO_MEMORY;
     }
 
-    syscall_fd = init_data.syscall_fd;
-    if (syscall_fd != -1)
+    type = init_data.init_type;
+    thread_id = init_data.thread_id;
+    switch( type )
     {
-	create_process(syscall_fd, NULL, 0);
-    }
+	case FIRST_PROCESS:
+	    create_process( -1, NULL, 0 );
+	    if (!current_config_dir)
+	    {
+		current_config_dir = init_data.config_dir;
+		init_registry(init_data.config_dir, init_data.config_dir_len);
+	    }
+	    /* TODO */
+	    //else if (!strcmp(current_config_dir, init_data.config_dir))
 
-    if (!current_config_dir)
-    {
-	current_config_dir = init_data.config_dir;
-	init_registry(init_data.config_dir, init_data.config_dir_len);
-    }
-    /* TODO */
-    //else if (!strcmp(current_config_dir, init_data.config_dir))
+	    return STATUS_SUCCESS;
 
-    return get_error();
+	case NEW_PROCESS:
+	case NEW_THREAD:
+	    if (thread_id)
+	    {
+		if (new_thread = get_thread_from_id(thread_id))
+		{
+		    add_thread_by_pid( new_thread, current->pid );
+		}
+		else
+		{
+		    klog(0,"new_thread get error id=%d \n", thread_id);
+		    return STATUS_UNSUCCESSFUL;
+		}
+	    }
+	    return STATUS_SUCCESS;
+
+	default:
+	    klog(0,"Unkown type \n");
+	    return STATUS_NOT_IMPLEMENTED;
+    }
 }
 
 extern char *req_names[];
@@ -934,12 +957,12 @@ NTSTATUS NtWineService(int __user *user_req_info)
 
 	if(!user_req_info || !thread)
 	{
-		return STATUS_INVALID_PARAMETER;
+	    return STATUS_INVALID_PARAMETER;
 	}
 
 	if (copy_from_user(&req_msg, user_req_info, sizeof(req_msg)))
 	{
-		return STATUS_NO_MEMORY;
+	    return STATUS_NO_MEMORY;
 	}
 
 	memcpy(&thread->req, &req_msg, sizeof(thread->req));
@@ -985,8 +1008,10 @@ NTSTATUS NtWineService(int __user *user_req_info)
 	}
 
 	status = get_error();
+#if 1
 	if (status)
-		klog (0, "req=%d : %s done ret=%08x\n",req, req_names[req],status);
+	    klog (0, "req=%d : %s done ret=%08x\n",req, req_names[req],status);
+#endif
 
 	//if (thread->reply_fd)
 	if (thread)
@@ -1054,6 +1079,7 @@ static int syscall_chardev_release(struct inode *inode, struct file *file)
 static int syscall_chardev_ioctl(struct inode *inode, struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	int err = 0;
+	int __user* argp = (int __user*)arg;
 
 	if ( (cmd > Nt_MaxNum) || (cmd < Nt_None) )
 	{
@@ -1065,11 +1091,11 @@ static int syscall_chardev_ioctl(struct inode *inode, struct file *filp, unsigne
 	{
 		case Nt_None:
 			break;
-		case Nt_CreateFirstProcess:
-			err = NtCreateFirstProcess(arg);
+		case Nt_EarlyInit:
+			err = NtEarlyInit(argp);
 			break;
 		case Nt_WineService:
-			err = NtWineService((int __user*)arg);
+			err = NtWineService(argp);
 			break;
 		default:
 			break;

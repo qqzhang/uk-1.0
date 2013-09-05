@@ -1752,7 +1752,6 @@ char * build_reg_name( const char * config_dir , int config_dir_len, const char 
 		return NULL;
 	}
 	memcpy(ret+config_dir_len, regname, strlen(regname)); 
-	klog(0,"regname=%s\n",ret);
 	return ret;
 }
 
@@ -2044,7 +2043,6 @@ done:
 static void periodic_save( void *arg )
 {
     int i;
-    klog(0,"\n");
 
     save_timeout_user = NULL;
     for (i = 0; i < save_branch_count; i++)

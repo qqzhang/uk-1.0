@@ -73,6 +73,7 @@ static const unsigned int supported_cpus = CPU_FLAG(CPU_ARM64);
 #include <linux/spinlock.h>
 #include <linux/rwlock.h>
 #include <linux/sched.h>
+#include <linux/completion.h>
 
 /* for find_thread_by_pid() */
 static DEFINE_RWLOCK(thread_hash_lock);
@@ -92,7 +93,7 @@ void init_thread_hash_table(void)
 		INIT_HLIST_HEAD(&thread_hash_table[i]);
 }
 
-static void add_thread_by_pid(struct thread *thread, pid_t pid)
+void add_thread_by_pid(struct thread *thread, pid_t pid)
 {
 	int slot;
 
@@ -300,6 +301,8 @@ static inline void init_thread_structure( struct thread *thread )
     thread->pid             = -1;  /* not known yet */
     INIT_HLIST_NODE( &thread->hash_entry );
     thread->unix_errno      = 0;
+    init_completion( &thread->completion );
+    memset( &thread->wake_info, 0, sizeof(thread->wake_info));
 #endif
 
     thread->creation_time = current_time;
@@ -361,9 +364,6 @@ struct thread *create_thread( int fd, struct process *process )
     set_fd_events( thread->request_fd, POLLIN );  /* start listening to events */
 #endif
     add_process_thread( thread->process, thread );
-#ifdef CONFIG_UNIFIED_KERNEL
-    add_thread_by_pid( thread, current->pid );
-#endif
     return thread;
 }
 
@@ -788,8 +788,15 @@ static int send_thread_wakeup( struct thread *thread, client_ptr_t cookie, int s
     memset( &reply, 0, sizeof(reply) );
     reply.cookie   = cookie;
     reply.signaled = signaled;
+#ifdef CONFIG_UNIFIED_KERNEL
+    complete( &thread->completion );
+    thread->wake_info.cookie   = cookie;
+    thread->wake_info.signaled = signaled;
+    return 0;
+#else
     if ((ret = write( get_unix_fd( thread->wait_fd ), &reply, sizeof(reply) )) == sizeof(reply))
         return 0;
+#endif
     if (ret >= 0)
         fatal_protocol_error( thread, "partial wakeup write %d\n", ret );
     else if (errno == EPIPE)
@@ -907,7 +914,19 @@ static timeout_t select_on( unsigned int count, client_ptr_t cookie, const obj_h
         }
     }
     current_thread->wait->cookie = cookie;
+#ifdef CONFIG_UNIFIED_KERNEL
+    wait_for_completion( &current_thread->completion );
+    if (cookie == current_thread->wake_info.cookie)
+    {
+	set_error( current_thread->wake_info.signaled );
+    }
+    else
+    {
+	klog(0,"cookie is broken \n");
+    }
+#else
     set_error( STATUS_PENDING );
+#endif
 
 done:
     while (i > 0) release_object( objects[--i] );
@@ -1258,12 +1277,14 @@ DECL_HANDLER(new_thread)
     struct thread *thread;
     int request_fd = thread_get_inflight_fd( current_thread, req->request_fd );
 
+#ifndef CONFIG_UNIFIED_KERNEL
     if (request_fd == -1 || fcntl( request_fd, F_SETFL, O_NONBLOCK ) == -1)
     {
         if (request_fd != -1) close( request_fd );
         set_error( STATUS_INVALID_HANDLE );
         return;
     }
+#endif
 
     if ((thread = create_thread( request_fd, current_thread->process )))
     {
@@ -1302,11 +1323,13 @@ DECL_HANDLER(init_thread)
         goto error;
     }
 
+#ifndef CONFIG_UNIFIED_KERNEL
     if (fcntl( reply_fd, F_SETFL, O_NONBLOCK ) == -1) goto error;
 
     current_thread->reply_fd = create_anonymous_fd( &thread_fd_ops, reply_fd, &current_thread->obj, 0 );
     current_thread->wait_fd  = create_anonymous_fd( &thread_fd_ops, wait_fd, &current_thread->obj, 0 );
     if (!current_thread->reply_fd || !current_thread->wait_fd) return;
+#endif
 
     if (!is_valid_address(req->teb))
     {
