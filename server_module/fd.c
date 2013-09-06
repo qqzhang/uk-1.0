@@ -173,7 +173,7 @@ struct fd
 {
     struct object        obj;         /* object header */
     const struct fd_ops *fd_ops;      /* file descriptor operations */
-    struct inode        *inode;       /* inode that this fd belongs to */
+    struct uk_inode        *inode;       /* inode that this fd belongs to */
     struct list_head          inode_entry; /* entry in inode fd list */
     struct closed_fd    *closed;      /* structure to store the unix fd at destroy time */
     struct object       *user;        /* object using this file descriptor */
@@ -257,7 +257,7 @@ static const struct object_ops device_ops =
 
 /* inode object */
 
-struct inode
+struct uk_inode
 {
     struct object       obj;        /* object header */
     struct list_head         entry;      /* inode hash list entry */
@@ -273,7 +273,7 @@ static void inode_destroy( struct object *obj );
 
 static const struct object_ops inode_ops =
 {
-    sizeof(struct inode),     /* size */
+    sizeof(struct uk_inode),     /* size */
     inode_dump,               /* dump */
     no_get_type,              /* get_type */
     no_add_queue,             /* add_queue */
@@ -293,7 +293,7 @@ static const struct object_ops inode_ops =
 
 /* file lock object */
 
-struct file_lock
+struct uk_file_lock
 {
     struct object       obj;         /* object header */
     struct fd          *fd;          /* fd owning this lock */
@@ -311,7 +311,7 @@ static int file_lock_signaled( struct object *obj, struct thread *thread );
 
 static const struct object_ops file_lock_ops =
 {
-    sizeof(struct file_lock),   /* size */
+    sizeof(struct uk_file_lock),   /* size */
     file_lock_dump,             /* dump */
     no_get_type,                /* get_type */
     add_queue,                  /* add_queue */
@@ -1062,7 +1062,7 @@ static void device_destroy( struct object *obj )
 /* inode functions */
 
 /* close all pending file descriptors in the closed list */
-static void inode_close_pending( struct inode *inode, int keep_unlinks )
+static void inode_close_pending( struct uk_inode *inode, int keep_unlinks )
 {
     struct list_head *ptr = list_head( &inode->closed );
 
@@ -1087,7 +1087,7 @@ static void inode_close_pending( struct inode *inode, int keep_unlinks )
 
 static void inode_dump( struct object *obj, int verbose )
 {
-    struct inode *inode = (struct inode *)obj;
+    struct uk_inode *inode = (struct uk_inode *)obj;
     fprintf( stderr, "Inode device=%p ino=", inode->device );
     DUMP_LONG_LONG( inode->ino );
     fprintf( stderr, "\n" );
@@ -1095,7 +1095,7 @@ static void inode_dump( struct object *obj, int verbose )
 
 static void inode_destroy( struct object *obj )
 {
-    struct inode *inode = (struct inode *)obj;
+    struct uk_inode *inode = (struct uk_inode *)obj;
     struct list_head *ptr;
 
     assert( list_empty(&inode->open) );
@@ -1124,20 +1124,20 @@ static void inode_destroy( struct object *obj )
 }
 
 /* retrieve the inode object for a given fd, creating it if needed */
-static struct inode *get_inode( dev_t dev, ino_t ino, int unix_fd )
+static struct uk_inode *get_inode( dev_t dev, ino_t ino, int unix_fd )
 {
     struct device *device;
-    struct inode *inode;
+    struct uk_inode *inode;
     unsigned int hash = ino % INODE_HASH_SIZE;
 
     if (!(device = get_device( dev, unix_fd ))) return NULL;
 
-    LIST_FOR_EACH_ENTRY( inode, &device->inode_hash[hash], struct inode, entry )
+    LIST_FOR_EACH_ENTRY( inode, &device->inode_hash[hash], struct uk_inode, entry )
     {
         if (inode->ino == ino)
         {
             release_object( device );
-            return (struct inode *)grab_object( inode );
+            return (struct uk_inode *)grab_object( inode );
         }
     }
 
@@ -1157,7 +1157,7 @@ static struct inode *get_inode( dev_t dev, ino_t ino, int unix_fd )
 }
 
 /* add fd to the inode list of file descriptors to close */
-static void inode_add_closed_fd( struct inode *inode, struct closed_fd *fd )
+static void inode_add_closed_fd( struct uk_inode *inode, struct closed_fd *fd )
 {
     if (!list_empty( &inode->locks ))
     {
@@ -1182,7 +1182,7 @@ static void inode_add_closed_fd( struct inode *inode, struct closed_fd *fd )
 
 static void file_lock_dump( struct object *obj, int verbose )
 {
-    struct file_lock *lock = (struct file_lock *)obj;
+    struct uk_file_lock *lock = (struct uk_file_lock *)obj;
     fprintf( stderr, "Lock %s fd=%p proc=%p start=",
              lock->shared ? "shared" : "excl", lock->fd, lock->process );
     DUMP_LONG_LONG( lock->start );
@@ -1193,7 +1193,7 @@ static void file_lock_dump( struct object *obj, int verbose )
 
 static int file_lock_signaled( struct object *obj, struct thread *thread )
 {
-    struct file_lock *lock = (struct file_lock *)obj;
+    struct uk_file_lock *lock = (struct uk_file_lock *)obj;
     /* lock is signaled if it has lost its owner */
     return !lock->process;
 }
@@ -1259,7 +1259,7 @@ static int set_unix_lock( struct fd *fd, file_pos_t start, file_pos_t end, int t
 }
 
 /* check if interval [start;end) overlaps the lock */
-static inline int lock_overlaps( struct file_lock *lock, file_pos_t start, file_pos_t end )
+static inline int lock_overlaps( struct uk_file_lock *lock, file_pos_t start, file_pos_t end )
 {
     if (lock->end && start >= lock->end) return 0;
     if (end && lock->start >= end) return 0;
@@ -1289,7 +1289,7 @@ static void remove_unix_locks( struct fd *fd, file_pos_t start, file_pos_t end )
 
     LIST_FOR_EACH( ptr, &fd->inode->locks )
     {
-        struct file_lock *lock = LIST_ENTRY( ptr, struct file_lock, inode_entry );
+        struct uk_file_lock *lock = LIST_ENTRY( ptr, struct uk_file_lock, inode_entry );
         if (lock->start == lock->end) continue;
         if (lock_overlaps( lock, start, end )) count++;
     }
@@ -1315,7 +1315,7 @@ static void remove_unix_locks( struct fd *fd, file_pos_t start, file_pos_t end )
 
     LIST_FOR_EACH( ptr, &fd->inode->locks )
     {
-        struct file_lock *lock = LIST_ENTRY( ptr, struct file_lock, inode_entry );
+        struct uk_file_lock *lock = LIST_ENTRY( ptr, struct uk_file_lock, inode_entry );
         if (lock->start == lock->end) continue;
         if (!lock_overlaps( lock, start, end )) continue;
 
@@ -1367,9 +1367,9 @@ static void remove_unix_locks( struct fd *fd, file_pos_t start, file_pos_t end )
 }
 
 /* create a new lock on a fd */
-static struct file_lock *add_lock( struct fd *fd, int shared, file_pos_t start, file_pos_t end )
+static struct uk_file_lock *add_lock( struct fd *fd, int shared, file_pos_t start, file_pos_t end )
 {
-    struct file_lock *lock;
+    struct uk_file_lock *lock;
 
     if (!(lock = alloc_object( &file_lock_ops ))) return NULL;
     lock->shared  = shared;
@@ -1391,9 +1391,9 @@ static struct file_lock *add_lock( struct fd *fd, int shared, file_pos_t start, 
 }
 
 /* remove an existing lock */
-static void remove_lock( struct file_lock *lock, int remove_unix )
+static void remove_lock( struct uk_file_lock *lock, int remove_unix )
 {
-    struct inode *inode = lock->fd->inode;
+    struct uk_inode *inode = lock->fd->inode;
 
     list_remove( &lock->fd_entry );
     list_remove( &lock->inode_entry );
@@ -1412,7 +1412,7 @@ void remove_process_locks( struct process *process )
 
     while ((ptr = list_head( &process->locks )))
     {
-        struct file_lock *lock = LIST_ENTRY( ptr, struct file_lock, proc_entry );
+        struct uk_file_lock *lock = LIST_ENTRY( ptr, struct uk_file_lock, proc_entry );
         remove_lock( lock, 1 );  /* this removes it from the list */
     }
 }
@@ -1425,7 +1425,7 @@ static void remove_fd_locks( struct fd *fd )
 
     while ((ptr = list_head( &fd->locks )))
     {
-        struct file_lock *lock = LIST_ENTRY( ptr, struct file_lock, fd_entry );
+        struct uk_file_lock *lock = LIST_ENTRY( ptr, struct uk_file_lock, fd_entry );
         if (lock->start < start) start = lock->start;
         if (!lock->end || lock->end > end) end = lock->end - 1;
         remove_lock( lock, 0 );
@@ -1456,7 +1456,7 @@ obj_handle_t lock_fd( struct fd *fd, file_pos_t start, file_pos_t count, int sha
     /* check if another lock on that file overlaps the area */
     LIST_FOR_EACH( ptr, &fd->inode->locks )
     {
-        struct file_lock *lock = LIST_ENTRY( ptr, struct file_lock, inode_entry );
+        struct uk_file_lock *lock = LIST_ENTRY( ptr, struct uk_file_lock, inode_entry );
         if (!lock_overlaps( lock, start, end )) continue;
         if (shared && (lock->shared || lock->fd == fd)) continue;
         /* found one */
@@ -1488,7 +1488,7 @@ void unlock_fd( struct fd *fd, file_pos_t start, file_pos_t count )
     /* find an existing lock with the exact same parameters */
     LIST_FOR_EACH( ptr, &fd->locks )
     {
-        struct file_lock *lock = LIST_ENTRY( ptr, struct file_lock, fd_entry );
+        struct uk_file_lock *lock = LIST_ENTRY( ptr, struct uk_file_lock, fd_entry );
         if ((lock->start == start) && (lock->end == end))
         {
             remove_lock( lock, 1 );
@@ -1719,7 +1719,7 @@ struct fd *dup_fd_object( struct fd *orig, unsigned int access, unsigned int sha
         closed->unix_fd = fd->unix_fd;
         closed->unlink[0] = 0;
         fd->closed = closed;
-        fd->inode = (struct inode *)grab_object( orig->inode );
+        fd->inode = (struct uk_inode *)grab_object( orig->inode );
         wine_list_add_head( &fd->inode->open, &fd->inode_entry );
         if ((err = check_sharing( fd, access, sharing, 0, options )))
         {
@@ -1873,7 +1873,7 @@ struct fd *open_fd( struct fd *root, const char *name, int flags, mode_t *mode, 
     if (S_ISREG(st.st_mode) || S_ISDIR(st.st_mode))
     {
         unsigned int err;
-        struct inode *inode = get_inode( st.st_dev, st.st_ino, fd->unix_fd );
+        struct uk_inode *inode = get_inode( st.st_dev, st.st_ino, fd->unix_fd );
 
         if (!inode)
         {
@@ -2188,7 +2188,7 @@ static void unmount_device( struct fd *device_fd )
     unsigned int i;
     struct stat st;
     struct device *device;
-    struct inode *inode;
+    struct uk_inode *inode;
     struct fd *fd;
     int unix_fd = get_unix_fd( device_fd );
 
@@ -2204,7 +2204,7 @@ static void unmount_device( struct fd *device_fd )
 
     for (i = 0; i < INODE_HASH_SIZE; i++)
     {
-        LIST_FOR_EACH_ENTRY( inode, &device->inode_hash[i], struct inode, entry )
+        LIST_FOR_EACH_ENTRY( inode, &device->inode_hash[i], struct uk_inode, entry )
         {
             LIST_FOR_EACH_ENTRY( fd, &inode->open, struct fd, inode_entry )
             {
