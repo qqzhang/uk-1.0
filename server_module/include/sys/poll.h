@@ -1,6 +1,9 @@
 #ifndef _SYS_POLL_H_
 #define _SYS_POLL_H_
 
+#include <linux/poll.h>
+
+#if 0
 #define POLLIN		0x0001
 #define POLLPRI		0x0002
 #define POLLOUT		0x0004
@@ -17,5 +20,6 @@ struct pollfd {
     short events;     /* requested events */
     short revents;    /* returned events */
 };
+#endif
 
 #endif

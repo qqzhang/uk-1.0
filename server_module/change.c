@@ -112,9 +112,9 @@ static inline int inotify_rm_watch( int fd, int wd )
 
 #endif
 
-struct inode;
+struct change_inode;
 
-static void free_inode( struct inode *inode );
+static void free_inode( struct change_inode *inode );
 
 static struct fd *inotify_fd;
 
@@ -137,7 +137,7 @@ struct dir
     int            subtree;  /* do we want to watch subdirectories? */
     struct list_head    change_records;   /* data for the change */
     struct list_head    in_entry; /* entry in the inode dirs list */
-    struct inode  *inode;    /* inode of the associated directory */
+    struct change_inode  *inode;    /* inode of the associated directory */
 };
 
 static struct fd *dir_get_fd( struct object *obj );
@@ -415,10 +415,10 @@ static enum server_fd_type dir_get_fd_type( struct fd *fd )
 
 #define HASH_SIZE 31
 
-struct inode {
+struct change_inode {
     struct list_head ch_entry;    /* entry in the children list */
     struct list_head children;    /* children of this inode */
-    struct inode *parent;    /* parent of this inode */
+    struct change_inode *parent;    /* parent of this inode */
     struct list_head dirs;        /* directory handles watching this inode */
     struct list_head ino_entry;   /* entry in the inode hash */
     struct list_head wd_entry;    /* entry in the watch descriptor hash */
@@ -433,12 +433,12 @@ static struct list_head wd_hash[ HASH_SIZE ];
 
 static int inotify_add_dir( char *path, unsigned int filter );
 
-static struct inode *inode_from_wd( int wd )
+static struct change_inode *inode_from_wd( int wd )
 {
     struct list_head *bucket = &wd_hash[ wd % HASH_SIZE ];
-    struct inode *inode;
+    struct change_inode *inode;
 
-    LIST_FOR_EACH_ENTRY( inode, bucket, struct inode, wd_entry )
+    LIST_FOR_EACH_ENTRY( inode, bucket, struct change_inode, wd_entry )
         if (inode->wd == wd)
             return inode;
 
@@ -450,21 +450,21 @@ static inline struct list_head *get_hash_list( dev_t dev, ino_t ino )
     return &inode_hash[ (ino ^ dev) % HASH_SIZE ];
 }
 
-static struct inode *find_inode( dev_t dev, ino_t ino )
+static struct change_inode *find_inode( dev_t dev, ino_t ino )
 {
     struct list_head *bucket = get_hash_list( dev, ino );
-    struct inode *inode;
+    struct change_inode *inode;
 
-    LIST_FOR_EACH_ENTRY( inode, bucket, struct inode, ino_entry )
+    LIST_FOR_EACH_ENTRY( inode, bucket, struct change_inode, ino_entry )
         if (inode->ino == ino && inode->dev == dev)
              return inode;
 
     return NULL;
 }
 
-static struct inode *create_inode( dev_t dev, ino_t ino )
+static struct change_inode *create_inode( dev_t dev, ino_t ino )
 {
-    struct inode *inode;
+    struct change_inode *inode;
 
     inode = malloc( sizeof *inode );
     if (inode)
@@ -481,9 +481,9 @@ static struct inode *create_inode( dev_t dev, ino_t ino )
     return inode;
 }
 
-static struct inode *get_inode( dev_t dev, ino_t ino )
+static struct change_inode *get_inode( dev_t dev, ino_t ino )
 {
-    struct inode *inode;
+    struct change_inode *inode;
 
     inode = find_inode( dev, ino );
     if (inode)
@@ -491,7 +491,7 @@ static struct inode *get_inode( dev_t dev, ino_t ino )
     return create_inode( dev, ino );
 }
 
-static void inode_set_wd( struct inode *inode, int wd )
+static void inode_set_wd( struct change_inode *inode, int wd )
 {
     if (inode->wd != -1)
         list_remove( &inode->wd_entry );
@@ -499,16 +499,16 @@ static void inode_set_wd( struct inode *inode, int wd )
     wine_list_add_tail( &wd_hash[ wd % HASH_SIZE ], &inode->wd_entry );
 }
 
-static void inode_set_name( struct inode *inode, const char *name )
+static void inode_set_name( struct change_inode *inode, const char *name )
 {
     free (inode->name);
     inode->name = name ? strdup( name ) : NULL;
 }
 
-static void free_inode( struct inode *inode )
+static void free_inode( struct change_inode *inode )
 {
     int subtree = 0, watches = 0;
-    struct inode *tmp, *next;
+    struct change_inode *tmp, *next;
     struct dir *dir;
 
     LIST_FOR_EACH_ENTRY( dir, &inode->dirs, struct dir, in_entry )
@@ -520,7 +520,7 @@ static void free_inode( struct inode *inode )
     if (!subtree && !inode->parent)
     {
         LIST_FOR_EACH_ENTRY_SAFE( tmp, next, &inode->children,
-                                  struct inode, ch_entry )
+                                  struct change_inode, ch_entry )
         {
             assert( tmp != inode );
             assert( tmp->parent == inode );
@@ -535,7 +535,7 @@ static void free_inode( struct inode *inode )
         list_remove( &inode->ch_entry );
 
     /* disconnect remaining children from the parent */
-    LIST_FOR_EACH_ENTRY_SAFE( tmp, next, &inode->children, struct inode, ch_entry )
+    LIST_FOR_EACH_ENTRY_SAFE( tmp, next, &inode->children, struct change_inode, ch_entry )
     {
         list_remove( &tmp->ch_entry );
         tmp->parent = NULL;
@@ -552,10 +552,10 @@ static void free_inode( struct inode *inode )
     free( inode );
 }
 
-static struct inode *inode_add( struct inode *parent,
+static struct change_inode *inode_add( struct change_inode *parent,
                                 dev_t dev, ino_t ino, const char *name )
 {
-    struct inode *inode;
+    struct change_inode *inode;
  
     inode = get_inode( dev, ino );
     if (!inode)
@@ -572,11 +572,11 @@ static struct inode *inode_add( struct inode *parent,
     return inode;
 }
 
-static struct inode *inode_from_name( struct inode *inode, const char *name )
+static struct change_inode *inode_from_name( struct change_inode *inode, const char *name )
 {
-    struct inode *i;
+    struct change_inode *i;
 
-    LIST_FOR_EACH_ENTRY( i, &inode->children, struct inode, ch_entry )
+    LIST_FOR_EACH_ENTRY( i, &inode->children, struct change_inode, ch_entry )
         if (i->name && !strcmp( i->name, name ))
             return i;
     return NULL;
@@ -651,7 +651,7 @@ static unsigned int filter_from_event( struct inotify_event *ie )
 }
 
 /* scan up the parent directories for watches */
-static unsigned int filter_from_inode( struct inode *inode, int is_parent )
+static unsigned int filter_from_inode( struct change_inode *inode, int is_parent )
 {
     unsigned int filter = 0;
     struct dir *dir;
@@ -669,7 +669,7 @@ static unsigned int filter_from_inode( struct inode *inode, int is_parent )
     return filter;
 }
 
-static char *inode_get_path( struct inode *inode, int sz )
+static char *inode_get_path( struct change_inode *inode, int sz )
 {
     struct list_head *head;
     char *path;
@@ -702,11 +702,11 @@ static char *inode_get_path( struct inode *inode, int sz )
     return path;
 }
 
-static void inode_check_dir( struct inode *parent, const char *name )
+static void inode_check_dir( struct change_inode *parent, const char *name )
 {
     char *path;
     unsigned int filter;
-    struct inode *inode;
+    struct change_inode *inode;
     struct stat st;
     int wd = -1;
 
@@ -767,7 +767,7 @@ static int prepend( char **path, const char *segment )
 static void inotify_notify_all( struct inotify_event *ie )
 {
     unsigned int filter, action;
-    struct inode *inode, *i;
+    struct change_inode *inode, *i;
     char *path = NULL;
     struct dir *dir;
 
@@ -912,7 +912,7 @@ static int init_inotify( void )
 static int inotify_adjust_changes( struct dir *dir )
 {
     unsigned int filter;
-    struct inode *inode;
+    struct change_inode *inode;
     struct stat st;
     char path[32];
     int wd, unix_fd;
@@ -989,7 +989,7 @@ static char *get_basename( const char *link )
 
 static int dir_add_to_existing_notify( struct dir *dir )
 {
-    struct inode *inode, *parent;
+    struct change_inode *inode, *parent;
     unsigned int filter = 0;
     struct stat st, st_new;
     char link[35], *name;
@@ -1060,7 +1060,7 @@ static int inotify_adjust_changes( struct dir *dir )
     return 0;
 }
 
-static void free_inode( struct inode *inode )
+static void free_inode( struct change_inode *inode )
 {
     assert( 0 );
 }
