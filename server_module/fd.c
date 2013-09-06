@@ -101,6 +101,8 @@
 
 #ifdef CONFIG_UNIFIED_KERNEL
 #include <linux/kthread.h>
+#include <linux/poll.h>
+#include <linux/file.h>
 #include <asm/div64.h>
 #include "log.h"
 #endif
@@ -169,6 +171,17 @@ struct closed_fd
     char        unlink[1];   /* name to unlink on close (if any) */
 };
 
+#ifdef CONFIG_UNIFIED_KERNEL
+struct uk_poll_wqueues
+{
+    struct poll_wqueues table;
+    struct poll_table_entry uk_pt_entry;/* only need one. */
+    struct fd *fd;
+    int have_inited_flag;/* have run __uk_pollwait to init waitqueue. */
+    int	pending_event;
+};
+#endif
+
 struct fd
 {
     struct object        obj;         /* object header */
@@ -193,6 +206,9 @@ struct fd
     struct async_queue  *wait_q;      /* other async waiters of this fd */
     struct uk_completion   *completion;  /* completion object attached to this fd */
     apc_param_t          comp_key;    /* completion key to set in completion events */
+#ifdef CONFIG_UNIFIED_KERNEL
+    struct uk_poll_wqueues	uk_pwq;
+#endif
 };
 
 static void fd_dump( struct object *obj, int verbose );
@@ -420,7 +436,7 @@ const char *get_timeout_str( timeout_t timeout )
         secs = -timeout / TICKS_PER_SEC;
         nsecs = -timeout % TICKS_PER_SEC;
 #else
-	timeout_t t = -timeout;
+        timeout_t t = -timeout;
         nsecs = do_div(t,TICKS_PER_SEC);
         secs = t;
 #endif
@@ -432,7 +448,7 @@ const char *get_timeout_str( timeout_t timeout )
         secs = (timeout - current_time) / TICKS_PER_SEC;
         nsecs = (timeout - current_time) % TICKS_PER_SEC;
 #else
-	timeout_t t = (timeout - current_time);
+        timeout_t t = (timeout - current_time);
         nsecs = do_div(t,TICKS_PER_SEC);
         secs = t;
 #endif
@@ -465,20 +481,336 @@ static struct fd **freelist;                /* list of free entries in the array
 
 static int get_next_timeout(void);
 
+#ifdef CONFIG_UNIFIED_KERNEL
+static inline void fd_poll_event( struct fd *fd, int event )
+{
+    if (fd && fd->fd_ops && fd->fd_ops->poll_event)
+    {
+        if(fd->uk_pwq.pending_event != 0
+                && (fd->uk_pwq.pending_event == event) && event&(POLLERR|POLLHUP))
+        {
+            /* avoid recursive call the fd_poll_event.*/
+            printk("fd_poll_event fd->uk_pwq.pending_event != 0\n");
+            return;
+        }
+        else
+        {
+            fd->uk_pwq.pending_event = event;
+        }
+
+        fd->fd_ops->poll_event(fd, event);
+
+        fd->uk_pwq.pending_event = 0;
+    }
+}
+#else
 static inline void fd_poll_event( struct fd *fd, int event )
 {
     fd->fd_ops->poll_event( fd, event );
 }
+#endif
 
 #ifdef USE_EPOLL
 
 static int epoll_fd = -1;
+
+#ifdef CONFIG_UNIFIED_KERNEL
+void uk_poll_initwait(struct uk_poll_wqueues *uk_pwq);
+void uk_poll_freewait(struct uk_poll_wqueues *uk_pwq);
+int uk_add_fd_events(struct uk_poll_wqueues *uk_pwq,struct fd *fd,struct file *file,int events);
+int uk_modify_fd_events(struct uk_poll_wqueues *uk_pwq,int events);
+int uk_remove_fd_events(struct uk_poll_wqueues *uk_pwq);
+static struct poll_table_entry *uk_poll_get_entry(struct uk_poll_wqueues *uk_pwq);
+
+struct file *get_unix_file(struct fd *fd)
+{
+    struct file* filp;
+
+    if (fd->unix_fd != -1)
+    {
+        filp = fget(fd->unix_fd);
+        if (filp)
+            return filp;
+        else
+        {
+            klog(0,"filp is NULL \n");
+            return NULL;
+        }
+    }
+    else
+    {
+        klog(0," unix_fd is invalid \n");
+    }
+}
+/*
+ * unifiedkernel use the function to poll struct file.
+ */
+static inline unsigned int uk_do_poll_file(struct file *file, int events,poll_table *pwait)
+{
+    unsigned int mask;
+
+    mask = DEFAULT_POLLMASK;
+    if (file->f_op && file->f_op->poll)
+    {
+        if (pwait)
+            pwait->key = events|POLLERR | POLLHUP;
+        mask = file->f_op->poll(file, pwait);
+    }
+    /* Mask out unneeded events. */
+    mask &= events | POLLERR | POLLHUP;
+    return mask;
+}
+
+static inline unsigned int uk_do_pollfd(struct pollfd *pollfd, poll_table *pwait)
+{
+    unsigned int mask;
+    int fd;
+
+    mask = 0;
+    fd = pollfd->fd;
+    if (fd >= 0) {
+        struct file * file;
+
+        file = fget(fd);
+        mask = POLLNVAL;
+        if (file != NULL) {
+            uk_do_poll_file(file,pollfd->events,pwait);
+            fput(file);
+        }
+    }
+    pollfd->revents = mask;
+
+    return mask;
+}
+
+/* old __pollwake use default */
+static int __uk_pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key,int entry_events)
+{
+    struct poll_wqueues *pwq = wait->private;
+    struct uk_poll_wqueues *uk_pwq;
+    int events;
+    struct file *file;
+    int poll_events;
+    struct poll_table_entry *entry;
+
+    /*
+     * Although this function is called under waitqueue lock, LOCK
+     * doesn't imply write barrier and the users expect write
+     * barrier semantics on wakeup functions.  The following
+     * smp_wmb() is equivalent to smp_wmb() in try_to_wake_up()
+     * and is paired with set_mb() in poll_schedule_timeout.
+     */
+    smp_wmb();
+    pwq->triggered = 1;
+
+    uk_pwq = (struct uk_poll_wqueues *)pwq;
+    entry = uk_poll_get_entry(uk_pwq);
+
+    /*need to filter the key.*/
+    events = (int)(key) & entry_events;
+    file = get_unix_file(uk_pwq->fd);
+    poll_events = file->f_op->poll(file,NULL) & entry_events;
+
+    if(events != poll_events )
+    {
+        printk("poll_events:%d.events:%d,(int)(key):%d,entry_events:%d.\n",poll_events,events,(int)(key),entry_events);	
+    }
+
+    /* use fd_poll_event to deal with events.*/
+    if(uk_pwq->fd != NULL && poll_events != 0)
+    {
+        spin_unlock(&entry->wait_address->lock);
+        fd_poll_event(uk_pwq->fd, poll_events );
+        spin_lock(&entry->wait_address->lock);
+    }
+
+    return 1;
+}
+
+static int uk_pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key)
+{
+    struct poll_table_entry *entry;
+
+    entry = container_of(wait, struct poll_table_entry, wait);
+
+    if (key && !((unsigned long)key & entry->key))
+        return 0;
+
+    return __uk_pollwake(wait, mode, sync, key,entry->key);
+}
+
+/* only one poll_table_entry */
+static struct poll_table_entry *uk_poll_get_entry(struct uk_poll_wqueues *uk_pwq)
+{
+    return &uk_pwq->uk_pt_entry;
+}
+
+/*
+ * if struct file have data,must deal with it.
+ * private_data is struct fd
+ */
+int uk_add_fd_events(struct uk_poll_wqueues *uk_pwq,struct fd *fd,struct file *file,int events)
+{
+    if(uk_pwq->have_inited_flag == false)
+    {
+        poll_table* pt;
+        unsigned int mask;
+
+        uk_poll_initwait(uk_pwq);
+        pt = &uk_pwq->table.pt;
+        uk_pwq->fd = fd;
+        mask = uk_do_poll_file(file,events,pt);
+        if(uk_pwq->fd != NULL && mask)
+        {
+            fd_poll_event(uk_pwq->fd, mask );
+        }
+    }
+    else
+    {
+        /* have inited. */
+        uk_modify_fd_events(uk_pwq,events);
+    }
+    return 0;
+}
+
+int uk_remove_fd_events(struct uk_poll_wqueues *uk_pwq)
+{
+    struct poll_table_entry *entry;
+
+    /* think this carefully,is it necceary?. */
+    if(uk_pwq->have_inited_flag == false)
+        return 0;
+
+    entry = uk_poll_get_entry(uk_pwq);
+    if(entry)
+        entry->key = 0;
+
+    return 0;
+}
+
+/* change poll fd's events. */
+int uk_modify_fd_events(struct uk_poll_wqueues *uk_pwq,int events)
+{
+    struct poll_table_entry *entry;
+    unsigned int mask;
+
+    /* think this carefully,is it necceary?. */
+    if(uk_pwq->have_inited_flag == false)
+        return 0;
+
+    entry = uk_poll_get_entry(uk_pwq);
+    if(entry)
+        entry->key = events|POLLERR | POLLHUP;
+
+    if(uk_pwq->fd != NULL)
+    {
+        mask = uk_do_poll_file(get_unix_file(uk_pwq->fd),events,NULL);
+        if(mask)
+        {
+            fd_poll_event(uk_pwq->fd, mask );
+        }
+    }
+    return 0;
+}
+
+/* if first call file->f_op->poll,the function will be callback. */
+static void __uk_pollwait(struct file *filp, wait_queue_head_t *wait_address,
+        poll_table *p)
+{
+    struct uk_poll_wqueues *uk_pwq;
+    struct poll_table_entry *entry;
+    struct poll_wqueues *pwq;
+
+    pwq = container_of(p, struct poll_wqueues, pt);
+    uk_pwq = (struct uk_poll_wqueues *)pwq;
+    entry = uk_poll_get_entry(uk_pwq);
+    if (entry)
+    {
+        get_file(filp);
+        entry->filp = filp;
+        entry->wait_address = wait_address;
+        entry->key = p->key;
+        init_waitqueue_func_entry(&entry->wait, uk_pollwake);
+        entry->wait.private = pwq;
+        add_wait_queue(wait_address, &entry->wait);
+        uk_pwq->have_inited_flag = true;
+    }
+}
+
+void uk_poll_initwait(struct uk_poll_wqueues *uk_pwq)
+{
+    struct poll_wqueues *pwq;
+
+    pwq = (struct poll_wqueues *)uk_pwq;
+    init_poll_funcptr(&pwq->pt, __uk_pollwait);
+    pwq->polling_task = current;
+    pwq->triggered = 0;
+    pwq->error = 0;
+    pwq->table = NULL;
+    pwq->inline_index = 0;
+}
+
+/* need to check whether pwd have been initd. */
+void uk_poll_freewait(struct uk_poll_wqueues *uk_pwq)
+{
+    if(uk_pwq && uk_pwq->have_inited_flag)
+    {
+        struct poll_table_entry *entry = uk_poll_get_entry(uk_pwq);
+
+        /*maybe have error,can not remove wait in callback.*/
+        remove_wait_queue(entry->wait_address, &entry->wait);
+        fput(entry->filp);
+        uk_pwq->have_inited_flag = false;
+    }
+}
+
+void uk_freewait_for_sock_destroy(struct fd *fd)
+{
+    uk_poll_freewait(&fd->uk_pwq);
+}
+
+void uk_wake_poll_freewait(struct fd *fd)
+{
+    uk_poll_freewait(&fd->uk_pwq);
+}
+
+
+int uk_wake_poll_add_fd_events(struct fd *fd,struct file *file,int events)
+{
+    return uk_add_fd_events(&fd->uk_pwq,fd,file,events);
+}
+
+#endif
 
 static inline void init_epoll(void)
 {
     epoll_fd = epoll_create( 128 );
 }
 
+#ifdef CONFIG_UNIFIED_KERNEL
+/* set the events that epoll waits for on this fd; helper for set_fd_events */
+static inline void set_fd_epoll_events( struct fd *fd, int user, int events )
+{
+    if (events == -1)  /* stop waiting on this fd completely */
+    {
+        if (pollfd[user].fd == -1) return;  /* already removed */
+        //ctl = EPOLL_CTL_DEL;
+        uk_remove_fd_events(&fd->uk_pwq);
+    }
+    else if (pollfd[user].fd == -1)
+    {
+        if (pollfd[user].events) return;  /* stopped waiting on it, don't restart */
+        //ctl = EPOLL_CTL_ADD;
+        uk_add_fd_events(&fd->uk_pwq,fd,get_unix_file(fd),events);
+    }
+    else
+    {
+        if (pollfd[user].events == events) return;  /* nothing to do */
+        //ctl = EPOLL_CTL_MOD;
+        uk_modify_fd_events(&fd->uk_pwq,events);
+    }
+}
+#else
 /* set the events that epoll waits for on this fd; helper for set_fd_events */
 static inline void set_fd_epoll_events( struct fd *fd, int user, int events )
 {
@@ -517,6 +849,7 @@ static inline void set_fd_epoll_events( struct fd *fd, int user, int events )
         else perror( "epoll_ctl" );  /* should not happen */
     }
 }
+#endif
 
 static inline void remove_epoll_user( struct fd *fd, int user )
 {
@@ -859,29 +1192,29 @@ static void remove_poll_user( struct fd *fd, int user )
 #ifdef CONFIG_UNIFIED_KERNEL
 void timer_loop(void)
 {
-	unsigned int msecs, timeout, next;
+    unsigned int msecs, timeout, next;
 
-	msecs = 10000;
-	timeout = msecs_to_jiffies(msecs) + 1;
-	while (1)
-	{
-		next = get_next_timeout();
-		if (kthread_should_stop())
-		{
-			return;
-		}
+    msecs = 10000;
+    timeout = msecs_to_jiffies(msecs) + 1;
+    while (1)
+    {
+        next = get_next_timeout();
+        if (kthread_should_stop())
+        {
+            return;
+        }
 
-		set_current_state(TASK_INTERRUPTIBLE);
-		if (next == -1)
-		{
-			schedule_timeout(timeout);
-		}
-		else
-		{
-			next = msecs_to_jiffies(next) + 1;
-			schedule_timeout(next);
-		}
-	}
+        set_current_state(TASK_INTERRUPTIBLE);
+        if (next == -1)
+        {
+            schedule_timeout(timeout);
+        }
+        else
+        {
+            next = msecs_to_jiffies(next) + 1;
+            schedule_timeout(next);
+        }
+    }
 }
 #endif
 
@@ -923,10 +1256,10 @@ static int get_next_timeout(void)
 #ifndef CONFIG_UNIFIED_KERNEL
             int diff = (timeout->when - current_time + 9999) / 10000;
 #else
-	    int diff = 0;
-	    u64 tmp = (timeout->when - current_time + 9999);
-	    do_div(tmp, 10000);
-	    diff = (int)tmp;
+            int diff = 0;
+            u64 tmp = (timeout->when - current_time + 9999);
+            do_div(tmp, 10000);
+            diff = (int)tmp;
 #endif
             if (diff < 0) diff = 0;
             return diff;
@@ -1513,6 +1846,10 @@ static void fd_dump( struct object *obj, int verbose )
 static void fd_destroy( struct object *obj )
 {
     struct fd *fd = (struct fd *)obj;
+#ifdef CONFIG_UNIFIED_KERNEL
+    /* do not poll events,fput struct file. */
+    uk_poll_freewait(&fd->uk_pwq);
+#endif
 
     free_async_queue( fd->read_q );
     free_async_queue( fd->write_q );
@@ -1650,6 +1987,9 @@ static struct fd *alloc_fd_object(void)
     fd->completion = NULL;
     list_init( &fd->inode_entry );
     list_init( &fd->locks );
+#ifdef CONFIG_UNIFIED_KERNEL
+    fd->uk_pwq.have_inited_flag = false;
+#endif
 
     if ((fd->poll_index = add_poll_user( fd )) == -1)
     {
@@ -1686,6 +2026,9 @@ struct fd *alloc_pseudo_fd( const struct fd_ops *fd_user_ops, struct object *use
     fd->no_fd_status = STATUS_BAD_DEVICE_TYPE;
     list_init( &fd->inode_entry );
     list_init( &fd->locks );
+#ifdef CONFIG_UNIFIED_KERNEL
+    fd->uk_pwq.have_inited_flag = false;
+#endif
     return fd;
 }
 
@@ -2343,7 +2686,7 @@ DECL_HANDLER(get_handle_fd)
             reply->options = fd->options;
             reply->access = get_handle_access( current_thread->process, req->handle );
 #ifdef CONFIG_UNIFIED_KERNEL
-	    reply->fd = unix_fd;
+            reply->fd = unix_fd;
 #else
             send_client_fd( current_thread->process, unix_fd, req->handle );
 #endif
