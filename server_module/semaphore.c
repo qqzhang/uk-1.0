@@ -36,7 +36,7 @@
 #include "request.h"
 #include "security.h"
 
-struct semaphore
+struct uk_semaphore
 {
     struct object  obj;    /* object header */
     unsigned int   count;  /* current_thread count */
@@ -52,7 +52,7 @@ static int semaphore_signal( struct object *obj, unsigned int access );
 
 static const struct object_ops semaphore_ops =
 {
-    sizeof(struct semaphore),      /* size */
+    sizeof(struct uk_semaphore),      /* size */
     semaphore_dump,                /* dump */
     semaphore_get_type,            /* get_type */
     add_queue,                     /* add_queue */
@@ -71,11 +71,11 @@ static const struct object_ops semaphore_ops =
 };
 
 
-static struct semaphore *create_semaphore( struct directory *root, const struct unicode_str *name,
+static struct uk_semaphore *create_semaphore( struct directory *root, const struct unicode_str *name,
                                            unsigned int attr, unsigned int initial, unsigned int max,
                                            const struct security_descriptor *sd )
 {
-    struct semaphore *sem;
+    struct uk_semaphore *sem;
 
     if (!max || (initial > max))
     {
@@ -98,7 +98,7 @@ static struct semaphore *create_semaphore( struct directory *root, const struct 
     return sem;
 }
 
-static int release_semaphore( struct semaphore *sem, unsigned int count,
+static int release_semaphore( struct uk_semaphore *sem, unsigned int count,
                               unsigned int *prev )
 {
     if (prev) *prev = sem->count;
@@ -122,7 +122,7 @@ static int release_semaphore( struct semaphore *sem, unsigned int count,
 
 static void semaphore_dump( struct object *obj, int verbose )
 {
-    struct semaphore *sem = (struct semaphore *)obj;
+    struct uk_semaphore *sem = (struct uk_semaphore *)obj;
     assert( obj->ops == &semaphore_ops );
     fprintf( stderr, "Semaphore count=%d max=%d ", sem->count, sem->max );
     dump_object_name( &sem->obj );
@@ -138,14 +138,14 @@ static struct object_type *semaphore_get_type( struct object *obj )
 
 static int semaphore_signaled( struct object *obj, struct thread *thread )
 {
-    struct semaphore *sem = (struct semaphore *)obj;
+    struct uk_semaphore *sem = (struct uk_semaphore *)obj;
     assert( obj->ops == &semaphore_ops );
     return (sem->count > 0);
 }
 
 static int semaphore_satisfied( struct object *obj, struct thread *thread )
 {
-    struct semaphore *sem = (struct semaphore *)obj;
+    struct uk_semaphore *sem = (struct uk_semaphore *)obj;
     assert( obj->ops == &semaphore_ops );
     assert( sem->count );
     sem->count--;
@@ -163,7 +163,7 @@ static unsigned int semaphore_map_access( struct object *obj, unsigned int acces
 
 static int semaphore_signal( struct object *obj, unsigned int access )
 {
-    struct semaphore *sem = (struct semaphore *)obj;
+    struct uk_semaphore *sem = (struct uk_semaphore *)obj;
     assert( obj->ops == &semaphore_ops );
 
     if (!(access & SEMAPHORE_MODIFY_STATE))
@@ -177,7 +177,7 @@ static int semaphore_signal( struct object *obj, unsigned int access )
 /* create a semaphore */
 DECL_HANDLER(create_semaphore)
 {
-    struct semaphore *sem;
+    struct uk_semaphore *sem;
     struct unicode_str name;
     struct directory *root = NULL;
     const struct object_attributes *objattr = get_req_data();
@@ -211,7 +211,7 @@ DECL_HANDLER(open_semaphore)
 {
     struct unicode_str name;
     struct directory *root = NULL;
-    struct semaphore *sem;
+    struct uk_semaphore *sem;
 
     get_req_unicode_str( &name );
     if (req->rootdir && !(root = get_directory_obj( current_thread->process, req->rootdir, 0 )))
@@ -229,9 +229,9 @@ DECL_HANDLER(open_semaphore)
 /* release a semaphore */
 DECL_HANDLER(release_semaphore)
 {
-    struct semaphore *sem;
+    struct uk_semaphore *sem;
 
-    if ((sem = (struct semaphore *)get_handle_obj( current_thread->process, req->handle,
+    if ((sem = (struct uk_semaphore *)get_handle_obj( current_thread->process, req->handle,
                                                    SEMAPHORE_MODIFY_STATE, &semaphore_ops )))
     {
         release_semaphore( sem, req->count, &reply->prev_count );
