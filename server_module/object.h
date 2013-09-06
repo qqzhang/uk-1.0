@@ -39,7 +39,7 @@ struct object_name;
 struct thread;
 struct process;
 struct token;
-struct file;
+struct uk_file;
 struct wait_queue_entry;
 struct async;
 struct async_queue;

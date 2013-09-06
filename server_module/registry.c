@@ -1636,7 +1636,7 @@ static void load_keys( struct reg_key *key, const char *filename, FILE *f, int p
 /* load a part of the registry from a file */
 static void load_registry( struct reg_key *key, obj_handle_t handle )
 {
-    struct file *file;
+    struct uk_file *file;
     int fd;
 
     if (!(file = get_file_obj( current_thread->process, handle, FILE_READ_DATA ))) return;
@@ -1943,7 +1943,7 @@ static void save_all_subkeys( struct reg_key *key, FILE *f )
 /* save a registry branch to a file handle */
 static void save_registry( struct reg_key *key, obj_handle_t handle )
 {
-    struct file *file;
+    struct uk_file *file;
     int fd;
 
     if (!(file = get_file_obj( current_thread->process, handle, FILE_WRITE_DATA ))) return;

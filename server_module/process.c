@@ -102,7 +102,7 @@ static const struct fd_ops process_fd_ops =
 struct startup_info
 {
     struct object       obj;          /* object header */
-    struct file        *exe_file;     /* file handle for main exe */
+    struct uk_file     *exe_file;     /* file handle for main exe */
     struct process     *process;      /* created process */
     data_size_t         info_size;    /* size of startup info */
     data_size_t         data_size;    /* size of whole startup data */

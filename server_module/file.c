@@ -52,7 +52,7 @@
 #include "process.h"
 #include "security.h"
 
-struct file
+struct uk_file
 {
     struct object       obj;        /* object header */
     struct fd          *fd;         /* file descriptor for this file */
@@ -75,7 +75,7 @@ static enum server_fd_type file_get_fd_type( struct fd *fd );
 
 static const struct object_ops file_ops =
 {
-    sizeof(struct file),          /* size */
+    sizeof(struct uk_file),          /* size */
     file_dump,                    /* dump */
     no_get_type,                  /* get_type */
     add_queue,                    /* add_queue */
@@ -105,16 +105,16 @@ static const struct fd_ops file_fd_ops =
     default_fd_cancel_async       /* cancel_async */
 };
 
-static inline int is_overlapped( const struct file *file )
+static inline int is_overlapped( const struct uk_file *file )
 {
     return !(get_fd_options( file->fd ) & (FILE_SYNCHRONOUS_IO_ALERT | FILE_SYNCHRONOUS_IO_NONALERT));
 }
 
 /* create a file from a file descriptor */
 /* if the function fails the fd is closed */
-struct file *create_file_for_fd( int fd, unsigned int access, unsigned int sharing )
+struct uk_file *create_file_for_fd( int fd, unsigned int access, unsigned int sharing )
 {
-    struct file *file;
+    struct uk_file *file;
     struct stat st;
 
     if (fstat( fd, &st ) == -1)
@@ -139,9 +139,9 @@ struct file *create_file_for_fd( int fd, unsigned int access, unsigned int shari
 }
 
 /* create a file by duplicating an fd object */
-struct file *create_file_for_fd_obj( struct fd *fd, unsigned int access, unsigned int sharing )
+struct uk_file *create_file_for_fd_obj( struct fd *fd, unsigned int access, unsigned int sharing )
 {
-    struct file *file;
+    struct uk_file *file;
     struct stat st;
 
     if (fstat( get_unix_fd(fd), &st ) == -1)
@@ -166,7 +166,7 @@ struct file *create_file_for_fd_obj( struct fd *fd, unsigned int access, unsigne
 
 static struct object *create_file_obj( struct fd *fd, unsigned int access, mode_t mode )
 {
-    struct file *file = alloc_object( &file_ops );
+    struct uk_file *file = alloc_object( &file_ops );
 
     if (!file) return NULL;
     file->access  = access;
@@ -253,21 +253,21 @@ done:
 }
 
 /* check if two file objects point to the same file */
-int is_same_file( struct file *file1, struct file *file2 )
+int is_same_file( struct uk_file *file1, struct uk_file *file2 )
 {
     return is_same_file_fd( file1->fd, file2->fd );
 }
 
 static void file_dump( struct object *obj, int verbose )
 {
-    struct file *file = (struct file *)obj;
+    struct uk_file *file = (struct uk_file *)obj;
     assert( obj->ops == &file_ops );
     fprintf( stderr, "File fd=%p\n", file->fd );
 }
 
 static int file_get_poll_events( struct fd *fd )
 {
-    struct file *file = get_fd_user( fd );
+    struct uk_file *file = get_fd_user( fd );
     int events = 0;
     assert( file->obj.ops == &file_ops );
     if (file->access & FILE_UNIX_READ_ACCESS) events |= POLLIN;
@@ -283,7 +283,7 @@ static void file_flush( struct fd *fd, struct event **event )
 
 static enum server_fd_type file_get_fd_type( struct fd *fd )
 {
-    struct file *file = get_fd_user( fd );
+    struct uk_file *file = get_fd_user( fd );
 
     if (S_ISREG(file->mode) || S_ISBLK(file->mode)) return FD_TYPE_FILE;
     if (S_ISDIR(file->mode)) return FD_TYPE_DIR;
@@ -292,7 +292,7 @@ static enum server_fd_type file_get_fd_type( struct fd *fd )
 
 static struct fd *file_get_fd( struct object *obj )
 {
-    struct file *file = (struct file *)obj;
+    struct uk_file *file = (struct uk_file *)obj;
     assert( obj->ops == &file_ops );
     return (struct fd *)grab_object( file->fd );
 }
@@ -424,7 +424,7 @@ struct security_descriptor *mode_to_sd( mode_t mode, const SID *user, const SID 
 
 static struct security_descriptor *file_get_sd( struct object *obj )
 {
-    struct file *file = (struct file *)obj;
+    struct uk_file *file = (struct uk_file *)obj;
     struct stat st;
     int unix_fd;
     struct security_descriptor *sd;
@@ -535,7 +535,7 @@ mode_t sd_to_mode( const struct security_descriptor *sd, const SID *owner )
 static int file_set_sd( struct object *obj, const struct security_descriptor *sd,
                         unsigned int set_info )
 {
-    struct file *file = (struct file *)obj;
+    struct uk_file *file = (struct uk_file *)obj;
     const SID *owner;
     struct stat st;
     mode_t mode;
@@ -584,7 +584,7 @@ static int file_set_sd( struct object *obj, const struct security_descriptor *sd
 
 static void file_destroy( struct object *obj )
 {
-    struct file *file = (struct file *)obj;
+    struct uk_file *file = (struct uk_file *)obj;
     assert( obj->ops == &file_ops );
 
     if (file->fd) release_object( file->fd );
@@ -627,12 +627,12 @@ void file_set_error(void)
     }
 }
 
-struct file *get_file_obj( struct process *process, obj_handle_t handle, unsigned int access )
+struct uk_file *get_file_obj( struct process *process, obj_handle_t handle, unsigned int access )
 {
-    return (struct file *)get_handle_obj( process, handle, access, &file_ops );
+    return (struct uk_file *)get_handle_obj( process, handle, access, &file_ops );
 }
 
-int get_file_unix_fd( struct file *file )
+int get_file_unix_fd( struct uk_file *file )
 {
     return get_unix_fd( file->fd );
 }
@@ -686,7 +686,7 @@ DECL_HANDLER(create_file)
 /* allocate a file handle for a Unix fd */
 DECL_HANDLER(alloc_file_handle)
 {
-    struct file *file;
+    struct uk_file *file;
     int fd;
 
     reply->handle = 0;
@@ -705,7 +705,7 @@ DECL_HANDLER(alloc_file_handle)
 /* lock a region of a file */
 DECL_HANDLER(lock_file)
 {
-    struct file *file;
+    struct uk_file *file;
 
     if ((file = get_file_obj( current_thread->process, req->handle, 0 )))
     {
@@ -718,7 +718,7 @@ DECL_HANDLER(lock_file)
 /* unlock a region of a file */
 DECL_HANDLER(unlock_file)
 {
-    struct file *file;
+    struct uk_file *file;
 
     if ((file = get_file_obj( current_thread->process, req->handle, 0 )))
     {

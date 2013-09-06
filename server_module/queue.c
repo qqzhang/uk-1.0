@@ -2163,7 +2163,7 @@ DECL_HANDLER(get_msg_queue)
 DECL_HANDLER(set_queue_fd)
 {
     struct msg_queue *queue = get_current_queue();
-    struct file *file;
+    struct uk_file *file;
     int unix_fd;
 
     if (queue->fd)  /* fd can only be set once */

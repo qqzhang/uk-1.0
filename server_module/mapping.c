@@ -63,7 +63,7 @@ struct mapping
     int             header_size;     /* size of headers (for PE image mapping) */
     client_ptr_t    base;            /* default base addr (for PE image mapping) */
     struct ranges  *committed;       /* list of committed ranges in this mapping */
-    struct file    *shared_file;     /* temp file for shared PE mapping */
+    struct uk_file    *shared_file;     /* temp file for shared PE mapping */
     struct list_head     shared_entry;    /* entry in global shared PE mappings list */
 };
 
@@ -193,13 +193,13 @@ static int create_temp_file( file_pos_t size )
 }
 
 /* find the shared PE mapping for a given mapping */
-static struct file *get_shared_file( struct mapping *mapping )
+static struct uk_file *get_shared_file( struct mapping *mapping )
 {
     struct mapping *ptr;
 
     LIST_FOR_EACH_ENTRY( ptr, &shared_list, struct mapping, shared_entry )
         if (is_same_file_fd( ptr->fd, mapping->fd ))
-            return (struct file *)grab_object( ptr->shared_file );
+            return (struct uk_file *)grab_object( ptr->shared_file );
     return NULL;
 }
 
@@ -439,7 +439,7 @@ static struct object *create_mapping( struct directory *root, const struct unico
                                       obj_handle_t handle, const struct security_descriptor *sd )
 {
     struct mapping *mapping;
-    struct file *file;
+    struct uk_file *file;
     struct fd *fd;
     int access = 0;
     int unix_fd;
@@ -549,7 +549,7 @@ obj_handle_t open_mapping_file( struct process *process, struct mapping *mapping
                                 unsigned int access, unsigned int sharing )
 {
     obj_handle_t handle;
-    struct file *file = create_file_for_fd_obj( mapping->fd, access, sharing );
+    struct uk_file *file = create_file_for_fd_obj( mapping->fd, access, sharing );
 
     if (!file) return 0;
     handle = alloc_handle( process, file, access, 0 );
