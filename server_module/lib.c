@@ -263,12 +263,12 @@ void free(void *p)
 
 void *realloc(void *ptr, size_t new_size)
 {
-	void	*new_ptr;
+    void *new_ptr;
 
 	if (!new_size) 
 	{
 		free(ptr);
-		return ptr;
+		return NULL;
 	}
 
 	if (!ptr)
@@ -2612,10 +2612,17 @@ int clock_settime(clockid_t clk_id, const void *tp)
 	klog(0,"NOT IMPLEMENT!\n");
 	return 0;
 }
+
 int clock_gettime(clockid_t clk_id, void *tp)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+    int ret = 0 ;
+    asmlinkage long (*sys_clock_gettime)(clockid_t which_clock,
+            struct timespec __user *tp) = get_kernel_proc_address("sys_clock_gettime");
+
+    ret = sys_clock_gettime( clk_id, tp);
+
+    SYSCALL_RETURN(ret);
+
 }
 
 /*signal.h*/
@@ -3102,7 +3109,7 @@ long ptrace(int request, ...)
 }
 long sysconf(int name)
 {
-    if (name = _SC_PAGESIZE)
+    if (name == _SC_PAGESIZE)
     {
 	return PAGE_SIZE;
     }

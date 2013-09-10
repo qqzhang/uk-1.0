@@ -922,20 +922,20 @@ NTSTATUS NtEarlyInit(int __user* init_data_ptr)
 	    return STATUS_SUCCESS;
 
 	case NEW_PROCESS:
-	case NEW_THREAD:
-	    if (thread_id)
-	    {
-		if (new_thread = get_thread_from_id(thread_id))
-		{
-		    add_thread_by_pid( new_thread, current->pid );
-		}
-		else
-		{
-		    klog(0,"new_thread get error id=%d \n", thread_id);
-		    return STATUS_UNSUCCESSFUL;
-		}
-	    }
-	    return STATUS_SUCCESS;
+    case NEW_THREAD:
+        if (thread_id)
+        {
+            if (new_thread = get_thread_from_id(thread_id))
+            {
+                add_thread_by_pid( new_thread, current->pid );
+            }
+            else
+            {
+                klog(0,"new_thread get error id=%d \n", thread_id);
+                return STATUS_UNSUCCESSFUL;
+            }
+        }
+        return STATUS_SUCCESS;
 
 	default:
 	    klog(0,"Unkown type \n");
