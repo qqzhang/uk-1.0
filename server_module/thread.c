@@ -1121,7 +1121,33 @@ int thread_add_inflight_fd( struct thread *thread, int client, int server )
 #ifdef CONFIG_UNIFIED_KERNEL
 int thread_get_inflight_fd( struct thread *thread, int client )
 {
-	return client;
+    int i, ret;
+    int new_fd;
+
+    if (client == -1) return -1;
+
+    for (i = 0; i < MAX_INFLIGHT_FDS; i++)
+    {
+        if (thread->inflight[i].client == client)
+        {
+            ret = thread->inflight[i].server;
+            thread->inflight[i].server = thread->inflight[i].client = -1;
+            return ret;
+        }
+    }
+
+    /* not found , need add to cache */
+    new_fd = dup( client );
+    if (new_fd >= 0)
+    {
+        thread_add_inflight_fd( thread, client, new_fd );
+        return new_fd;
+    }
+    else
+    {
+        klog(0,"dup fd error \n");
+        return -1;
+    }
 }
 #else
 /* get an inflight fd and purge it from the list */
