@@ -180,6 +180,17 @@ struct uk_poll_wqueues
     int have_inited_flag;/* have run __uk_pollwait to init waitqueue. */
     int	pending_event;
 };
+
+#define DEFAULT_MAP_NUM 4
+struct tgid_fd_map
+{
+    pid_t tgid;
+    int   unix_fd;
+    unsigned int handle_count; /* means to : how many handles use this uinx_fd */
+};
+void destroy_map_tbl(struct fd *fd);
+int get_unix_fd_by_tgid(struct fd *fd, pid_t tgid);
+int find_unix_fd_by_tgid(struct fd* fd, pid_t tgid);
 #endif
 
 struct fd
@@ -207,6 +218,11 @@ struct fd
     struct uk_completion   *completion;  /* completion object attached to this fd */
     apc_param_t          comp_key;    /* completion key to set in completion events */
 #ifdef CONFIG_UNIFIED_KERNEL
+    pid_t creator_tgid;
+    struct file *unix_file;
+    int tbl_index;
+    int max_index;
+    struct tgid_fd_map   *map_tbl;
     struct uk_poll_wqueues	uk_pwq;
 #endif
 };
@@ -521,27 +537,8 @@ int uk_add_fd_events(struct uk_poll_wqueues *uk_pwq,struct fd *fd,struct file *f
 int uk_modify_fd_events(struct uk_poll_wqueues *uk_pwq,int events);
 int uk_remove_fd_events(struct uk_poll_wqueues *uk_pwq);
 static struct poll_table_entry *uk_poll_get_entry(struct uk_poll_wqueues *uk_pwq);
+struct file *get_unix_file( struct fd *fd );
 
-struct file *get_unix_file(struct fd *fd)
-{
-    struct file* filp;
-
-    if (fd->unix_fd != -1)
-    {
-        filp = fget(fd->unix_fd);
-        if (filp)
-            return filp;
-        else
-        {
-            klog(0,"filp is NULL \n");
-            return NULL;
-        }
-    }
-    else
-    {
-        klog(0," unix_fd is invalid \n");
-    }
-}
 /*
  * unifiedkernel use the function to poll struct file.
  */
@@ -858,7 +855,7 @@ static inline void remove_epoll_user( struct fd *fd, int user )
     if (pollfd[user].fd != -1)
     {
         struct epoll_event dummy;
-        epoll_ctl( epoll_fd, EPOLL_CTL_DEL, fd->unix_fd, &dummy );
+        epoll_ctl( epoll_fd, EPOLL_CTL_DEL, get_unix_fd(fd), &dummy );
     }
 }
 
@@ -1546,13 +1543,13 @@ static int set_unix_lock( struct fd *fd, file_pos_t start, file_pos_t end, int t
         fl.l_start  = start;
         if (!end || end > max_unix_offset) fl.l_len = 0;
         else fl.l_len = end - start;
-        if (fcntl( fd->unix_fd, F_SETLK, &fl ) != -1) return 1;
+        if (fcntl( get_unix_fd(fd), F_SETLK, &fl ) != -1) return 1;
 
         switch(errno)
         {
         case EACCES:
             /* check whether locks work at all on this file system */
-            if (fcntl( fd->unix_fd, F_GETLK, &fl ) != -1)
+            if (fcntl( get_unix_fd(fd), F_GETLK, &fl ) != -1)
             {
                 set_error( STATUS_FILE_LOCK_CONFLICT );
                 return 0;
@@ -1846,10 +1843,6 @@ static void fd_dump( struct object *obj, int verbose )
 static void fd_destroy( struct object *obj )
 {
     struct fd *fd = (struct fd *)obj;
-#ifdef CONFIG_UNIFIED_KERNEL
-    /* do not poll events,fput struct file. */
-    uk_poll_freewait(&fd->uk_pwq);
-#endif
 
     free_async_queue( fd->read_q );
     free_async_queue( fd->write_q );
@@ -1860,6 +1853,11 @@ static void fd_destroy( struct object *obj )
     free( fd->unix_name );
     list_remove( &fd->inode_entry );
     if (fd->poll_index != -1) remove_poll_user( fd, fd->poll_index );
+#ifdef CONFIG_UNIFIED_KERNEL
+    /* do not poll events,fput struct file. */
+    uk_poll_freewait(&fd->uk_pwq);
+    destroy_map_tbl( fd );
+#else /* close unix_fd in fd_close_handle now */
     if (fd->inode)
     {
         inode_add_closed_fd( fd->inode, fd->closed );
@@ -1869,6 +1867,7 @@ static void fd_destroy( struct object *obj )
     {
         if (fd->unix_fd != -1) close( fd->unix_fd );
     }
+#endif
 }
 
 /* check if the desired access is possible without violating */
@@ -1935,7 +1934,7 @@ void set_fd_events( struct fd *fd, int events )
     }
     else if (pollfd[user].fd != -1 || !pollfd[user].events)
     {
-        pollfd[user].fd = fd->unix_fd;
+        pollfd[user].fd = get_unix_fd(fd);
         pollfd[user].events = events;
     }
 }
@@ -1950,7 +1949,7 @@ static inline void unmount_fd( struct fd *fd )
 
     if (fd->poll_index != -1) set_fd_events( fd, -1 );
 
-    if (fd->unix_fd != -1) close( fd->unix_fd );
+    if (get_unix_fd(fd) != -1) close( get_unix_fd(fd) );
 
     fd->unix_fd = -1;
     fd->no_fd_status = STATUS_VOLUME_DISMOUNTED;
@@ -1989,6 +1988,20 @@ static struct fd *alloc_fd_object(void)
     list_init( &fd->locks );
 #ifdef CONFIG_UNIFIED_KERNEL
     fd->uk_pwq.have_inited_flag = false;
+    fd->creator_tgid = 0;
+    fd->unix_file    = NULL;
+    fd->tbl_index = 0;
+    fd->map_tbl = malloc(sizeof(struct tgid_fd_map) * DEFAULT_MAP_NUM);
+    if (!fd->map_tbl)
+    {
+        klog(0," malloc error \n");
+        fd->max_index = 0;
+    }
+    else
+    {
+        memset(fd->map_tbl, -1, sizeof(struct tgid_fd_map) * DEFAULT_MAP_NUM);
+        fd->max_index = DEFAULT_MAP_NUM;
+    }
 #endif
 
     if ((fd->poll_index = add_poll_user( fd )) == -1)
@@ -2028,6 +2041,20 @@ struct fd *alloc_pseudo_fd( const struct fd_ops *fd_user_ops, struct object *use
     list_init( &fd->locks );
 #ifdef CONFIG_UNIFIED_KERNEL
     fd->uk_pwq.have_inited_flag = false;
+    fd->creator_tgid = 0;
+    fd->unix_file    = NULL;
+    fd->tbl_index = 0;
+    fd->map_tbl = malloc(sizeof(struct tgid_fd_map) * DEFAULT_MAP_NUM);
+    if (!fd->map_tbl)
+    {
+        klog(0," malloc error \n");
+        fd->max_index = 0;
+    }
+    else
+    {
+        memset(fd->map_tbl, -1, sizeof(struct tgid_fd_map) * DEFAULT_MAP_NUM);
+        fd->max_index = DEFAULT_MAP_NUM;
+    }
 #endif
     return fd;
 }
@@ -2053,6 +2080,26 @@ struct fd *dup_fd_object( struct fd *orig, unsigned int access, unsigned int sha
     {
         struct closed_fd *closed = mem_alloc( sizeof(*closed) );
         if (!closed) goto failed;
+#ifdef CONFIG_UNIFIED_KERNEL
+        if (orig->creator_tgid == current->tgid)
+        {
+            if ((fd->unix_fd = dup( orig->unix_fd )) == -1)
+            {
+                file_set_error();
+                free( closed );
+                goto failed;
+            }
+            fd->creator_tgid = current->tgid;
+            fd->unix_file = orig->unix_file;
+        }
+        else
+        {
+            fd->unix_fd = get_unix_fd(orig);
+            fd->creator_tgid = current->tgid;
+            fd->unix_file = orig->unix_file;
+        }
+        closed->unix_fd = -1;
+#else
         if ((fd->unix_fd = dup( orig->unix_fd )) == -1)
         {
             file_set_error();
@@ -2060,6 +2107,7 @@ struct fd *dup_fd_object( struct fd *orig, unsigned int access, unsigned int sha
             goto failed;
         }
         closed->unix_fd = fd->unix_fd;
+#endif
         closed->unlink[0] = 0;
         fd->closed = closed;
         fd->inode = (struct uk_inode *)grab_object( orig->inode );
@@ -2070,11 +2118,28 @@ struct fd *dup_fd_object( struct fd *orig, unsigned int access, unsigned int sha
             goto failed;
         }
     }
+#ifdef CONFIG_UNIFIED_KERNEL
+    else if (orig->creator_tgid == current->tgid)
+    {
+        if ((fd->unix_fd = dup( orig->unix_fd )) == -1)
+        {
+            file_set_error();
+            goto failed;
+        }
+        fd->creator_tgid = current->tgid;
+    }
+    else
+    {
+        fd->unix_fd = get_unix_fd(orig);
+        fd->creator_tgid = current->tgid;
+    }
+#else
     else if ((fd->unix_fd = dup( orig->unix_fd )) == -1)
     {
         file_set_error();
         goto failed;
     }
+#endif
     return fd;
 
 failed:
@@ -2207,7 +2272,26 @@ struct fd *open_fd( struct fd *root, const char *name, int flags, mode_t *mode, 
         }
     }
 
+#ifdef CONFIG_UNIFIED_KERNEL
+    fd->creator_tgid = current->tgid;
+    fd->unix_file = fget(fd->unix_fd);
+    if (!fd->unix_file)
+    {
+        klog(0,"fget error \n");
+    }
+    else
+    {
+        fd->map_tbl[fd->tbl_index].tgid = current->tgid;
+        fd->map_tbl[fd->tbl_index].unix_fd = fd->unix_fd;
+        fd->map_tbl[fd->tbl_index].handle_count = 1;
+        fd->tbl_index++;
+        fput(fd->unix_file);
+    }
+
+    closed_fd->unix_fd = -1; /* don't use closed_fd->unix_fd */
+#else
     closed_fd->unix_fd = fd->unix_fd;
+#endif
     closed_fd->unlink[0] = 0;
     fstat( fd->unix_fd, &st );
     *mode = st.st_mode;
@@ -2297,6 +2381,22 @@ struct fd *create_anonymous_fd( const struct fd_ops *fd_user_ops, int unix_fd, s
         set_fd_user( fd, fd_user_ops, user );
         fd->unix_fd = unix_fd;
         fd->options = options;
+#ifdef CONFIG_UNIFIED_KERNEL
+        fd->creator_tgid = current->tgid;
+        fd->unix_file = fget(unix_fd);
+        if (!fd->unix_file)
+        {
+            klog(0,"fget error \n");
+        }
+        else
+        {
+            fd->map_tbl[fd->tbl_index].tgid = current->tgid;
+            fd->map_tbl[fd->tbl_index].unix_fd = unix_fd;
+            fd->map_tbl[fd->tbl_index].handle_count = 1;
+            fd->tbl_index++;
+            fput(fd->unix_file);
+        }
+#endif
         return fd;
     }
     close( unix_fd );
@@ -2315,12 +2415,172 @@ unsigned int get_fd_options( struct fd *fd )
     return fd->options;
 }
 
+#ifdef CONFIG_UNIFIED_KERNEL
+
+int find_unix_fd_by_tgid(struct fd* fd, pid_t tgid)
+{
+    int i=0;
+
+    if (!fd->map_tbl || fd->tbl_index==0)
+        return -1;
+
+    for(i=0; i<fd->tbl_index; i++)
+    {
+        if (fd->map_tbl[i].tgid == tgid)
+            return fd->map_tbl[i].unix_fd;
+    }
+
+    return -1;
+}
+
+void inc_handle_count_by_tgid(struct object *obj, pid_t tgid)
+{
+    struct fd *fd;
+    int i=0;
+
+    if( obj->ops->get_fd && (fd=obj->ops->get_fd(obj)) )
+    {
+        if (!fd->map_tbl || fd->tbl_index==0)
+            return;
+
+        for(i=0; i<fd->tbl_index; i++)
+        {
+            if (fd->map_tbl[i].tgid == tgid)
+                fd->map_tbl[i].handle_count++;
+        }
+
+        release_object(fd); /* get_fd had increased fd object's refcount */
+    }
+}
+
+int get_unix_fd_by_tgid(struct fd *fd, pid_t tgid)
+{
+    int new_fd;
+
+    new_fd = find_unix_fd_by_tgid(fd, current->tgid);
+    if (new_fd != -1)
+    {
+        return new_fd;
+    }
+
+    /* not found , alloc one */
+    new_fd = get_unused_fd();
+    if (new_fd<0)
+    {
+        klog(0,"get_unused_fd() error \n");
+        return -1;
+    }
+
+    if (!fd->unix_file)
+    {
+        klog(0,"fd->unix_file is NULL\n");
+        return -1;
+    }
+
+    get_file(fd->unix_file); /* reference count inc, close will dec */
+
+    if (fd->tbl_index < fd->max_index)
+    {
+        fd->map_tbl[fd->tbl_index].tgid = current->tgid;
+        fd->map_tbl[fd->tbl_index].unix_fd = new_fd;
+        fd->map_tbl[fd->tbl_index].handle_count = 1;
+        fd->tbl_index++;
+        return new_fd;
+    }
+    else /*expend table*/
+    {
+        struct tgid_fd_map *new_tbl;
+        int new_size = fd->max_index + fd->max_index/2;
+
+        klog(0,"need expend table\n");
+
+        new_tbl = realloc(fd->map_tbl, sizeof(struct tgid_fd_map) * new_size);
+        if (!new_tbl)
+        {
+            klog(0, "realloc error \n");
+            return -1;
+        }
+        else
+        {
+            fd->map_tbl = new_tbl;
+            fd->map_tbl[fd->tbl_index].tgid = current->tgid;
+            fd->map_tbl[fd->tbl_index].unix_fd = new_fd;
+            fd->map_tbl[fd->tbl_index].handle_count = 1;
+            fd->tbl_index++;
+            fd->max_index  = new_size;
+            return new_fd;
+        }
+    }
+}
+
+void remove_unix_fd_by_tgid(struct fd* fd, pid_t tgid)
+{
+    int i=0;
+    if (fd->tbl_index==0)
+        return ;
+
+    for(i=0; i<fd->tbl_index; i++)
+    {
+        if (fd->map_tbl[i].tgid == tgid)
+        {
+            if (!--fd->map_tbl[i].handle_count)
+            {
+                close(fd->map_tbl[i].unix_fd);
+                fd->tbl_index--;
+            }
+        }
+    }
+}
+
+void destroy_map_tbl(struct fd *fd)
+{
+    if (fd->map_tbl)
+    {
+        if (fd->tbl_index != 0)
+            klog(0, "warning : fd->tbl_index != 0, =%d\n",fd->tbl_index);
+        free(fd->map_tbl);
+        fd->map_tbl = NULL;
+    }
+}
+
+/* retrieve the unix fd for an object */
+int get_unix_fd( struct fd *fd )
+{
+    if (unlikely(fd->unix_fd == -1))
+    {
+        set_error( fd->no_fd_status );
+        return -1;
+    }
+    else if (likely(fd->creator_tgid == current->tgid))
+    {
+        return fd->unix_fd;
+    }
+    else
+    {
+        return get_unix_fd_by_tgid(fd, current->tgid);
+    }
+}
+
+struct file *get_unix_file( struct fd *fd )
+{
+    if (fd->unix_file)
+    {
+        return fd->unix_file;
+    }
+    else
+    {
+        klog(0," unix_fd is invalid \n");
+        return NULL;
+    }
+}
+#else
 /* retrieve the unix fd for an object */
 int get_unix_fd( struct fd *fd )
 {
     if (fd->unix_fd == -1) set_error( fd->no_fd_status );
     return fd->unix_fd;
 }
+#endif
 
 /* check if two file descriptors point to the same file */
 int is_same_file_fd( struct fd *fd1, struct fd *fd2 )
@@ -2356,6 +2616,23 @@ int is_fd_signaled( struct fd *fd )
 /* handler for close_handle that refuses to close fd-associated handles in other processes */
 int fd_close_handle( struct object *obj, struct process *process, obj_handle_t handle )
 {
+#ifdef CONFIG_UNIFIED_KERNEL
+    struct fd *fd;
+
+    if( obj->ops->get_fd && (fd=obj->ops->get_fd(obj)) )
+    {
+        if (fd->inode)
+        {
+            inode_add_closed_fd( fd->inode, fd->closed );
+            release_object( fd->inode );
+            fd->inode = NULL;
+        }
+
+        remove_unix_fd_by_tgid(fd, current->tgid);
+
+        release_object(fd); /* get_fd had increased fd object's refcount */
+    }
+#endif
     return (!current_thread || current_thread->process == process);
 }
 
@@ -2364,10 +2641,10 @@ int check_fd_events( struct fd *fd, int events )
 {
     struct pollfd pfd;
 
-    if (fd->unix_fd == -1) return POLLERR;
+    if (get_unix_fd(fd) == -1) return POLLERR;
     if (fd->inode) return events;  /* regular files are always signaled */
 
-    pfd.fd     = fd->unix_fd;
+    pfd.fd     = get_unix_fd(fd);
     pfd.events = events;
     if (poll( &pfd, 1, 0 ) <= 0) return 0;
     return pfd.revents;
@@ -2686,7 +2963,11 @@ DECL_HANDLER(get_handle_fd)
             reply->options = fd->options;
             reply->access = get_handle_access( current_thread->process, req->handle );
 #ifdef CONFIG_UNIFIED_KERNEL
-            reply->fd = unix_fd;
+            unix_fd = dup(unix_fd); /* the new_fd will be closed by UserApplication */
+            if (unix_fd >= 0)
+                reply->fd = unix_fd;
+            else
+                klog(0,"dup error \n");
 #else
             send_client_fd( current_thread->process, unix_fd, req->handle );
 #endif
