@@ -1185,7 +1185,7 @@ void CDECL __wine_kernel_init(void)
         }
         update_library_argv0( main_exe_name );
         if (!build_command_line( __wine_main_wargv )) goto error;
-        //start_wineboot( boot_events );
+        start_wineboot( boot_events );
     }
 
     /* if there's no extension, append a dot to prevent LoadLibrary from appending .dll */
