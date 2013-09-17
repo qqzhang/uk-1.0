@@ -2477,11 +2477,12 @@ int get_unix_fd_by_tgid(struct fd *fd, pid_t tgid)
         return -1;
     }
 
+    fd_install(new_fd, fd->unix_file);
     get_file(fd->unix_file); /* reference count inc, close will dec */
 
     if (fd->tbl_index < fd->max_index)
     {
-        fd->map_tbl[fd->tbl_index].tgid = current->tgid;
+        fd->map_tbl[fd->tbl_index].tgid = tgid;
         fd->map_tbl[fd->tbl_index].unix_fd = new_fd;
         fd->map_tbl[fd->tbl_index].handle_count = 1;
         fd->tbl_index++;
@@ -2503,7 +2504,7 @@ int get_unix_fd_by_tgid(struct fd *fd, pid_t tgid)
         else
         {
             fd->map_tbl = new_tbl;
-            fd->map_tbl[fd->tbl_index].tgid = current->tgid;
+            fd->map_tbl[fd->tbl_index].tgid = tgid;
             fd->map_tbl[fd->tbl_index].unix_fd = new_fd;
             fd->map_tbl[fd->tbl_index].handle_count = 1;
             fd->tbl_index++;
