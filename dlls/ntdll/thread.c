@@ -350,6 +350,9 @@ void exit_thread( int status )
     if (interlocked_xchg_add( &nb_threads, -1 ) <= 1)
     {
         LdrShutdownProcess();
+#ifdef CONFIG_UNIFIED_KERNEL
+        server_kill_thread( status );
+#endif
         exit( status );
     }
 
@@ -377,6 +380,9 @@ void exit_thread( int status )
     close( ntdll_get_thread_data()->wait_fd[1] );
     close( ntdll_get_thread_data()->reply_fd );
     close( ntdll_get_thread_data()->request_fd );
+#ifdef CONFIG_UNIFIED_KERNEL
+    server_kill_thread( status );
+#endif
     pthread_exit( UIntToPtr(status) );
 }
 
@@ -670,7 +676,15 @@ NTSTATUS WINAPI NtTerminateThread( HANDLE handle, LONG exit_code )
     }
     SERVER_END_REQ;
 
+#ifdef CONFIG_UNIFIED_KERNEL
+    if (self)
+    {
+        server_kill_thread( exit_code );
+        abort_thread( exit_code );
+    }
+#else
     if (self) abort_thread( exit_code );
+#endif
     return ret;
 }
 

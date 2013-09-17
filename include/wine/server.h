@@ -53,6 +53,8 @@ enum syscall
 	Nt_KillThread,
 	Nt_MaxNum
 };
+
+extern void server_kill_thread(LONG exit_code);
 #endif
 
 struct __server_iovec

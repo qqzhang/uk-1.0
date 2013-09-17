@@ -1284,3 +1284,26 @@ size_t server_init_thread( void *entry_point )
         server_protocol_error( "init_thread failed with status %x\n", ret );
     }
 }
+
+#ifdef CONFIG_UNIFIED_KERNEL
+void server_kill_thread(LONG exit_code)
+{
+    int fd,ret;
+
+    fd = open( SYSCALL_FILE, O_WRONLY);
+    if (fd == -1)
+    {
+        ERR("open SYSCALL_FILE error %d \n",errno);
+        return errno;
+    }
+    else
+    {
+        ret = ioctl(fd, Nt_KillThread, &exit_code);
+        if (ret<0)
+        {
+            ERR("p %d t %d : ioctl ret=%d error %d \n", getpid(), syscall(224), ret, errno);
+        }
+        close(fd);
+    }
+}
+#endif
