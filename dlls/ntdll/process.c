@@ -60,7 +60,36 @@ NTSTATUS WINAPI NtTerminateProcess( HANDLE handle, LONG exit_code )
         self = !ret && reply->self;
     }
     SERVER_END_REQ;
+#ifdef CONFIG_UNIFIED_KERNEL
+#include <sys/errno.h>
+#include <sys/ioctl.h>
+#include <fcntl.h>
+#include <unistd.h>
+    if (self && handle)
+    {
+        int fd;
+
+        fd = open( SYSCALL_FILE, O_WRONLY);
+        if (fd == -1)
+        {
+            ERR("open SYSCALL_FILE error %d \n",errno);
+            return errno;
+        }
+        else
+        {
+            ret = ioctl(fd, Nt_KillThread, &exit_code);
+            if (ret<0)
+            {
+                ERR("p %d t %d : ioctl ret=%d error %d \n", getpid(), syscall(224), ret, errno);
+            }
+            close(fd);
+        }
+
+        exit( exit_code );
+    }
+#else
     if (self && handle) exit( exit_code );
+#endif
     return ret;
 }
 

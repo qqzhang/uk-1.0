@@ -50,6 +50,7 @@ enum syscall
 	Nt_None = 0x2E2E0000,
 	Nt_EarlyInit,
 	Nt_WineService,
+	Nt_KillThread,
 	Nt_MaxNum
 };
 #endif

@@ -433,8 +433,8 @@ int receive_fd( struct process *process )
 #ifdef CONFIG_UNIFIED_KERNEL
 int send_client_fd( struct process *process, int fd, obj_handle_t handle )
 {
-	klog(1,"don't need \n");
-	return -1;
+	klog(0,"warnnnig : don't need \n");
+	return 1;
 }
 #else
 /* send an fd to a client */
@@ -1059,6 +1059,11 @@ out:
 	return status;
 }
 
+NTSTATUS NtKillThread(int __user* exit_code)
+{
+    kill_thread(current_thread, 0);
+    return STATUS_SUCCESS;
+}
 
 /* for syscall_chardev_fops */
 static struct class *class;
@@ -1096,6 +1101,9 @@ static int syscall_chardev_ioctl(struct inode *inode, struct file *filp, unsigne
 			break;
 		case Nt_WineService:
 			err = NtWineService(argp);
+			break;
+		case Nt_KillThread:
+			err = NtKillThread(argp);
 			break;
 		default:
 			break;

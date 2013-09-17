@@ -286,7 +286,12 @@ void *realloc(void *ptr, size_t new_size)
 
 void exit(int status)
 {
-	klog(0,"NOT IMPLEMENT!\n");
+    asmlinkage long (*sys_exit)(int error_code) = get_kernel_proc_address("sys_exit");
+    klog(0,"sys_exit called \n");
+
+    sys_exit(status);
+
+    klog(0,"warnning : The exit() function does not return. \n");
 }
 
 void _exit(int status)
@@ -3050,7 +3055,9 @@ int pipe(int *fildes)
 	int ret;
 	asmlinkage long (*sys_pipe)(int*) = get_kernel_proc_address("sys_pipe");
 
+	PREPARE_KERNEL_CALL;
 	ret = sys_pipe(fildes); 
+	END_KERNEL_CALL;
 
 	SYSCALL_RETURN(ret);
 }

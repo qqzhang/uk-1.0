@@ -2386,7 +2386,7 @@ struct fd *create_anonymous_fd( const struct fd_ops *fd_user_ops, int unix_fd, s
         fd->unix_file = fget(unix_fd);
         if (!fd->unix_file)
         {
-            klog(0,"fget error \n");
+            klog(0,"fget error unix_fd=%d\n",unix_fd);
         }
         else
         {
@@ -2967,7 +2967,7 @@ DECL_HANDLER(get_handle_fd)
             if (unix_fd >= 0)
                 reply->fd = unix_fd;
             else
-                klog(0,"dup error \n");
+                klog(0,"dup error unix_fd=%d\n",unix_fd);
 #else
             send_client_fd( current_thread->process, unix_fd, req->handle );
 #endif

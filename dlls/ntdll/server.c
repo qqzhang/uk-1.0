@@ -1231,10 +1231,8 @@ size_t server_init_thread( void *entry_point )
     /* create the server->client communication pipes */
     if (server_pipe( reply_pipe ) == -1) server_protocol_perror( "pipe" );
     if (server_pipe( ntdll_get_thread_data()->wait_fd ) == -1) server_protocol_perror( "pipe" );
-#ifndef CONFIG_UNIFIED_KERNEL
     wine_server_send_fd( reply_pipe[1] );
     wine_server_send_fd( ntdll_get_thread_data()->wait_fd[1] );
-#endif
     ntdll_get_thread_data()->reply_fd = reply_pipe[0];
     close( reply_pipe[1] );
 
