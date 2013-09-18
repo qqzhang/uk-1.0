@@ -102,6 +102,7 @@
 #ifdef CONFIG_UNIFIED_KERNEL
 #include <linux/kthread.h>
 #include <linux/poll.h>
+#include <linux/version.h>
 #include <linux/file.h>
 #include <asm/div64.h>
 #include "klog.h"
@@ -542,6 +543,13 @@ struct file *get_unix_file( struct fd *fd );
 /*
  * unifiedkernel use the function to poll struct file.
  */
+
+# if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 4, 0))   
+#define GET_PARAM(a, b) (a->b)
+# else              
+#define GET_PARAM(a, b) (a->_##b) 
+# endif             
+    
 static inline unsigned int uk_do_poll_file(struct file *file, int events,poll_table *pwait)
 {
     unsigned int mask;
@@ -550,7 +558,7 @@ static inline unsigned int uk_do_poll_file(struct file *file, int events,poll_ta
     if (file->f_op && file->f_op->poll)
     {
         if (pwait)
-            pwait->key = events|POLLERR | POLLHUP;
+            GET_PARAM(pwait, key) = events|POLLERR | POLLHUP;
         mask = file->f_op->poll(file, pwait);
     }
     /* Mask out unneeded events. */
@@ -726,7 +734,7 @@ static void __uk_pollwait(struct file *filp, wait_queue_head_t *wait_address,
         get_file(filp);
         entry->filp = filp;
         entry->wait_address = wait_address;
-        entry->key = p->key;
+        entry->key = GET_PARAM(p, key);
         init_waitqueue_func_entry(&entry->wait, uk_pollwake);
         entry->wait.private = pwq;
         add_wait_queue(wait_address, &entry->wait);
