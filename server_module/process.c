@@ -393,7 +393,7 @@ struct thread *create_process( int fd, struct thread *parent_thread, int inherit
 #ifdef CONFIG_UNIFIED_KERNEL
     if (parent_thread == NULL)
     {
-	add_thread_by_pid( thread, current->pid );
+        add_thread_by_pid( thread, current->pid );
     }
 #else
     set_fd_events( process->msg_fd, POLLIN );  /* start listening to events */

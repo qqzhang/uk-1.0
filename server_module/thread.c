@@ -51,7 +51,6 @@
 #include "request.h"
 #include "user.h"
 #include "security.h"
-#include "log.h"
 
 
 #ifdef __i386__
@@ -74,6 +73,10 @@ static const unsigned int supported_cpus = CPU_FLAG(CPU_ARM64);
 #include <linux/rwlock.h>
 #include <linux/sched.h>
 #include <linux/completion.h>
+#include "klog.h"
+
+int uk_sched_setaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask);
+int uk_sched_getaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask);
 
 /* for find_thread_by_pid() */
 static DEFINE_RWLOCK(thread_hash_lock);
@@ -118,7 +121,6 @@ static void remove_thread_by_pid(struct thread *thread, pid_t pid)
 	if (thread->pid != pid)
 	{
 		printk("%s %d : pid is bad \n",__func__,__LINE__);
-		return;
 	}
 
 	slot = thread_hashfn(pid);
@@ -340,8 +342,7 @@ struct thread *create_thread( int fd, struct process *process )
     thread->process = (struct process *)grab_object( process );
     thread->desktop = process->desktop;
     thread->affinity = process->affinity;
-#ifdef CONFIG_UNIFIED_KERNEL
-#else
+#ifndef CONFIG_UNIFIED_KERNEL
     if (!current_thread) current_thread = thread;
 #endif
 
@@ -525,17 +526,6 @@ struct thread *get_thread_from_tid( int tid )
     return NULL;
 }
 
-#ifdef CONFIG_UNIFIED_KERNEL
-static int uk_sched_setaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask)
-{
-	return ENOSYS;
-}
-
-static int uk_sched_getaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask)
-{
-	return ENOSYS;
-}
-#endif
 
 /* find a thread from a Unix pid */
 struct thread *get_thread_from_pid( int pid )
@@ -564,9 +554,9 @@ int set_thread_affinity( struct thread *thread, affinity_t affinity )
             if (affinity & mask) CPU_SET( i, &set );
 
 #ifdef CONFIG_UNIFIED_KERNEL
-	ret = uk_sched_setaffinity( thread->unix_tid, sizeof(set), &set );
+        ret = uk_sched_setaffinity( thread->unix_tid, sizeof(set), &set );
 #else
-	ret = sched_setaffinity( thread->unix_tid, sizeof(set), &set );
+        ret = sched_setaffinity( thread->unix_tid, sizeof(set), &set );
 #endif
     }
 #endif
@@ -586,10 +576,10 @@ affinity_t get_thread_affinity( struct thread *thread )
 #ifdef CONFIG_UNIFIED_KERNEL
         if (!uk_sched_getaffinity( thread->unix_tid, sizeof(set), &set ))
 #else
-        if (!sched_getaffinity( thread->unix_tid, sizeof(set), &set ))
+            if (!sched_getaffinity( thread->unix_tid, sizeof(set), &set ))
 #endif
-            for (i = 0; i < 8 * sizeof(mask); i++)
-                if (CPU_ISSET( i, &set )) mask |= 1 << i;
+                for (i = 0; i < 8 * sizeof(mask); i++)
+                    if (CPU_ISSET( i, &set )) mask |= 1 << i;
     }
 #endif
     if (!mask) mask = ~0;
@@ -779,6 +769,15 @@ static int check_wait( struct thread *thread )
     return -1;
 }
 
+#ifdef CONFIG_UNIFIED_KERNEL
+static int send_thread_wakeup( struct thread *thread, client_ptr_t cookie, int signaled )
+{
+    complete( &thread->completion );
+    thread->wake_info.cookie   = cookie;
+    thread->wake_info.signaled = signaled;
+    return 0;
+}
+#else
 /* send the wakeup signal to a thread */
 static int send_thread_wakeup( struct thread *thread, client_ptr_t cookie, int signaled )
 {
@@ -788,15 +787,8 @@ static int send_thread_wakeup( struct thread *thread, client_ptr_t cookie, int s
     memset( &reply, 0, sizeof(reply) );
     reply.cookie   = cookie;
     reply.signaled = signaled;
-#ifdef CONFIG_UNIFIED_KERNEL
-    complete( &thread->completion );
-    thread->wake_info.cookie   = cookie;
-    thread->wake_info.signaled = signaled;
-    return 0;
-#else
     if ((ret = write( get_unix_fd( thread->wait_fd ), &reply, sizeof(reply) )) == sizeof(reply))
         return 0;
-#endif
     if (ret >= 0)
         fatal_protocol_error( thread, "partial wakeup write %d\n", ret );
     else if (errno == EPIPE)
@@ -805,6 +797,7 @@ static int send_thread_wakeup( struct thread *thread, client_ptr_t cookie, int s
         fatal_protocol_error( thread, "write: %s\n", strerror( errno ));
     return -1;
 }
+#endif
 
 /* attempt to wake up a thread */
 /* return >0 if OK, 0 if the wait condition is still not satisfied */
@@ -918,11 +911,11 @@ static timeout_t select_on( unsigned int count, client_ptr_t cookie, const obj_h
     wait_for_completion( &current_thread->completion );
     if (cookie == current_thread->wake_info.cookie)
     {
-	set_error( current_thread->wake_info.signaled );
+        set_error( current_thread->wake_info.signaled );
     }
     else
     {
-	klog(0,"cookie is broken \n");
+        klog(0,"cookie is broken \n");
     }
 #else
     set_error( STATUS_PENDING );

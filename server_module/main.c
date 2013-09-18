@@ -144,9 +144,7 @@ int main( int argc, char *argv[] )
     if (debug_level) fprintf( stderr, "wineserver: starting (pid=%ld)\n", (long) getpid() );
     init_signals();
     init_directories();
-#ifndef CONFIG_UNIFIED_KERNEL
     init_registry();
-#endif
     main_loop();
     return 0;
 }
@@ -155,7 +153,7 @@ int main( int argc, char *argv[] )
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/kthread.h>
-#include "log.h"
+#include "klog.h"
 
 extern void init_thread_hash_table(void);
 extern int create_syscall_chardev(void);
@@ -173,7 +171,7 @@ static int __init unifiedkernel_init(void)
 	init_thread_hash_table();
 	create_syscall_chardev();
 	init_directories();
-	/*init_registry(); */ /* NtCreateFirstProcss call init_registry() */
+	/*init_registry(); */ /* NtEarlyInit will call uk_init_registry() */
 
 	timer_kernel_task = kthread_create((void*)timer_loop, NULL, "timer_thread");
 	if(!IS_ERR(timer_kernel_task))

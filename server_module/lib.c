@@ -40,8 +40,10 @@
 #include "stdio.h"
 #include "assert.h"
 #include "errno.h"
-#include "log.h"
+#include "klog.h"
 #include "thread.h"
+#include "sched.h"
+#include "termios.h"
 #include "wine/unicode.h"
 #include "sys/sysctl.h"
 
@@ -3142,5 +3144,32 @@ int getrlimit(int resource, struct rlimit *rlim)
 	ret = sys_getrlimit(resource, rlim);
 
 	SYSCALL_RETURN(ret);
+}
+
+int uk_sched_setaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask)
+{
+	klog(0,"NOT IMPLEMENT!\n");
+	return 0;
+}
+
+int uk_sched_getaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask)
+{
+	klog(0,"NOT IMPLEMENT!\n");
+	return 0;
+}
+
+int tcgetattr(int fd, struct termios *termios_p)
+{
+	/* in glibc tcgetattr.c */
+	//struct __kernel_termios k_termios;
+	//INLINE_SYSCALL (ioctl, 3, fd, TCGETS, &k_termios);
+	klog(0,"NOT IMPLEMENT!\n");
+	return 0;
+}
+int tcflush(int fd, int queue_selector)
+{
+	//return __ioctl (fd, TCFLSH, queue_selector);
+	klog(0,"NOT IMPLEMENT!\n");
+	return 0;
 }
 

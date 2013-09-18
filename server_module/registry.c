@@ -52,7 +52,7 @@
 
 #ifdef CONFIG_UNIFIED_KERNEL
 #include <asm/div64.h>
-#include "log.h"
+#include "klog.h"
 #endif
 
 struct notify
@@ -272,9 +272,9 @@ static void save_subkeys( const struct reg_key *key, const struct reg_key *base,
 #ifndef CONFIG_UNIFIED_KERNEL
         fprintf( f, "] %u\n", (unsigned int)((key->modif - ticks_1601_to_1970) / TICKS_PER_SEC) );
 #else
-	u64 tmp = (key->modif - ticks_1601_to_1970);
-	do_div(tmp, TICKS_PER_SEC);
-	fprintf( f, "] %u\n", (unsigned int)(tmp) );
+        u64 tmp = (key->modif - ticks_1601_to_1970);
+        do_div(tmp, TICKS_PER_SEC);
+        fprintf( f, "] %u\n", (unsigned int)(tmp) );
 #endif
         if (key->class)
         {
@@ -1730,29 +1730,28 @@ unsigned int get_prefix_cpu_mask(void)
 }
 
 #ifdef CONFIG_UNIFIED_KERNEL
-#include <linux/slab.h>
 #include <linux/uaccess.h>
 
-char * build_reg_name( const char * config_dir , int config_dir_len, const char *regname )
+char *build_reg_name( const char *config_dir , int config_dir_len, const char *regname )
 {
-	int total_len=0;
-	char *ret;
+    int total_len=0;
+    char *ret;
 
-	total_len = config_dir_len + strlen(regname) + 1;
-	ret = kmalloc(total_len, GFP_KERNEL);
-	if (!ret)
-	{
-		printk("%s No Memory \n", __func__);
-		return NULL;
-	}
-	memset(ret, 0, total_len);
-	if (copy_from_user(ret, config_dir, config_dir_len))
-	{
-		printk("%s copy_from_user error\n", __func__);
-		return NULL;
-	}
-	memcpy(ret+config_dir_len, regname, strlen(regname)); 
-	return ret;
+    total_len = config_dir_len + strlen(regname) + 1;
+    ret = malloc(total_len);
+    if (!ret)
+    {
+        printk("%s No Memory \n", __func__);
+        return NULL;
+    }
+    memset(ret, 0, total_len);
+    if (copy_from_user(ret, config_dir, config_dir_len))
+    {
+        printk("%s copy_from_user error\n", __func__);
+        return NULL;
+    }
+    memcpy(ret+config_dir_len, regname, strlen(regname)); 
+    return ret;
 }
 
 void destroy_reg_name( void )
@@ -1760,10 +1759,10 @@ void destroy_reg_name( void )
     int i;
 
     for (i = 0; i < save_branch_count; i++)
-        kfree( save_branch_info[i].path );
+        free( save_branch_info[i].path );
 }
 
-void init_registry(const char __user *config_dir, int len)
+void uk_init_registry(const char __user *config_dir, int len)
 {
     static const WCHAR HKLM[] = { 'M','a','c','h','i','n','e' };
     static const WCHAR HKU_default[] = { 'U','s','e','r','\\','.','D','e','f','a','u','l','t' };
@@ -1842,7 +1841,8 @@ void init_registry(const char __user *config_dir, int len)
     /* start the periodic save timer */
     set_periodic_save_timer();
 }
-#else
+#endif
+
 /* registry initialisation */
 void init_registry(void)
 {
@@ -1917,7 +1917,6 @@ void init_registry(void)
     /* go back to the server dir */
     if (fchdir( server_dir_fd ) == -1) fatal_error( "chdir to server dir: %s\n", strerror( errno ));
 }
-#endif
 
 /* save a registry branch to a file */
 static void save_all_subkeys( struct reg_key *key, FILE *f )

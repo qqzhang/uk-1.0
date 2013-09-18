@@ -104,7 +104,7 @@
 #include <linux/poll.h>
 #include <linux/file.h>
 #include <asm/div64.h>
-#include "log.h"
+#include "klog.h"
 #endif
 
 #if defined(HAVE_SYS_EPOLL_H) && defined(HAVE_EPOLL_CREATE)

@@ -56,23 +56,6 @@
 #include "thread.h"
 #include "request.h"
 
-#ifdef CONFIG_UNIFIED_KERNEL
-#include <linux/kernel.h>
-static int tcgetattr(int fd, struct termios *termios_p)
-{
-	/* in glibc tcgetattr.c */
-	//struct __kernel_termios k_termios;
-	//INLINE_SYSCALL (ioctl, 3, fd, TCGETS, &k_termios);
-	printk("%s %d is stub \n",__func__,__LINE__);
-	return 0;
-}
-static int tcflush(int fd, int queue_selector)
-{
-	//return __ioctl (fd, TCFLSH, queue_selector);
-	printk("%s %d is stub \n",__func__,__LINE__);
-	return 0;
-}
-#endif
 
 static void serial_dump( struct object *obj, int verbose );
 static struct fd *serial_get_fd( struct object *obj );

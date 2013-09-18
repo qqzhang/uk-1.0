@@ -70,7 +70,7 @@
 
 #ifdef CONFIG_UNIFIED_KERNEL
 #include "wine/server.h" /* for struct __server_request_info */
-#include "log.h" /* for klog */
+#include "klog.h" /* for klog */
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/fs.h>
@@ -889,7 +889,7 @@ void close_master_socket( timeout_t timeout )
 #ifdef CONFIG_UNIFIED_KERNEL
 
 char __user *current_config_dir;
-extern void init_registry(const char __user* config_dir, int len);
+extern void uk_init_registry(const char __user* config_dir, int len);
 
 NTSTATUS NtEarlyInit(int __user* init_data_ptr)
 {
@@ -901,45 +901,45 @@ NTSTATUS NtEarlyInit(int __user* init_data_ptr)
     memset(&init_data, 0, sizeof(struct init_data));
     if (copy_from_user(&init_data, init_data_ptr, sizeof(struct init_data)))
     {
-	klog(0,"copy_from_user error \n");
-	return STATUS_NO_MEMORY;
+        klog(0,"copy_from_user error \n");
+        return STATUS_NO_MEMORY;
     }
 
     type = init_data.init_type;
     thread_id = init_data.thread_id;
     switch( type )
     {
-	case FIRST_PROCESS:
-	    create_process( -1, NULL, 0 );
-	    if (!current_config_dir)
-	    {
-		current_config_dir = init_data.config_dir;
-		init_registry(init_data.config_dir, init_data.config_dir_len);
-	    }
-	    /* TODO */
-	    //else if (!strcmp(current_config_dir, init_data.config_dir))
-
-	    return STATUS_SUCCESS;
-
-	case NEW_PROCESS:
-    case NEW_THREAD:
-        if (thread_id)
-        {
-            if (new_thread = get_thread_from_id(thread_id))
+        case FIRST_PROCESS:
+            create_process( -1, NULL, 0 );
+            if (!current_config_dir)
             {
-                add_thread_by_pid( new_thread, current->pid );
+                current_config_dir = init_data.config_dir;
+                uk_init_registry(init_data.config_dir, init_data.config_dir_len);
             }
-            else
-            {
-                klog(0,"new_thread get error id=%d \n", thread_id);
-                return STATUS_UNSUCCESSFUL;
-            }
-        }
-        return STATUS_SUCCESS;
+            /* TODO */
+            //else if (!strcmp(current_config_dir, init_data.config_dir))
 
-	default:
-	    klog(0,"Unkown type \n");
-	    return STATUS_NOT_IMPLEMENTED;
+            return STATUS_SUCCESS;
+
+        case NEW_PROCESS:
+        case NEW_THREAD:
+            if (thread_id)
+            {
+                if (new_thread = get_thread_from_id(thread_id))
+                {
+                    add_thread_by_pid( new_thread, current->pid );
+                }
+                else
+                {
+                    klog(0,"new_thread get error id=%d \n", thread_id);
+                    return STATUS_UNSUCCESSFUL;
+                }
+            }
+            return STATUS_SUCCESS;
+
+        default:
+            klog(0,"Unkown type \n");
+            return STATUS_NOT_IMPLEMENTED;
     }
 }
 
@@ -1010,7 +1010,7 @@ NTSTATUS NtWineService(int __user *user_req_info)
 	status = get_error();
 #if 1
 	if (status)
-	    klog (0, "req=%d : %s done ret=%08x\n",req, req_names[req],status);
+	    klog (0, "[%d]:%s ret=%08x\n",req, req_names[req],status);
 #endif
 
 	//if (thread->reply_fd)

@@ -265,6 +265,32 @@ static inline unsigned int wait_reply( struct __server_request_info *req )
 }
 
 
+#ifdef CONFIG_UNIFIED_KERNEL
+unsigned int wine_server_call( void *req_ptr )
+{
+    struct __server_request_info * const req = req_ptr;
+    unsigned int ret = 0;
+    int fd;
+
+    fd = open( SYSCALL_FILE, O_WRONLY);
+    if (fd == -1)
+    {
+        ERR("open SYSCALL_FILE error %d \n",errno);
+        return errno;
+    }
+    else
+    {
+        ret = ioctl(fd, Nt_WineService, req_ptr);
+        if (ret<0)
+        {
+            ERR("p %d t %d : ioctl ret=%d error %d \n", getpid(), syscall(224), ret, errno);
+        }
+        close(fd);
+    }
+
+    return ret;
+}
+#else
 /***********************************************************************
  *           wine_server_call (NTDLL.@)
  *
@@ -289,7 +315,6 @@ static inline unsigned int wait_reply( struct __server_request_info *req )
  */
 unsigned int wine_server_call( void *req_ptr )
 {
-#ifndef CONFIG_UNIFIED_KERNEL
     struct __server_request_info * const req = req_ptr;
     sigset_t old_set;
     unsigned int ret;
@@ -299,30 +324,8 @@ unsigned int wine_server_call( void *req_ptr )
     if (!ret) ret = wait_reply( req );
     pthread_sigmask( SIG_SETMASK, &old_set, NULL );
     return ret;
-#else
-    struct __server_request_info * const req = req_ptr;
-    unsigned int ret = 0;
-    int fd;
-
-    fd = open( SYSCALL_FILE, O_WRONLY);
-    if (fd == -1)
-    {
-	ERR("open SYSCALL_FILE error %d \n",errno);
-	return errno;
-    }
-    else
-    {
-	ret = ioctl(fd, Nt_WineService, req_ptr);
-	if (ret<0)
-	{
-	    ERR("p %d t %d : ioctl ret=%d error %d \n", getpid(), syscall(224), ret, errno);
-	}
-	close(fd);
-    }
-
-    return ret;
-#endif
 }
+#endif
 
 
 /***********************************************************************
@@ -347,7 +350,7 @@ void server_leave_uninterrupted_section( RTL_CRITICAL_SECTION *cs, sigset_t *sig
 #ifdef CONFIG_UNIFIED_KERNEL
 void CDECL wine_server_send_fd( int fd )
 {
-	fprintf(stderr, "%s don't need \n",__func__);
+//	fprintf(stderr, "%s don't need \n",__func__);
 }
 #else
 /***********************************************************************
@@ -607,21 +610,21 @@ int server_get_unix_fd( HANDLE handle, unsigned int wanted_access, int *unix_fd,
             if (options) *options = reply->options;
             access = reply->access;
 #ifdef CONFIG_UNIFIED_KERNEL
-	    fd = reply->fd;
-	    if (fd != -1)
-	    {
-		*needs_close = 0;
-		if(reply->cacheable)
-		{
-		    server_enter_uninterrupted_section( &fd_cache_section, &sigset );
-		    add_fd_to_cache( handle, fd, reply->type,reply->access, reply->options );
-		    server_leave_uninterrupted_section( &fd_cache_section, &sigset );
-		}
-	    }
-	    else
-	    {
-		ret = STATUS_TOO_MANY_OPENED_FILES;
-	    }
+            fd = reply->fd;
+            if (fd != -1)
+            {
+                *needs_close = 0;
+                if(reply->cacheable)
+                {
+                    server_enter_uninterrupted_section( &fd_cache_section, &sigset );
+                    add_fd_to_cache( handle, fd, reply->type,reply->access, reply->options );
+                    server_leave_uninterrupted_section( &fd_cache_section, &sigset );
+                }
+            }
+            else
+            {
+                ret = STATUS_TOO_MANY_OPENED_FILES;
+            }
 #else
             if ((fd = receive_fd( &fd_handle )) != -1)
             {
@@ -669,9 +672,7 @@ int CDECL wine_server_fd_to_handle( int fd, unsigned int access, unsigned int at
     int ret;
 
     *handle = 0;
-#ifndef CONFIG_UNIFIED_KERNEL
     wine_server_send_fd( fd );
-#endif
 
     SERVER_START_REQ( alloc_file_handle )
     {
@@ -1130,12 +1131,8 @@ void server_init_process(void)
     fd = open( SYSCALL_FILE, O_WRONLY);
     if (fd == -1)
     {
-	    ERR("open SYSCALL_FILE error %d \n",errno);
-	    return errno;
-    }
-    else
-    {
-//    ntdll_get_thread_data()->request_fd = fd;
+        ERR("open SYSCALL_FILE error %d \n",errno);
+        return;
     }
 
     memset(&init_data, 0, sizeof(struct init_data));
@@ -1145,15 +1142,15 @@ void server_init_process(void)
         thread_id = atoi( env_socket );
         unsetenv( "WINESERVERSOCKET" );
 
-	init_data.init_type = NEW_PROCESS;
-	init_data.thread_id = thread_id; /* don't need create_process() */
+        init_data.init_type = NEW_PROCESS;
+        init_data.thread_id = thread_id; /* don't need create_process() */
     }
     else 
     {
-	fd_socket = server_connect();
+        fd_socket = server_connect();
 
-	init_data.init_type = FIRST_PROCESS;
-	init_data.thread_id = 0;
+        init_data.init_type = FIRST_PROCESS;
+        init_data.thread_id = 0;
     }
 
     ioctl(fd, Nt_EarlyInit, &init_data);
@@ -1169,6 +1166,9 @@ void server_init_process(void)
     sigaddset( &server_block_set, SIGUSR2 );
     sigaddset( &server_block_set, SIGCHLD );
     pthread_sigmask( SIG_BLOCK, &server_block_set, NULL );
+
+    /* receive the first thread request fd on the main socket */
+    ntdll_get_thread_data()->request_fd = -1;
 }
 #endif
 
@@ -1294,7 +1294,7 @@ void server_kill_thread(LONG exit_code)
     if (fd == -1)
     {
         ERR("open SYSCALL_FILE error %d \n",errno);
-        return errno;
+        return;
     }
     else
     {

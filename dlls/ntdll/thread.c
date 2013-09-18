@@ -407,25 +407,25 @@ static void start_thread( struct startup_info *info )
 
 #ifdef CONFIG_UNIFIED_KERNEL
     {
-	struct init_data data;
-	int fd ;
+        struct init_data data;
+        int fd , ret;
 
-	fd = open( SYSCALL_FILE, O_WRONLY);
-	if (fd == -1)
-	{
-	    ERR("open SYSCALL_FILE failed \n");
-	}
-	else
-	{
-	    //	    thread_data->request_fd = fd;
+        fd = open( SYSCALL_FILE, O_WRONLY);
+        if (fd == -1)
+        {
+            ERR("open SYSCALL_FILE failed \n");
+        }
+        else
+        {
+            memset( &data, 0, sizeof(data));
 
-	    memset( &data, 0, sizeof(data));
-
-	    data.init_type = NEW_THREAD;
-	    data.thread_id = teb->ClientId.UniqueThread;
-	    ioctl(fd, Nt_EarlyInit, &data);
-	    close(fd);
-	}
+            data.init_type = NEW_THREAD;
+            data.thread_id = teb->ClientId.UniqueThread;
+            ret = ioctl(fd, Nt_EarlyInit, &data);
+            if (ret<0)
+                ERR("ioctl failed \n");
+            close(fd);
+        }
     }
 #endif
 
