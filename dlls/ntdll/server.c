@@ -984,6 +984,13 @@ static int server_connect(void)
     init_data.config_dir =  wine_get_config_dir();
     init_data.config_dir_len = strlen(init_data.config_dir);
 
+    /* switch back to the starting directory */
+    if (fd_cwd != -1)
+    {
+        fchdir( fd_cwd );
+        close( fd_cwd );
+    }
+
     return 1;
 }
 #endif
