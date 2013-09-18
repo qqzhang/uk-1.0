@@ -282,8 +282,8 @@ void FD_SET(int fd, fd_set *set);
 void FD_ZERO(fd_set *set);
 #endif
 
-void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
-int munmap(void *addr, size_t length);
+int mmap(unsigned long addr, size_t len, int prot, int flags, int fd, off_t off);
+int munmap(unsigned long addr, size_t length);
 
 int pipe(int pipefd[2]);
 

@@ -2363,11 +2363,11 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset)
     file = fget(fd);
     if (file)
     {
-	loff_t pos = offset; /* from start of the file */
-	PREPARE_KERNEL_CALL;
-	ret = vfs_read(file, buf, count, &pos);
-	END_KERNEL_CALL;
-	fput(file);
+        loff_t pos = offset; /* from start of the file */
+        PREPARE_KERNEL_CALL;
+        ret = vfs_read(file, buf, count, &pos);
+        END_KERNEL_CALL;
+        fput(file);
     }
 
     SYSCALL_RETURN(ret);
@@ -2375,8 +2375,20 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset)
 
 ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+    struct file *file;
+    ssize_t ret = -EBADF;
+
+    file = fget(fd);
+    if (file)
+    {
+        loff_t pos = offset; /* from start of the file */
+        PREPARE_KERNEL_CALL;
+        ret = vfs_write(file, buf, count, &pos);
+        END_KERNEL_CALL;
+        fput(file);
+    }
+
+    SYSCALL_RETURN(ret);
 }
 
 ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
@@ -2568,8 +2580,13 @@ int fchdir(int fd)
 }
 int fsync(int fd)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+    int ret;
+    asmlinkage long (*sys_fsync)(unsigned int fd) = get_kernel_proc_address("sys_fsync");
+    klog(0,"warning : use fd number in kernel!\n");
+
+    ret = sys_fsync(fd);
+
+	SYSCALL_RETURN(ret);
 }
 int chmod(const char *path, mode_t mode)
 {
@@ -3040,16 +3057,31 @@ int inotify_rm_watch(int fd,int wd)
 }
 
 /*mma.h*/
-void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
+int mmap(unsigned long addr, size_t len, int prot, int flags, int fd, off_t off)
 {
-	klog(0,"NOT IMPLEMENT!\n");
+    int ret;
 
-	return 0;
+    asmlinkage long (*sys_mmap_pgoff)(unsigned long addr, unsigned long len,
+            unsigned long prot, unsigned long flags,
+            unsigned long fd, unsigned long pgoff) = get_kernel_proc_address("sys_mmap_pgoff");
+
+    ret = -EINVAL;
+    if (off & ~PAGE_MASK)
+        goto out;
+
+    ret = sys_mmap_pgoff(addr, len, prot, flags, fd, off >> PAGE_SHIFT);
+out:
+    SYSCALL_RETURN(ret);
 }
-int munmap(void *addr, size_t length)
+
+int munmap(unsigned long addr, size_t length)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+    int ret;
+    asmlinkage long (*sys_munmap)(unsigned long addr, size_t len) = get_kernel_proc_address("sys_munmap");
+
+    ret = sys_munmap(addr, length);
+
+    SYSCALL_RETURN(ret);
 }
 
 int pipe(int *fildes)
