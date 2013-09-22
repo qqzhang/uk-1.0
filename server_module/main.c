@@ -189,7 +189,13 @@ static void __exit unifiedkernel_exit(void)
 	wake_up_process(timer_kernel_task);
 	kthread_stop(timer_kernel_task);
 
-	destroy_reg_name();
+    flush_registry();
+
+#ifdef DEBUG_OBJECTS
+    close_objects();  /* shut down everything properly */
+#endif
+
+    destroy_reg_name();
 }
 
 module_init(unifiedkernel_init);

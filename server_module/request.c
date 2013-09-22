@@ -872,6 +872,12 @@ static void close_socket_timeout( void *arg )
     exit( 0 );
 }
 
+#ifdef CONFIG_UNIFIED_KERNEL
+/* close the master socket and stop waiting for new clients */
+void close_master_socket( timeout_t timeout )
+{
+}
+#else
 /* close the master socket and stop waiting for new clients */
 void close_master_socket( timeout_t timeout )
 {
@@ -885,6 +891,7 @@ void close_master_socket( timeout_t timeout )
 
     master_timeout = add_timeout_user( timeout, close_socket_timeout, NULL );
 }
+#endif
 
 #ifdef CONFIG_UNIFIED_KERNEL
 
