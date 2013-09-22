@@ -1,6 +1,8 @@
 #ifndef _SCHED_H_
 #define _SCHED_H_
 
+#include <linux/cpumask.h>
+
 # define __CPU_SETSIZE	1024
 # define __NCPUBITS	(8 * sizeof (__cpu_mask))
 #define __extension__ 

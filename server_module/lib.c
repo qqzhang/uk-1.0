@@ -3180,14 +3180,39 @@ int getrlimit(int resource, struct rlimit *rlim)
 
 int uk_sched_setaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+    struct cpumask kernel_mask;
+    int ret;
+
+    asmlinkage long (*sys_sched_setaffinity)(pid_t pid, unsigned int len,
+            unsigned long __user *user_mask_ptr) = get_kernel_proc_address("sys_sched_setaffinity");
+
+    memcpy(&kernel_mask, mask, sizeof(struct cpumask));
+
+    PREPARE_KERNEL_CALL;
+    ret = sys_sched_setaffinity(pid, sizeof(struct cpumask), (unsigned long __user *)&kernel_mask);
+    END_KERNEL_CALL;
+
+    SYSCALL_RETURN(ret);
 }
 
 int uk_sched_getaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+    struct cpumask kernel_mask;
+    int ret;
+    asmlinkage long (*sys_sched_getaffinity)(pid_t pid, unsigned int len,
+            unsigned long __user *user_mask_ptr) = get_kernel_proc_address("sys_sched_getaffinity");
+
+    PREPARE_KERNEL_CALL;
+    ret = sys_sched_getaffinity(pid, sizeof(struct cpumask), (unsigned long __user *)&kernel_mask);
+    END_KERNEL_CALL;
+
+    if (ret == 0)
+    {
+        memset(mask, 0, cpusetsize);
+        memcpy(mask, &kernel_mask, sizeof(struct cpumask));
+    }
+
+    SYSCALL_RETURN(ret);
 }
 
 int tcgetattr(int fd, struct termios *termios_p)
