@@ -229,6 +229,21 @@ static void set_process_startup_state( struct process *process, enum startup_sta
     }
 }
 
+#ifdef CONFIG_UNIFIED_KERNEL
+static void server_shutdown_timeout( void *arg )
+{
+    shutdown_timeout = NULL;
+    if (!running_processes)
+    {
+        close_master_socket( 0 );
+        return;
+    }
+    if (debug_level) fprintf( stderr, "wineserver: shutting down\n" );
+    if (shutdown_event) set_event( shutdown_event );
+    shutdown_timeout = add_timeout_user( 2 * -TICKS_PER_SEC, server_shutdown_timeout, NULL );
+    close_master_socket( 4 * -TICKS_PER_SEC );
+}
+#else
 /* callback for server shutdown */
 static void server_shutdown_timeout( void *arg )
 {
@@ -251,6 +266,7 @@ static void server_shutdown_timeout( void *arg )
         break;
     }
 }
+#endif
 
 /* forced shutdown, used for wineserver -k */
 void shutdown_master_socket(void)
