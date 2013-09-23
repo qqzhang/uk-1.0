@@ -2538,7 +2538,17 @@ void destroy_map_tbl(struct fd *fd)
     if (fd->map_tbl)
     {
         if (fd->tbl_index != 0)
-            klog(0, "warning : fd->tbl_index != 0, =%d\n",fd->tbl_index);
+        {
+            int i;
+            for(i=0; i<fd->tbl_index; i++)
+            {
+                if (fd->map_tbl[i].tgid == current->tgid)
+                    close(fd->map_tbl[i].unix_fd);
+                else
+                    klog(0, "FIXME : can't close other process's fd number. obj_ops=%08x\n",((struct object*)fd->user)->ops);
+            }
+        }
+
         free(fd->map_tbl);
         fd->map_tbl = NULL;
     }
