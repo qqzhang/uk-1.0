@@ -909,7 +909,7 @@ static timeout_t select_on( unsigned int count, client_ptr_t cookie, const obj_h
     }
     current_thread->wait->cookie = cookie;
 #ifdef CONFIG_UNIFIED_KERNEL
-    wait_for_completion( &current_thread->completion );
+    wait_for_completion_interruptible( &current_thread->completion );
     if (cookie == current_thread->wake_info.cookie)
     {
         set_error( current_thread->wake_info.signaled );
