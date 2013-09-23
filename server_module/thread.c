@@ -120,7 +120,8 @@ static void remove_thread_by_pid(struct thread *thread, pid_t pid)
 
 	if (thread->pid != pid)
 	{
-		printk("%s %d : pid is bad \n",__func__,__LINE__);
+		klog(0,"killed by other thread %d\n",pid);
+		pid = thread->pid;
 	}
 
 	slot = thread_hashfn(pid);
