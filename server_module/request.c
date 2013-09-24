@@ -1084,7 +1084,7 @@ static int syscall_chardev_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static int syscall_chardev_ioctl(struct inode *inode, struct file *filp, unsigned int cmd, unsigned long arg)
+static int syscall_chardev_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	int err = 0;
 	int __user* argp = (int __user*)arg;
@@ -1120,7 +1120,7 @@ static const struct file_operations syscall_chardev_fops =
 	.owner 		= THIS_MODULE,
 	.open		= syscall_chardev_open,
 	.release 	= syscall_chardev_release,
-	.ioctl 		= syscall_chardev_ioctl,
+	.unlocked_ioctl = syscall_chardev_unlocked_ioctl,
 };
 
 int create_syscall_chardev(void)
