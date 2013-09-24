@@ -1017,7 +1017,15 @@ NTSTATUS NtWineService(int __user *user_req_info)
 	status = get_error();
 #if 1
 	if (status)
-	    klog (0, "[%d]:%s ret=%08x\n",req, req_names[req],status);
+    {
+        if(req==90 || req==91 ||req==94 || req==96 || req==97 || req==203)
+        {
+        }
+        else
+        {
+            klog (0, "[%d]:%s ret=%08x\n",req, req_names[req],status);
+        }
+    }
 #endif
 
 	//if (thread->reply_fd)

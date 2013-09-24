@@ -1811,7 +1811,7 @@ static char *config_dir;
 static char *user_name;
 static char *server_dir;
 
-int stat(char *filename, void*st);
+int stat(char *filename, struct stat *st);
 //static void fatal_error( const char *err, ... )  __attribute__((noreturn,format(printf,1,2)));
 //static void fatal_perror( const char *err, ... )  __attribute__((noreturn,format(printf,1,2)));
 static void fatal_error( const char *err, ... );
@@ -2438,40 +2438,42 @@ long dup2(unsigned int oldfd, unsigned int newfd)
 
 	SYSCALL_RETURN(ret);
 }
-//int stat(char *filename, struct stat *st)
-int stat(char *filename, void*st)
+
+int stat(char *filename, struct stat *st)
 {
-	long ret;
-	asmlinkage	long (*sys_newstat)(char*, struct stat*) 
-		= get_kernel_proc_address("sys_newstat");
+    int ret;
+    asmlinkage long (*sys_newstat)(char __user *filename,
+            struct stat __user *statbuf) = get_kernel_proc_address("sys_newstat");
 
-	PREPARE_KERNEL_CALL;
-	ret = sys_newstat(filename, st);
-	END_KERNEL_CALL;
+    PREPARE_KERNEL_CALL;
+    ret = sys_newstat(filename, st);
+    END_KERNEL_CALL;
 
-	SYSCALL_RETURN(ret);
+    SYSCALL_RETURN(ret);
 }
 
-//long fstat(unsigned int fd, struct stat *st)
-long fstat(unsigned int fd, void*st)
+long fstat(unsigned int fd, struct stat *st)
 {
-	long ret;
-	asmlinkage	long (*sys_newfstat)(unsigned int, struct stat*) = get_kernel_proc_address("sys_newfstat");
+    long ret;
+    asmlinkage long (*sys_newfstat)(unsigned int fd, struct stat __user *statbuf)
+        = get_kernel_proc_address("sys_newfstat");
 
-	PREPARE_KERNEL_CALL;
-	ret = sys_newfstat(fd, st);
-	END_KERNEL_CALL;
+    PREPARE_KERNEL_CALL;
+    ret = sys_newfstat(fd, st);
+    END_KERNEL_CALL;
 
-	SYSCALL_RETURN(ret);
+    SYSCALL_RETURN(ret);
 }
 
 int lstat(char *path, void *buf)
 {
 	int ret = 0;
-	asmlinkage long (*sys_lstat)(char __user *filename,
-			struct __old_kernel_stat __user *statbuf) = get_kernel_proc_address("sys_lstat");
+    asmlinkage long (*sys_newlstat)(char __user *filename,
+            struct stat __user *statbuf) = get_kernel_proc_address("sys_newlstat");
 
-	ret = sys_lstat(path, buf);
+    PREPARE_KERNEL_CALL;
+    ret = sys_newlstat(path, buf);
+	END_KERNEL_CALL;
 
 	SYSCALL_RETURN(ret);
 }
@@ -2543,9 +2545,14 @@ int fstatfs(int fd, struct statfs *buf)
 
 int rmdir(const char *pathname)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+    int ret;
+    asmlinkage long (*sys_rmdir)(const char __user *pathname) = get_kernel_proc_address("sys_rmdir");
+
+    ret = sys_rmdir(pathname);
+
+    SYSCALL_RETURN(ret);
 }
+
 int mkdir(const char *pathname, mode_t mode)
 {
 	long ret;
@@ -2662,10 +2669,15 @@ int  raise(int sig)
 	klog(0,"NOT IMPLEMENT!\n");
 	return 0;
 }
+
 unsigned int alarm(unsigned int seconds)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+    int ret;
+    asmlinkage long (*sys_alarm)(unsigned int seconds) = get_kernel_proc_address("sys_alarm");
+
+    ret = sys_alarm(seconds);
+
+    SYSCALL_RETURN(ret);
 }
 
 int sigaction(int sig, const struct old_sigaction __user *act, struct old_sigaction __user *oldact)
@@ -2895,6 +2907,15 @@ long shutdown(int fd, int how)
 
 long recv(int fd, void *buf, size_t size, unsigned flags)
 {
+	klog(0,"NOT IMPLEMENT!\n");
+	return 0;
+}
+ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
+                 struct sockaddr *src_addr, int *addrlen)
+{
+	klog(0,"NOT IMPLEMENT!\n");
+	return 0;
+#if 0
 	long ret;
 	asmlinkage long (*sys_recvfrom)(int, void*, size_t, unsigned, struct sockaddr*, int*) 
 		= get_kernel_proc_address("sys_recvfrom");
@@ -2904,15 +2925,13 @@ long recv(int fd, void *buf, size_t size, unsigned flags)
 	END_KERNEL_CALL;
 
 	SYSCALL_RETURN(ret);
-}
-ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
-                 struct sockaddr *src_addr, int *addrlen)
-{
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+#endif
 }
 ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
 {
+	klog(0,"NOT IMPLEMENT!\n");
+	return 0;
+#if 0
 	int ret;
 	asmlinkage long (*sys_recvmsg)(int, struct msghdr __user*, unsigned)
 		= get_kernel_proc_address("sys_recvmsg");
@@ -2922,6 +2941,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
 	END_KERNEL_CALL;
 
 	SYSCALL_RETURN(ret);
+#endif
 }
 
 ssize_t send(int sockfd, const void *buf, size_t len, int flags)
@@ -2937,6 +2957,9 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
 }
 ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 {
+	klog(0,"NOT IMPLEMENT!\n");
+	return 0;
+#if 0
 	int ret;
 	asmlinkage long (*sys_sendmsg)(int, const struct msghdr __user*, unsigned)
 		= get_kernel_proc_address("sys_sendmsg");
@@ -2946,6 +2969,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 	END_KERNEL_CALL;
 
 	SYSCALL_RETURN(ret);
+#endif
 }
 
 long socketpair(int family, int type, int protocol, int *sockvec)
@@ -3004,6 +3028,7 @@ int getpeername(int sockfd, struct sockaddr *addr, int* addrlen )
 {
 	int ret;
 	asmlinkage long (*sys_getpeername)(int, struct sockaddr __user*, int __user*)
+
 		= get_kernel_proc_address("sys_getpeername");
 
 	PREPARE_KERNEL_CALL;
@@ -3137,17 +3162,41 @@ pid_t wait(int *status)
 	klog(0,"NOT IMPLEMENT!\n");
 	return 0;
 }
+
 pid_t waitpid(pid_t pid, int *status, int options)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+    int ret;
+    asmlinkage long (*sys_waitpid)(pid_t pid, int __user *stat_addr, int options)
+        = get_kernel_proc_address("sys_waitpid");
+
+    PREPARE_KERNEL_CALL
+    ret = sys_waitpid(pid, status, options);
+    END_KERNEL_CALL
+
+    SYSCALL_RETURN(ret);
 }
 
 long ptrace(int request, ...)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+    int ret;
+    long pid,addr,data;
+    va_list ap;
+    asmlinkage long (*sys_ptrace)(long request, long pid, long addr, long data)
+        = get_kernel_proc_address("sys_ptrace");
+
+    va_start(ap, request);
+    pid = va_arg(ap, long);
+    addr = va_arg(ap, long);
+    data = va_arg(ap, long);
+    va_end(ap);
+
+    PREPARE_KERNEL_CALL
+    ret = sys_ptrace(request, pid, addr, data);
+    END_KERNEL_CALL
+
+    SYSCALL_RETURN(ret);
 }
+
 long sysconf(int name)
 {
     if (name == _SC_PAGESIZE)
