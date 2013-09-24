@@ -1131,55 +1131,58 @@ int create_syscall_chardev(void)
 	chardev = cdev_alloc();
 	if(chardev == NULL)
 	{
+	    klog(0,"cdev_alloc error: no memory \n");
 		return -ENOMEM;
 	}
 
 	ret = alloc_chrdev_region(&devno, 0, 1, filename);
 	if(ret < 0)
 	{
-		printk("alloc_chrdev_region error\n");
-		kfree(chardev);
-		return ret;
+        klog(0,"alloc_chrdev_region error %d\n",ret);
+        goto bad_alloc_chrdev_region;
 	}
 
 	class = class_create(THIS_MODULE, filename);
 	if(IS_ERR(class))
-	{
-		printk("class_create error\n");
-		unregister_chrdev_region(devno, 1);
-		kfree(chardev);
-		return PTR_ERR(class);
+    {
+        ret = PTR_ERR(class);
+        klog(0,"class_create error %d\n",ret);
+        goto bad_class_create;
 	}
 
 	dev = device_create(class, NULL, devno, NULL, filename);/*create /dev/syscall*/
 	if (IS_ERR(dev))
-	{
-		printk("device_create error\n");
-		class_destroy(class);
-		unregister_chrdev_region(devno, 1);
-		kfree(chardev);
-		return PTR_ERR(dev);
+    {
+        ret = PTR_ERR(dev);
+        klog(0,"device_create error %d\n",ret);
+        goto bad_device_create;
 	}
 
 	cdev_init(chardev, &syscall_chardev_fops);
 	ret = cdev_add(chardev, devno, 1);
 	if(ret < 0)
-	{
-		printk("Add char dev error\n");
-		class_destroy(class);
-		device_destroy(class, devno);
-		unregister_chrdev_region(devno, 1);
-		kfree(chardev);
-		return ret;
+    {
+        klog(0,"cdev_add error %d\n",ret);
+        goto bad_cdev_add;
 	}
 
 	return 0;
+
+bad_cdev_add:
+    device_destroy(class, devno);
+bad_device_create:
+    class_destroy(class);
+bad_class_create:
+    unregister_chrdev_region(devno, 1);
+bad_alloc_chrdev_region:
+    kfree(chardev);
+    return ret;
 }
 
 void destroy_syscall_chardev(void)
 {
+	device_destroy(class, devno); /* destroy device first */
 	class_destroy(class);
-	device_destroy(class, devno);
 	unregister_chrdev_region(devno, 1);
 	kfree(chardev);
 }
