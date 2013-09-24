@@ -89,7 +89,7 @@
 struct sock
 {
     struct object       obj;         /* object header */
-    struct fd          *fd;          /* socket file descriptor */
+    struct uk_fd          *fd;          /* socket file descriptor */
     unsigned int        state;       /* status bits */
     unsigned int        mask;        /* event mask */
     unsigned int        hmask;       /* held (blocked) events */
@@ -110,15 +110,15 @@ struct sock
 
 static void sock_dump( struct object *obj, int verbose );
 static int sock_signaled( struct object *obj, struct thread *thread );
-static struct fd *sock_get_fd( struct object *obj );
+static struct uk_fd *sock_get_fd( struct object *obj );
 static void sock_destroy( struct object *obj );
 
-static int sock_get_poll_events( struct fd *fd );
-static void sock_poll_event( struct fd *fd, int event );
-static enum server_fd_type sock_get_fd_type( struct fd *fd );
-static void sock_queue_async( struct fd *fd, const async_data_t *data, int type, int count );
-static void sock_reselect_async( struct fd *fd, struct async_queue *queue );
-static void sock_cancel_async( struct fd *fd, struct process *process, struct thread *thread, client_ptr_t iosb );
+static int sock_get_poll_events( struct uk_fd *fd );
+static void sock_poll_event( struct uk_fd *fd, int event );
+static enum server_fd_type sock_get_fd_type( struct uk_fd *fd );
+static void sock_queue_async( struct uk_fd *fd, const async_data_t *data, int type, int count );
+static void sock_reselect_async( struct uk_fd *fd, struct async_queue *queue );
+static void sock_cancel_async( struct uk_fd *fd, struct process *process, struct thread *thread, client_ptr_t iosb );
 
 static int sock_get_ntstatus( int err );
 static int sock_get_error( int err );
@@ -283,7 +283,7 @@ static void sock_wake_up( struct sock *sock )
     }
 }
 
-static inline int sock_error( struct fd *fd )
+static inline int sock_error( struct uk_fd *fd )
 {
     unsigned int optval = 0;
     socklen_t optlen = sizeof(optval);
@@ -369,7 +369,7 @@ end:
     sock_wake_up( sock );
 }
 
-static void sock_poll_event( struct fd *fd, int event )
+static void sock_poll_event( struct uk_fd *fd, int event )
 {
     struct sock *sock = get_fd_user( fd );
     int hangup_seen = 0;
@@ -478,7 +478,7 @@ static int sock_signaled( struct object *obj, struct thread *thread )
     return check_fd_events( sock->fd, sock_get_poll_events( sock->fd ) ) != 0;
 }
 
-static int sock_get_poll_events( struct fd *fd )
+static int sock_get_poll_events( struct uk_fd *fd )
 {
     struct sock *sock = get_fd_user( fd );
     unsigned int mask = sock->mask & ~sock->hmask;
@@ -512,12 +512,12 @@ static int sock_get_poll_events( struct fd *fd )
     return ev;
 }
 
-static enum server_fd_type sock_get_fd_type( struct fd *fd )
+static enum server_fd_type sock_get_fd_type( struct uk_fd *fd )
 {
     return FD_TYPE_SOCKET;
 }
 
-static void sock_queue_async( struct fd *fd, const async_data_t *data, int type, int count )
+static void sock_queue_async( struct uk_fd *fd, const async_data_t *data, int type, int count )
 {
     struct sock *sock = get_fd_user( fd );
     struct async *async;
@@ -555,13 +555,13 @@ static void sock_queue_async( struct fd *fd, const async_data_t *data, int type,
     set_error( STATUS_PENDING );
 }
 
-static void sock_reselect_async( struct fd *fd, struct async_queue *queue )
+static void sock_reselect_async( struct uk_fd *fd, struct async_queue *queue )
 {
     struct sock *sock = get_fd_user( fd );
     sock_reselect( sock );
 }
 
-static void sock_cancel_async( struct fd *fd, struct process *process, struct thread *thread, client_ptr_t iosb )
+static void sock_cancel_async( struct uk_fd *fd, struct process *process, struct thread *thread, client_ptr_t iosb )
 {
     struct sock *sock = get_fd_user( fd );
     int n = 0;
@@ -573,10 +573,10 @@ static void sock_cancel_async( struct fd *fd, struct process *process, struct th
         set_error( STATUS_NOT_FOUND );
 }
 
-static struct fd *sock_get_fd( struct object *obj )
+static struct uk_fd *sock_get_fd( struct object *obj )
 {
     struct sock *sock = (struct sock *)obj;
-    return (struct fd *)grab_object( sock->fd );
+    return (struct uk_fd *)grab_object( sock->fd );
 }
 
 static void sock_destroy( struct object *obj )
@@ -740,7 +740,7 @@ static struct sock *accept_socket( obj_handle_t handle )
 static int accept_into_socket( struct sock *sock, struct sock *acceptsock )
 {
     int acceptfd;
-    struct fd *newfd;
+    struct uk_fd *newfd;
     if ( sock->deferred )
     {
         newfd = dup_fd_object( sock->deferred->fd, 0, 0,

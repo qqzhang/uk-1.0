@@ -62,7 +62,7 @@ static int shutdown_stage;  /* current_thread stage in the shutdown process */
 static void process_dump( struct object *obj, int verbose );
 static int process_signaled( struct object *obj, struct thread *thread );
 static unsigned int process_map_access( struct object *obj, unsigned int access );
-static void process_poll_event( struct fd *fd, int event );
+static void process_poll_event( struct uk_fd *fd, int event );
 static void process_destroy( struct object *obj );
 
 static const struct object_ops process_ops =
@@ -481,7 +481,7 @@ static unsigned int process_map_access( struct object *obj, unsigned int access 
     return access & ~(GENERIC_READ | GENERIC_WRITE | GENERIC_EXECUTE | GENERIC_ALL);
 }
 
-static void process_poll_event( struct fd *fd, int event )
+static void process_poll_event( struct uk_fd *fd, int event )
 {
     struct process *process = get_fd_user( fd );
     assert( process->obj.ops == &process_ops );

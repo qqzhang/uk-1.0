@@ -72,7 +72,7 @@ static const struct object_ops async_ops =
 struct async_queue
 {
     struct object        obj;             /* object header */
-    struct fd           *fd;              /* file descriptor owning this queue */
+    struct uk_fd           *fd;              /* file descriptor owning this queue */
     struct uk_completion   *completion;      /* completion associated with a recently closed file descriptor */
     apc_param_t          comp_key;        /* completion key associated with a recently closed file descriptor */
     struct list_head          queue;           /* queue of async objects */
@@ -178,7 +178,7 @@ static void async_timeout( void *private )
 }
 
 /* create a new async queue for a given fd */
-struct async_queue *create_async_queue( struct fd *fd )
+struct async_queue *create_async_queue( struct uk_fd *fd )
 {
     struct async_queue *queue = alloc_object( &async_queue_ops );
 

@@ -74,7 +74,7 @@ struct object_ops
     /* signal an object */
     int  (*signal)(struct object *, unsigned int);
     /* return an fd object that can be used to read/write from the object */
-    struct fd *(*get_fd)(struct object *);
+    struct uk_fd *(*get_fd)(struct object *);
     /* map access rights to the specific rights for this object */
     unsigned int (*map_access)(struct object *, unsigned int);
     /* returns the security descriptor of the object */
@@ -135,7 +135,7 @@ extern struct object_type *no_get_type( struct object *obj );
 extern int no_add_queue( struct object *obj, struct wait_queue_entry *entry );
 extern int no_satisfied( struct object *obj, struct thread *thread );
 extern int no_signal( struct object *obj, unsigned int access );
-extern struct fd *no_get_fd( struct object *obj );
+extern struct uk_fd *no_get_fd( struct object *obj );
 extern unsigned int no_map_access( struct object *obj, unsigned int access );
 extern struct security_descriptor *default_get_sd( struct object *obj );
 extern int default_set_sd( struct object *obj, const struct security_descriptor *sd, unsigned int set_info );

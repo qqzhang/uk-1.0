@@ -58,17 +58,17 @@
 
 
 static void serial_dump( struct object *obj, int verbose );
-static struct fd *serial_get_fd( struct object *obj );
+static struct uk_fd *serial_get_fd( struct object *obj );
 static void serial_destroy(struct object *obj);
 
-static enum server_fd_type serial_get_fd_type( struct fd *fd );
-static void serial_flush( struct fd *fd, struct event **event );
-static void serial_queue_async( struct fd *fd, const async_data_t *data, int type, int count );
+static enum server_fd_type serial_get_fd_type( struct uk_fd *fd );
+static void serial_flush( struct uk_fd *fd, struct event **event );
+static void serial_queue_async( struct uk_fd *fd, const async_data_t *data, int type, int count );
 
 struct serial
 {
     struct object       obj;
-    struct fd          *fd;
+    struct uk_fd          *fd;
 
     /* timeout values */
     unsigned int        readinterval;
@@ -117,7 +117,7 @@ static const struct fd_ops serial_fd_ops =
 };
 
 /* check if the given fd is a serial port */
-int is_serial_fd( struct fd *fd )
+int is_serial_fd( struct uk_fd *fd )
 {
     struct termios tios;
 
@@ -125,7 +125,7 @@ int is_serial_fd( struct fd *fd )
 }
 
 /* create a serial object for a given fd */
-struct object *create_serial( struct fd *fd )
+struct object *create_serial( struct uk_fd *fd )
 {
     struct serial *serial;
 
@@ -137,15 +137,15 @@ struct object *create_serial( struct fd *fd )
     serial->writemult    = 0;
     serial->writeconst   = 0;
     serial->eventmask    = 0;
-    serial->fd = (struct fd *)grab_object( fd );
+    serial->fd = (struct uk_fd *)grab_object( fd );
     set_fd_user( fd, &serial_fd_ops, &serial->obj );
     return &serial->obj;
 }
 
-static struct fd *serial_get_fd( struct object *obj )
+static struct uk_fd *serial_get_fd( struct object *obj )
 {
     struct serial *serial = (struct serial *)obj;
-    return (struct fd *)grab_object( serial->fd );
+    return (struct uk_fd *)grab_object( serial->fd );
 }
 
 static void serial_destroy( struct object *obj)
@@ -166,12 +166,12 @@ static struct serial *get_serial_obj( struct process *process, obj_handle_t hand
     return (struct serial *)get_handle_obj( process, handle, access, &serial_ops );
 }
 
-static enum server_fd_type serial_get_fd_type( struct fd *fd )
+static enum server_fd_type serial_get_fd_type( struct uk_fd *fd )
 {
     return FD_TYPE_SERIAL;
 }
 
-static void serial_queue_async( struct fd *fd, const async_data_t *data, int type, int count )
+static void serial_queue_async( struct uk_fd *fd, const async_data_t *data, int type, int count )
 {
     struct serial *serial = get_fd_user( fd );
     timeout_t timeout = 0;
@@ -197,7 +197,7 @@ static void serial_queue_async( struct fd *fd, const async_data_t *data, int typ
     }
 }
 
-static void serial_flush( struct fd *fd, struct event **event )
+static void serial_flush( struct uk_fd *fd, struct event **event )
 {
     /* MSDN says: If hFile is a handle to a communications device,
      * the function only flushes the transmit buffer.

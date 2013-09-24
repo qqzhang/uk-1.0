@@ -234,7 +234,7 @@ static const struct object_ops thread_apc_ops =
 static void dump_thread( struct object *obj, int verbose );
 static int thread_signaled( struct object *obj, struct thread *thread );
 static unsigned int thread_map_access( struct object *obj, unsigned int access );
-static void thread_poll_event( struct fd *fd, int event );
+static void thread_poll_event( struct uk_fd *fd, int event );
 static void destroy_thread( struct object *obj );
 
 static const struct object_ops thread_ops =
@@ -370,7 +370,7 @@ struct thread *create_thread( int fd, struct process *process )
 }
 
 /* handle a client event */
-static void thread_poll_event( struct fd *fd, int event )
+static void thread_poll_event( struct uk_fd *fd, int event )
 {
     struct thread *thread = get_fd_user( fd );
     assert( thread->obj.ops == &thread_ops );

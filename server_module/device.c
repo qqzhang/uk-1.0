@@ -112,7 +112,7 @@ struct device
 {
     struct object          obj;           /* object header */
     struct device_manager *manager;       /* manager for this device (or NULL if deleted) */
-    struct fd             *fd;            /* file descriptor for ioctl */
+    struct uk_fd             *fd;            /* file descriptor for ioctl */
     client_ptr_t           user_ptr;      /* opaque ptr for client side */
     struct list_head            entry;         /* entry in device manager list */
     struct list_head            requests;      /* list of pending ioctl requests */
@@ -120,12 +120,12 @@ struct device
 
 static void device_dump( struct object *obj, int verbose );
 static struct object_type *device_get_type( struct object *obj );
-static struct fd *device_get_fd( struct object *obj );
+static struct uk_fd *device_get_fd( struct object *obj );
 static void device_destroy( struct object *obj );
 static struct object *device_open_file( struct object *obj, unsigned int access,
                                         unsigned int sharing, unsigned int options );
-static enum server_fd_type device_get_fd_type( struct fd *fd );
-static obj_handle_t device_ioctl( struct fd *fd, ioctl_code_t code, const async_data_t *async_data,
+static enum server_fd_type device_get_fd_type( struct uk_fd *fd );
+static obj_handle_t device_ioctl( struct uk_fd *fd, ioctl_code_t code, const async_data_t *async_data,
                                   int blocking, const void *data, data_size_t size );
 
 static const struct object_ops device_ops =
@@ -264,11 +264,11 @@ static struct object_type *device_get_type( struct object *obj )
     return get_object_type( &str );
 }
 
-static struct fd *device_get_fd( struct object *obj )
+static struct uk_fd *device_get_fd( struct object *obj )
 {
     struct device *device = (struct device *)obj;
 
-    return (struct fd *)grab_object( device->fd );
+    return (struct uk_fd *)grab_object( device->fd );
 }
 
 static void device_destroy( struct object *obj )
@@ -291,7 +291,7 @@ static struct object *device_open_file( struct object *obj, unsigned int access,
     return grab_object( obj );
 }
 
-static enum server_fd_type device_get_fd_type( struct fd *fd )
+static enum server_fd_type device_get_fd_type( struct uk_fd *fd )
 {
     return FD_TYPE_DEVICE;
 }
@@ -308,7 +308,7 @@ static struct ioctl_call *find_ioctl_call( struct device *device, struct thread 
     return NULL;
 }
 
-static obj_handle_t device_ioctl( struct fd *fd, ioctl_code_t code, const async_data_t *async_data,
+static obj_handle_t device_ioctl( struct uk_fd *fd, ioctl_code_t code, const async_data_t *async_data,
                                   int blocking, const void *data, data_size_t size )
 {
     struct device *device = get_fd_user( fd );

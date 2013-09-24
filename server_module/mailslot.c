@@ -55,7 +55,7 @@
 struct mailslot
 {
     struct object       obj;
-    struct fd          *fd;
+    struct uk_fd          *fd;
     int                 write_fd;
     unsigned int        max_msgsize;
     timeout_t           read_timeout;
@@ -64,7 +64,7 @@ struct mailslot
 
 /* mailslot functions */
 static void mailslot_dump( struct object*, int );
-static struct fd *mailslot_get_fd( struct object * );
+static struct uk_fd *mailslot_get_fd( struct object * );
 static unsigned int mailslot_map_access( struct object *obj, unsigned int access );
 static struct object *mailslot_open_file( struct object *obj, unsigned int access,
                                           unsigned int sharing, unsigned int options );
@@ -90,8 +90,8 @@ static const struct object_ops mailslot_ops =
     mailslot_destroy           /* destroy */
 };
 
-static enum server_fd_type mailslot_get_fd_type( struct fd *fd );
-static void mailslot_queue_async( struct fd *fd, const async_data_t *data, int type, int count );
+static enum server_fd_type mailslot_get_fd_type( struct uk_fd *fd );
+static void mailslot_queue_async( struct uk_fd *fd, const async_data_t *data, int type, int count );
 
 static const struct fd_ops mailslot_fd_ops =
 {
@@ -109,7 +109,7 @@ static const struct fd_ops mailslot_fd_ops =
 struct mail_writer
 {
     struct object         obj;
-    struct fd            *fd;
+    struct uk_fd            *fd;
     struct mailslot      *mailslot;
     struct list_head           entry;
     unsigned int          access;
@@ -117,7 +117,7 @@ struct mail_writer
 };
 
 static void mail_writer_dump( struct object *obj, int verbose );
-static struct fd *mail_writer_get_fd( struct object *obj );
+static struct uk_fd *mail_writer_get_fd( struct object *obj );
 static unsigned int mail_writer_map_access( struct object *obj, unsigned int access );
 static void mail_writer_destroy( struct object *obj);
 
@@ -141,7 +141,7 @@ static const struct object_ops mail_writer_ops =
     mail_writer_destroy         /* destroy */
 };
 
-static enum server_fd_type mail_writer_get_fd_type( struct fd *fd );
+static enum server_fd_type mail_writer_get_fd_type( struct uk_fd *fd );
 
 static const struct fd_ops mail_writer_fd_ops =
 {
@@ -159,19 +159,19 @@ static const struct fd_ops mail_writer_fd_ops =
 struct mailslot_device
 {
     struct object       obj;         /* object header */
-    struct fd          *fd;          /* pseudo-fd for ioctls */
+    struct uk_fd          *fd;          /* pseudo-fd for ioctls */
     struct namespace   *mailslots;   /* mailslot namespace */
 };
 
 static void mailslot_device_dump( struct object *obj, int verbose );
 static struct object_type *mailslot_device_get_type( struct object *obj );
-static struct fd *mailslot_device_get_fd( struct object *obj );
+static struct uk_fd *mailslot_device_get_fd( struct object *obj );
 static struct object *mailslot_device_lookup_name( struct object *obj, struct unicode_str *name,
                                                    unsigned int attr );
 static struct object *mailslot_device_open_file( struct object *obj, unsigned int access,
                                                  unsigned int sharing, unsigned int options );
 static void mailslot_device_destroy( struct object *obj );
-static enum server_fd_type mailslot_device_get_fd_type( struct fd *fd );
+static enum server_fd_type mailslot_device_get_fd_type( struct uk_fd *fd );
 
 static const struct object_ops mailslot_device_ops =
 {
@@ -228,16 +228,16 @@ static void mailslot_dump( struct object *obj, int verbose )
              mailslot->max_msgsize, get_timeout_str(mailslot->read_timeout) );
 }
 
-static enum server_fd_type mailslot_get_fd_type( struct fd *fd )
+static enum server_fd_type mailslot_get_fd_type( struct uk_fd *fd )
 {
     return FD_TYPE_MAILSLOT;
 }
 
-static struct fd *mailslot_get_fd( struct object *obj )
+static struct uk_fd *mailslot_get_fd( struct object *obj )
 {
     struct mailslot *mailslot = (struct mailslot *) obj;
 
-    return (struct fd *)grab_object( mailslot->fd );
+    return (struct uk_fd *)grab_object( mailslot->fd );
 }
 
 static unsigned int mailslot_map_access( struct object *obj, unsigned int access )
@@ -301,7 +301,7 @@ static struct object *mailslot_open_file( struct object *obj, unsigned int acces
     return &writer->obj;
 }
 
-static void mailslot_queue_async( struct fd *fd, const async_data_t *data, int type, int count )
+static void mailslot_queue_async( struct uk_fd *fd, const async_data_t *data, int type, int count )
 {
     struct mailslot *mailslot = get_fd_user( fd );
     struct async *async;
@@ -330,10 +330,10 @@ static struct object_type *mailslot_device_get_type( struct object *obj )
     return get_object_type( &str );
 }
 
-static struct fd *mailslot_device_get_fd( struct object *obj )
+static struct uk_fd *mailslot_device_get_fd( struct object *obj )
 {
     struct mailslot_device *device = (struct mailslot_device *)obj;
-    return (struct fd *)grab_object( device->fd );
+    return (struct uk_fd *)grab_object( device->fd );
 }
 
 static struct object *mailslot_device_lookup_name( struct object *obj, struct unicode_str *name,
@@ -364,7 +364,7 @@ static void mailslot_device_destroy( struct object *obj )
     free( device->mailslots );
 }
 
-static enum server_fd_type mailslot_device_get_fd_type( struct fd *fd )
+static enum server_fd_type mailslot_device_get_fd_type( struct uk_fd *fd )
 {
     return FD_TYPE_DEVICE;
 }
@@ -470,15 +470,15 @@ static void mail_writer_destroy( struct object *obj)
     release_object( writer->mailslot );
 }
 
-static enum server_fd_type mail_writer_get_fd_type( struct fd *fd )
+static enum server_fd_type mail_writer_get_fd_type( struct uk_fd *fd )
 {
     return FD_TYPE_MAILSLOT;
 }
 
-static struct fd *mail_writer_get_fd( struct object *obj )
+static struct uk_fd *mail_writer_get_fd( struct object *obj )
 {
     struct mail_writer *writer = (struct mail_writer *) obj;
-    return (struct fd *)grab_object( writer->fd );
+    return (struct uk_fd *)grab_object( writer->fd );
 }
 
 static unsigned int mail_writer_map_access( struct object *obj, unsigned int access )

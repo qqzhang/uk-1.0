@@ -114,7 +114,7 @@ struct thread_input
 struct msg_queue
 {
     struct object          obj;             /* object header */
-    struct fd             *fd;              /* optional file descriptor to poll */
+    struct uk_fd             *fd;              /* optional file descriptor to poll */
     unsigned int           wake_bits;       /* wakeup bits */
     unsigned int           wake_mask;       /* wakeup mask */
     unsigned int           changed_bits;    /* changed wakeup bits */
@@ -153,7 +153,7 @@ static void msg_queue_remove_queue( struct object *obj, struct wait_queue_entry 
 static int msg_queue_signaled( struct object *obj, struct thread *thread );
 static int msg_queue_satisfied( struct object *obj, struct thread *thread );
 static void msg_queue_destroy( struct object *obj );
-static void msg_queue_poll_event( struct fd *fd, int event );
+static void msg_queue_poll_event( struct uk_fd *fd, int event );
 static void thread_input_dump( struct object *obj, int verbose );
 static void thread_input_destroy( struct object *obj );
 static void timer_callback( void *private );
@@ -970,7 +970,7 @@ static void msg_queue_destroy( struct object *obj )
     if (queue->fd) release_object( queue->fd );
 }
 
-static void msg_queue_poll_event( struct fd *fd, int event )
+static void msg_queue_poll_event( struct uk_fd *fd, int event )
 {
     struct msg_queue *queue = get_fd_user( fd );
     assert( queue->obj.ops == &msg_queue_ops );

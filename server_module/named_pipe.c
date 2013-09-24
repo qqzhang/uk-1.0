@@ -68,8 +68,8 @@ struct named_pipe;
 struct pipe_server
 {
     struct object        obj;        /* object header */
-    struct fd           *fd;         /* pipe file descriptor */
-    struct fd           *ioctl_fd;   /* file descriptor for ioctls when not connected */
+    struct uk_fd           *fd;         /* pipe file descriptor */
+    struct uk_fd           *ioctl_fd;   /* file descriptor for ioctls when not connected */
     struct list_head          entry;      /* entry in named pipe servers list */
     enum pipe_state      state;      /* server state */
     struct pipe_client  *client;     /* client that this server is connected to */
@@ -82,7 +82,7 @@ struct pipe_server
 struct pipe_client
 {
     struct object        obj;        /* object header */
-    struct fd           *fd;         /* pipe file descriptor */
+    struct uk_fd           *fd;         /* pipe file descriptor */
     struct pipe_server  *server;     /* server that this client is connected to */
     unsigned int         flags;      /* file flags */
 };
@@ -104,7 +104,7 @@ struct named_pipe
 struct named_pipe_device
 {
     struct object       obj;         /* object header */
-    struct fd          *fd;          /* pseudo-fd for ioctls */
+    struct uk_fd          *fd;          /* pseudo-fd for ioctls */
     struct namespace   *pipes;       /* named pipe namespace */
 };
 
@@ -136,11 +136,11 @@ static const struct object_ops named_pipe_ops =
 
 /* server end functions */
 static void pipe_server_dump( struct object *obj, int verbose );
-static struct fd *pipe_server_get_fd( struct object *obj );
+static struct uk_fd *pipe_server_get_fd( struct object *obj );
 static void pipe_server_destroy( struct object *obj);
-static void pipe_server_flush( struct fd *fd, struct event **event );
-static enum server_fd_type pipe_server_get_fd_type( struct fd *fd );
-static obj_handle_t pipe_server_ioctl( struct fd *fd, ioctl_code_t code, const async_data_t *async,
+static void pipe_server_flush( struct uk_fd *fd, struct event **event );
+static enum server_fd_type pipe_server_get_fd_type( struct uk_fd *fd );
+static obj_handle_t pipe_server_ioctl( struct uk_fd *fd, ioctl_code_t code, const async_data_t *async,
                                        int blocking, const void *data, data_size_t size );
 
 static const struct object_ops pipe_server_ops =
@@ -178,10 +178,10 @@ static const struct fd_ops pipe_server_fd_ops =
 /* client end functions */
 static void pipe_client_dump( struct object *obj, int verbose );
 static int pipe_client_signaled( struct object *obj, struct thread *thread );
-static struct fd *pipe_client_get_fd( struct object *obj );
+static struct uk_fd *pipe_client_get_fd( struct object *obj );
 static void pipe_client_destroy( struct object *obj );
-static void pipe_client_flush( struct fd *fd, struct event **event );
-static enum server_fd_type pipe_client_get_fd_type( struct fd *fd );
+static void pipe_client_flush( struct uk_fd *fd, struct event **event );
+static enum server_fd_type pipe_client_get_fd_type( struct uk_fd *fd );
 
 static const struct object_ops pipe_client_ops =
 {
@@ -217,14 +217,14 @@ static const struct fd_ops pipe_client_fd_ops =
 
 static void named_pipe_device_dump( struct object *obj, int verbose );
 static struct object_type *named_pipe_device_get_type( struct object *obj );
-static struct fd *named_pipe_device_get_fd( struct object *obj );
+static struct uk_fd *named_pipe_device_get_fd( struct object *obj );
 static struct object *named_pipe_device_lookup_name( struct object *obj,
     struct unicode_str *name, unsigned int attr );
 static struct object *named_pipe_device_open_file( struct object *obj, unsigned int access,
                                                    unsigned int sharing, unsigned int options );
 static void named_pipe_device_destroy( struct object *obj );
-static enum server_fd_type named_pipe_device_get_fd_type( struct fd *fd );
-static obj_handle_t named_pipe_device_ioctl( struct fd *fd, ioctl_code_t code, const async_data_t *async_data,
+static enum server_fd_type named_pipe_device_get_fd_type( struct uk_fd *fd );
+static obj_handle_t named_pipe_device_ioctl( struct uk_fd *fd, ioctl_code_t code, const async_data_t *async_data,
                                              int blocking, const void *data, data_size_t size );
 
 static const struct object_ops named_pipe_device_ops =
@@ -307,11 +307,11 @@ static void named_pipe_destroy( struct object *obj)
     free_async_queue( pipe->waiters );
 }
 
-static struct fd *pipe_client_get_fd( struct object *obj )
+static struct uk_fd *pipe_client_get_fd( struct object *obj )
 {
     struct pipe_client *client = (struct pipe_client *) obj;
     if (client->fd)
-        return (struct fd *) grab_object( client->fd );
+        return (struct uk_fd *) grab_object( client->fd );
     set_error( STATUS_PIPE_DISCONNECTED );
     return NULL;
 }
@@ -339,11 +339,11 @@ static void set_server_state( struct pipe_server *server, enum pipe_state state 
     }
 }
 
-static struct fd *pipe_server_get_fd( struct object *obj )
+static struct uk_fd *pipe_server_get_fd( struct object *obj )
 {
     struct pipe_server *server = (struct pipe_server *) obj;
 
-    return (struct fd *)grab_object( server->fd ? server->fd : server->ioctl_fd );
+    return (struct uk_fd *)grab_object( server->fd ? server->fd : server->ioctl_fd );
 }
 
 
@@ -449,10 +449,10 @@ static struct object_type *named_pipe_device_get_type( struct object *obj )
     return get_object_type( &str );
 }
 
-static struct fd *named_pipe_device_get_fd( struct object *obj )
+static struct uk_fd *named_pipe_device_get_fd( struct object *obj )
 {
     struct named_pipe_device *device = (struct named_pipe_device *)obj;
-    return (struct fd *)grab_object( device->fd );
+    return (struct uk_fd *)grab_object( device->fd );
 }
 
 static struct object *named_pipe_device_lookup_name( struct object *obj, struct unicode_str *name,
@@ -484,7 +484,7 @@ static void named_pipe_device_destroy( struct object *obj )
     free( device->pipes );
 }
 
-static enum server_fd_type named_pipe_device_get_fd_type( struct fd *fd )
+static enum server_fd_type named_pipe_device_get_fd_type( struct uk_fd *fd )
 {
     return FD_TYPE_DEVICE;
 }
@@ -546,7 +546,7 @@ static void check_flushed( void *arg )
     }
 }
 
-static void pipe_server_flush( struct fd *fd, struct event **event )
+static void pipe_server_flush( struct uk_fd *fd, struct event **event )
 {
     struct pipe_server *server = get_fd_user( fd );
 
@@ -567,7 +567,7 @@ static void pipe_server_flush( struct fd *fd, struct event **event )
     }
 }
 
-static void pipe_client_flush( struct fd *fd, struct event **event )
+static void pipe_client_flush( struct uk_fd *fd, struct event **event )
 {
     /* FIXME: what do we have to do for this? */
 }
@@ -577,12 +577,12 @@ static inline int is_overlapped( unsigned int options )
     return !(options & (FILE_SYNCHRONOUS_IO_ALERT | FILE_SYNCHRONOUS_IO_NONALERT));
 }
 
-static enum server_fd_type pipe_server_get_fd_type( struct fd *fd )
+static enum server_fd_type pipe_server_get_fd_type( struct uk_fd *fd )
 {
     return FD_TYPE_PIPE;
 }
 
-static enum server_fd_type pipe_client_get_fd_type( struct fd *fd )
+static enum server_fd_type pipe_client_get_fd_type( struct uk_fd *fd )
 {
     return FD_TYPE_PIPE;
 }
@@ -600,7 +600,7 @@ static obj_handle_t alloc_wait_event( struct process *process )
     return handle;
 }
 
-static obj_handle_t pipe_server_ioctl( struct fd *fd, ioctl_code_t code, const async_data_t *async_data,
+static obj_handle_t pipe_server_ioctl( struct uk_fd *fd, ioctl_code_t code, const async_data_t *async_data,
                                        int blocking, const void *data, data_size_t size )
 {
     struct pipe_server *server = get_fd_user( fd );
@@ -875,7 +875,7 @@ static struct object *named_pipe_open_file( struct object *obj, unsigned int acc
     return &client->obj;
 }
 
-static obj_handle_t named_pipe_device_ioctl( struct fd *fd, ioctl_code_t code, const async_data_t *async_data,
+static obj_handle_t named_pipe_device_ioctl( struct uk_fd *fd, ioctl_code_t code, const async_data_t *async_data,
                                              int blocking, const void *data, data_size_t size )
 {
     struct named_pipe_device *device = get_fd_user( fd );

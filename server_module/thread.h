@@ -80,9 +80,9 @@ struct thread
     void                  *reply_data;    /* variable-size data for reply */
     unsigned int           reply_size;    /* size of reply data */
     unsigned int           reply_towrite; /* amount of data still to write in reply */
-    struct fd             *request_fd;    /* fd for receiving client requests */
-    struct fd             *reply_fd;      /* fd to send a reply to a client */
-    struct fd             *wait_fd;       /* fd to use to wake a sleeping client */
+    struct uk_fd             *request_fd;    /* fd for receiving client requests */
+    struct uk_fd             *reply_fd;      /* fd to send a reply to a client */
+    struct uk_fd             *wait_fd;       /* fd to use to wake a sleeping client */
     enum run_state         state;         /* running state */
     int                    exit_code;     /* thread exit code */
     int                    unix_pid;      /* Unix pid of client */

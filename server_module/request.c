@@ -94,12 +94,12 @@ static const char * const server_lock_name = "lock";       /* name of the server
 struct master_socket
 {
     struct object        obj;        /* object header */
-    struct fd           *fd;         /* file descriptor of the master socket */
+    struct uk_fd           *fd;         /* file descriptor of the master socket */
 };
 
 static void master_socket_dump( struct object *obj, int verbose );
 static void master_socket_destroy( struct object *obj );
-static void master_socket_poll_event( struct fd *fd, int event );
+static void master_socket_poll_event( struct uk_fd *fd, int event );
 
 static const struct object_ops master_socket_ops =
 {
@@ -538,7 +538,7 @@ static void master_socket_destroy( struct object *obj )
 }
 
 /* handle a socket event */
-static void master_socket_poll_event( struct fd *fd, int event )
+static void master_socket_poll_event( struct uk_fd *fd, int event )
 {
     struct master_socket *sock = get_fd_user( fd );
     assert( master_socket->obj.ops == &master_socket_ops );

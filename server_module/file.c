@@ -55,7 +55,7 @@
 struct uk_file
 {
     struct object       obj;        /* object header */
-    struct fd          *fd;         /* file descriptor for this file */
+    struct uk_fd          *fd;         /* file descriptor for this file */
     unsigned int        access;     /* file access (FILE_READ_DATA etc.) */
     mode_t              mode;       /* file stat.st_mode */
     uid_t               uid;        /* file stat.st_uid */
@@ -64,14 +64,14 @@ struct uk_file
 static unsigned int generic_file_map_access( unsigned int access );
 
 static void file_dump( struct object *obj, int verbose );
-static struct fd *file_get_fd( struct object *obj );
+static struct uk_fd *file_get_fd( struct object *obj );
 static struct security_descriptor *file_get_sd( struct object *obj );
 static int file_set_sd( struct object *obj, const struct security_descriptor *sd, unsigned int set_info );
 static void file_destroy( struct object *obj );
 
-static int file_get_poll_events( struct fd *fd );
-static void file_flush( struct fd *fd, struct event **event );
-static enum server_fd_type file_get_fd_type( struct fd *fd );
+static int file_get_poll_events( struct uk_fd *fd );
+static void file_flush( struct uk_fd *fd, struct event **event );
+static enum server_fd_type file_get_fd_type( struct uk_fd *fd );
 
 static const struct object_ops file_ops =
 {
@@ -139,7 +139,7 @@ struct uk_file *create_file_for_fd( int fd, unsigned int access, unsigned int sh
 }
 
 /* create a file by duplicating an fd object */
-struct uk_file *create_file_for_fd_obj( struct fd *fd, unsigned int access, unsigned int sharing )
+struct uk_file *create_file_for_fd_obj( struct uk_fd *fd, unsigned int access, unsigned int sharing )
 {
     struct uk_file *file;
     struct stat st;
@@ -164,7 +164,7 @@ struct uk_file *create_file_for_fd_obj( struct fd *fd, unsigned int access, unsi
     return file;
 }
 
-static struct object *create_file_obj( struct fd *fd, unsigned int access, mode_t mode )
+static struct object *create_file_obj( struct uk_fd *fd, unsigned int access, mode_t mode )
 {
     struct uk_file *file = alloc_object( &file_ops );
 
@@ -178,13 +178,13 @@ static struct object *create_file_obj( struct fd *fd, unsigned int access, mode_
     return &file->obj;
 }
 
-static struct object *create_file( struct fd *root, const char *nameptr, data_size_t len,
+static struct object *create_file( struct uk_fd *root, const char *nameptr, data_size_t len,
                                    unsigned int access, unsigned int sharing, int create,
                                    unsigned int options, unsigned int attrs,
                                    const struct security_descriptor *sd )
 {
     struct object *obj = NULL;
-    struct fd *fd;
+    struct uk_fd *fd;
     int flags;
     char *name;
     mode_t mode;
@@ -265,7 +265,7 @@ static void file_dump( struct object *obj, int verbose )
     fprintf( stderr, "File fd=%p\n", file->fd );
 }
 
-static int file_get_poll_events( struct fd *fd )
+static int file_get_poll_events( struct uk_fd *fd )
 {
     struct uk_file *file = get_fd_user( fd );
     int events = 0;
@@ -275,13 +275,13 @@ static int file_get_poll_events( struct fd *fd )
     return events;
 }
 
-static void file_flush( struct fd *fd, struct event **event )
+static void file_flush( struct uk_fd *fd, struct event **event )
 {
     int unix_fd = get_unix_fd( fd );
     if (unix_fd != -1 && fsync( unix_fd ) == -1) file_set_error();
 }
 
-static enum server_fd_type file_get_fd_type( struct fd *fd )
+static enum server_fd_type file_get_fd_type( struct uk_fd *fd )
 {
     struct uk_file *file = get_fd_user( fd );
 
@@ -290,11 +290,11 @@ static enum server_fd_type file_get_fd_type( struct fd *fd )
     return FD_TYPE_CHAR;
 }
 
-static struct fd *file_get_fd( struct object *obj )
+static struct uk_fd *file_get_fd( struct object *obj )
 {
     struct uk_file *file = (struct uk_file *)obj;
     assert( obj->ops == &file_ops );
-    return (struct fd *)grab_object( file->fd );
+    return (struct uk_fd *)grab_object( file->fd );
 }
 
 static unsigned int generic_file_map_access( unsigned int access )
@@ -641,7 +641,7 @@ int get_file_unix_fd( struct uk_file *file )
 DECL_HANDLER(create_file)
 {
     struct object *file;
-    struct fd *root_fd = NULL;
+    struct uk_fd *root_fd = NULL;
     const struct object_attributes *objattr = get_req_data();
     const struct security_descriptor *sd;
     const char *name;

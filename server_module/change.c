@@ -116,7 +116,7 @@ struct change_inode;
 
 static void free_inode( struct change_inode *inode );
 
-static struct fd *inotify_fd;
+static struct uk_fd *inotify_fd;
 
 struct change_record {
     struct list_head entry;
@@ -127,7 +127,7 @@ struct change_record {
 struct dir
 {
     struct object  obj;      /* object header */
-    struct fd     *fd;       /* file descriptor to the directory */
+    struct uk_fd     *fd;       /* file descriptor to the directory */
     mode_t         mode;     /* file stat.st_mode */
     uid_t          uid;      /* file stat.st_uid */
     struct list_head    entry;    /* entry in global change notifications list */
@@ -140,7 +140,7 @@ struct dir
     struct change_inode  *inode;    /* inode of the associated directory */
 };
 
-static struct fd *dir_get_fd( struct object *obj );
+static struct uk_fd *dir_get_fd( struct object *obj );
 static struct security_descriptor *dir_get_sd( struct object *obj );
 static int dir_set_sd( struct object *obj, const struct security_descriptor *sd,
                        unsigned int set_info );
@@ -167,8 +167,8 @@ static const struct object_ops dir_ops =
     dir_destroy               /* destroy */
 };
 
-static int dir_get_poll_events( struct fd *fd );
-static enum server_fd_type dir_get_fd_type( struct fd *fd );
+static int dir_get_poll_events( struct uk_fd *fd );
+static enum server_fd_type dir_get_fd_type( struct uk_fd *fd );
 
 static const struct fd_ops dir_fd_ops =
 {
@@ -271,11 +271,11 @@ void sigio_callback(void)
     }
 }
 
-static struct fd *dir_get_fd( struct object *obj )
+static struct uk_fd *dir_get_fd( struct object *obj )
 {
     struct dir *dir = (struct dir *)obj;
     assert( obj->ops == &dir_ops );
-    return (struct fd *)grab_object( dir->fd );
+    return (struct uk_fd *)grab_object( dir->fd );
 }
 
 static int get_dir_unix_fd( struct dir *dir )
@@ -401,12 +401,12 @@ struct dir *get_dir_obj( struct process *process, obj_handle_t handle, unsigned 
     return (struct dir *)get_handle_obj( process, handle, access, &dir_ops );
 }
 
-static int dir_get_poll_events( struct fd *fd )
+static int dir_get_poll_events( struct uk_fd *fd )
 {
     return 0;
 }
 
-static enum server_fd_type dir_get_fd_type( struct fd *fd )
+static enum server_fd_type dir_get_fd_type( struct uk_fd *fd )
 {
     return FD_TYPE_DIR;
 }
@@ -582,8 +582,8 @@ static struct change_inode *inode_from_name( struct change_inode *inode, const c
     return NULL;
 }
 
-static int inotify_get_poll_events( struct fd *fd );
-static void inotify_poll_event( struct fd *fd, int event );
+static int inotify_get_poll_events( struct uk_fd *fd );
+static void inotify_poll_event( struct uk_fd *fd, int event );
 
 static const struct fd_ops inotify_fd_ops =
 {
@@ -597,7 +597,7 @@ static const struct fd_ops inotify_fd_ops =
     NULL,                        /* cancel_async */
 };
 
-static int inotify_get_poll_events( struct fd *fd )
+static int inotify_get_poll_events( struct uk_fd *fd )
 {
     return POLLIN;
 }
@@ -824,7 +824,7 @@ static void inotify_notify_all( struct inotify_event *ie )
     }
 }
 
-static void inotify_poll_event( struct fd *fd, int event )
+static void inotify_poll_event( struct uk_fd *fd, int event )
 {
     int r, ofs, unix_fd;
     char buffer[0x1000];
@@ -849,7 +849,7 @@ static void inotify_poll_event( struct fd *fd, int event )
     }
 }
 
-static inline struct fd *create_inotify_fd( void )
+static inline struct uk_fd *create_inotify_fd( void )
 {
     int unix_fd;
 
@@ -1072,7 +1072,7 @@ static int dir_add_to_existing_notify( struct dir *dir )
 
 #endif  /* USE_INOTIFY */
 
-struct object *create_dir_obj( struct fd *fd, unsigned int access, mode_t mode )
+struct object *create_dir_obj( struct uk_fd *fd, unsigned int access, mode_t mode )
 {
     struct dir *dir;
 

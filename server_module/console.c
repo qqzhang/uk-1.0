@@ -62,12 +62,12 @@ struct console_input
     int                          output_cp;     /* console output codepage */
     user_handle_t                win;           /* window handle if backend supports it */
     struct event                *event;         /* event to wait on for input queue */
-    struct fd                   *fd;            /* for bare console, attached input fd */
+    struct uk_fd                   *fd;            /* for bare console, attached input fd */
 };
 
 static void console_input_dump( struct object *obj, int verbose );
 static void console_input_destroy( struct object *obj );
-static struct fd *console_input_get_fd( struct object *obj );
+static struct uk_fd *console_input_get_fd( struct object *obj );
 
 static const struct object_ops console_input_ops =
 {
@@ -139,12 +139,12 @@ struct screen_buffer
     unsigned short        attr;          /* default attribute for screen buffer */
     rectangle_t           win;           /* current_thread visible window on the screen buffer *
 					  * as seen in wineconsole */
-    struct fd            *fd;            /* for bare console, attached output fd */
+    struct uk_fd            *fd;            /* for bare console, attached output fd */
 };
 
 static void screen_buffer_dump( struct object *obj, int verbose );
 static void screen_buffer_destroy( struct object *obj );
-static struct fd *screen_buffer_get_fd( struct object *obj );
+static struct uk_fd *screen_buffer_get_fd( struct object *obj );
 
 static const struct object_ops screen_buffer_ops =
 {
@@ -166,7 +166,7 @@ static const struct object_ops screen_buffer_ops =
     screen_buffer_destroy             /* destroy */
 };
 
-static enum server_fd_type console_get_fd_type( struct fd *fd );
+static enum server_fd_type console_get_fd_type( struct uk_fd *fd );
 
 static const struct fd_ops console_fd_ops =
 {
@@ -189,17 +189,17 @@ static int console_input_is_bare( struct console_input* cin )
     return cin->evt == NULL;
 }
 
-static struct fd *console_input_get_fd( struct object* obj )
+static struct uk_fd *console_input_get_fd( struct object* obj )
 {
     struct console_input *console_input = (struct console_input*)obj;
     assert( obj->ops == &console_input_ops );
     if (console_input->fd)
-        return (struct fd*)grab_object( console_input->fd );
+        return (struct uk_fd*)grab_object( console_input->fd );
     set_error( STATUS_OBJECT_TYPE_MISMATCH );
     return NULL;
 }
 
-static enum server_fd_type console_get_fd_type( struct fd *fd )
+static enum server_fd_type console_get_fd_type( struct uk_fd *fd )
 {
     return FD_TYPE_CHAR;
 }
@@ -1146,12 +1146,12 @@ static void screen_buffer_destroy( struct object *obj )
     free( screen_buffer->data );
 }
 
-static struct fd *screen_buffer_get_fd( struct object *obj )
+static struct uk_fd *screen_buffer_get_fd( struct object *obj )
 {
     struct screen_buffer *screen_buffer = (struct screen_buffer*)obj;
     assert( obj->ops == &screen_buffer_ops );
     if (screen_buffer->fd)
-        return (struct fd*)grab_object( screen_buffer->fd );
+        return (struct uk_fd*)grab_object( screen_buffer->fd );
     set_error( STATUS_OBJECT_TYPE_MISMATCH );
     return NULL;
 }

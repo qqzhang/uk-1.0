@@ -50,7 +50,7 @@ typedef void (*signal_callback)(void);
 struct handler
 {
     struct object    obj;         /* object header */
-    struct fd       *fd;          /* file descriptor for the pipe side */
+    struct uk_fd       *fd;          /* file descriptor for the pipe side */
     int              pipe_write;  /* unix fd for the pipe write side */
     volatile int     pending;     /* is signal pending? */
     signal_callback  callback;    /* callback function */
@@ -79,7 +79,7 @@ static const struct object_ops handler_ops =
     handler_destroy           /* destroy */
 };
 
-static void handler_poll_event( struct fd *fd, int event );
+static void handler_poll_event( struct uk_fd *fd, int event );
 
 static const struct fd_ops handler_fd_ops =
 {
@@ -152,7 +152,7 @@ static void handler_destroy( struct object *obj )
     close( handler->pipe_write );
 }
 
-static void handler_poll_event( struct fd *fd, int event )
+static void handler_poll_event( struct uk_fd *fd, int event )
 {
     struct handler *handler = get_fd_user( fd );
 

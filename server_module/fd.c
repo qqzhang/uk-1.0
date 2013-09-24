@@ -177,7 +177,7 @@ struct uk_poll_wqueues
 {
     struct poll_wqueues table;
     struct poll_table_entry uk_pt_entry;/* only need one. */
-    struct fd *fd;
+    struct uk_fd *fd;
     int have_inited_flag;/* have run __uk_pollwait to init waitqueue. */
     int	pending_event;
 };
@@ -189,12 +189,12 @@ struct tgid_fd_map
     int   unix_fd;
     unsigned int handle_count; /* means to : how many handles use this uinx_fd */
 };
-void destroy_map_tbl(struct fd *fd);
-int get_unix_fd_by_tgid(struct fd *fd, pid_t tgid);
-int find_unix_fd_by_tgid(struct fd* fd, pid_t tgid);
+void destroy_map_tbl(struct uk_fd *fd);
+int get_unix_fd_by_tgid(struct uk_fd *fd, pid_t tgid);
+int find_unix_fd_by_tgid(struct uk_fd* fd, pid_t tgid);
 #endif
 
-struct fd
+struct uk_fd
 {
     struct object        obj;         /* object header */
     const struct fd_ops *fd_ops;      /* file descriptor operations */
@@ -233,7 +233,7 @@ static void fd_destroy( struct object *obj );
 
 static const struct object_ops fd_ops =
 {
-    sizeof(struct fd),        /* size */
+    sizeof(struct uk_fd),        /* size */
     fd_dump,                  /* dump */
     no_get_type,              /* get_type */
     no_add_queue,             /* add_queue */
@@ -329,7 +329,7 @@ static const struct object_ops inode_ops =
 struct uk_file_lock
 {
     struct object       obj;         /* object header */
-    struct fd          *fd;          /* fd owning this lock */
+    struct uk_fd          *fd;          /* fd owning this lock */
     struct list_head         fd_entry;    /* entry in list of locks on a given fd */
     struct list_head         inode_entry; /* entry in inode list of locks */
     int                 shared;      /* shared lock? */
@@ -489,17 +489,17 @@ const char *get_timeout_str( timeout_t timeout )
 /****************************************************************/
 /* poll support */
 
-static struct fd **poll_users;              /* users array */
+static struct uk_fd **poll_users;              /* users array */
 static struct pollfd *pollfd;               /* poll fd array */
 static int nb_users;                        /* count of array entries actually in use */
 static int active_users;                    /* current_thread number of active users */
 static int allocated_users;                 /* count of allocated entries in the array */
-static struct fd **freelist;                /* list of free entries in the array */
+static struct uk_fd **freelist;                /* list of free entries in the array */
 
 static int get_next_timeout(void);
 
 #ifdef CONFIG_UNIFIED_KERNEL
-static inline void fd_poll_event( struct fd *fd, int event )
+static inline void fd_poll_event( struct uk_fd *fd, int event )
 {
     if (fd && fd->fd_ops && fd->fd_ops->poll_event)
     {
@@ -521,7 +521,7 @@ static inline void fd_poll_event( struct fd *fd, int event )
     }
 }
 #else
-static inline void fd_poll_event( struct fd *fd, int event )
+static inline void fd_poll_event( struct uk_fd *fd, int event )
 {
     fd->fd_ops->poll_event( fd, event );
 }
@@ -534,11 +534,11 @@ static int epoll_fd = -1;
 #ifdef CONFIG_UNIFIED_KERNEL
 void uk_poll_initwait(struct uk_poll_wqueues *uk_pwq);
 void uk_poll_freewait(struct uk_poll_wqueues *uk_pwq);
-int uk_add_fd_events(struct uk_poll_wqueues *uk_pwq,struct fd *fd,struct file *file,int events);
+int uk_add_fd_events(struct uk_poll_wqueues *uk_pwq,struct uk_fd *fd,struct file *file,int events);
 int uk_modify_fd_events(struct uk_poll_wqueues *uk_pwq,int events);
 int uk_remove_fd_events(struct uk_poll_wqueues *uk_pwq);
 static struct poll_table_entry *uk_poll_get_entry(struct uk_poll_wqueues *uk_pwq);
-struct file *get_unix_file( struct fd *fd );
+struct file *get_unix_file( struct uk_fd *fd );
 
 /*
  * unifiedkernel use the function to poll struct file.
@@ -652,9 +652,9 @@ static struct poll_table_entry *uk_poll_get_entry(struct uk_poll_wqueues *uk_pwq
 
 /*
  * if struct file have data,must deal with it.
- * private_data is struct fd
+ * private_data is struct uk_fd
  */
-int uk_add_fd_events(struct uk_poll_wqueues *uk_pwq,struct fd *fd,struct file *file,int events)
+int uk_add_fd_events(struct uk_poll_wqueues *uk_pwq,struct uk_fd *fd,struct file *file,int events)
 {
     if(uk_pwq->have_inited_flag == false)
     {
@@ -769,18 +769,18 @@ void uk_poll_freewait(struct uk_poll_wqueues *uk_pwq)
     }
 }
 
-void uk_freewait_for_sock_destroy(struct fd *fd)
+void uk_freewait_for_sock_destroy(struct uk_fd *fd)
 {
     uk_poll_freewait(&fd->uk_pwq);
 }
 
-void uk_wake_poll_freewait(struct fd *fd)
+void uk_wake_poll_freewait(struct uk_fd *fd)
 {
     uk_poll_freewait(&fd->uk_pwq);
 }
 
 
-int uk_wake_poll_add_fd_events(struct fd *fd,struct file *file,int events)
+int uk_wake_poll_add_fd_events(struct uk_fd *fd,struct file *file,int events)
 {
     return uk_add_fd_events(&fd->uk_pwq,fd,file,events);
 }
@@ -794,7 +794,7 @@ static inline void init_epoll(void)
 
 #ifdef CONFIG_UNIFIED_KERNEL
 /* set the events that epoll waits for on this fd; helper for set_fd_events */
-static inline void set_fd_epoll_events( struct fd *fd, int user, int events )
+static inline void set_fd_epoll_events( struct uk_fd *fd, int user, int events )
 {
     if (events == -1)  /* stop waiting on this fd completely */
     {
@@ -817,7 +817,7 @@ static inline void set_fd_epoll_events( struct fd *fd, int user, int events )
 }
 #else
 /* set the events that epoll waits for on this fd; helper for set_fd_events */
-static inline void set_fd_epoll_events( struct fd *fd, int user, int events )
+static inline void set_fd_epoll_events( struct uk_fd *fd, int user, int events )
 {
     struct epoll_event ev;
     int ctl;
@@ -856,7 +856,7 @@ static inline void set_fd_epoll_events( struct fd *fd, int user, int events )
 }
 #endif
 
-static inline void remove_epoll_user( struct fd *fd, int user )
+static inline void remove_epoll_user( struct uk_fd *fd, int user )
 {
     if (epoll_fd == -1) return;
 
@@ -924,7 +924,7 @@ static inline void init_epoll(void)
     kqueue_fd = kqueue();
 }
 
-static inline void set_fd_epoll_events( struct fd *fd, int user, int events )
+static inline void set_fd_epoll_events( struct uk_fd *fd, int user, int events )
 {
     struct kevent ev[2];
 
@@ -963,7 +963,7 @@ static inline void set_fd_epoll_events( struct fd *fd, int user, int events )
     }
 }
 
-static inline void remove_epoll_user( struct fd *fd, int user )
+static inline void remove_epoll_user( struct uk_fd *fd, int user )
 {
     if (kqueue_fd == -1) return;
 
@@ -1037,7 +1037,7 @@ static inline void init_epoll(void)
     port_fd = port_create();
 }
 
-static inline void set_fd_epoll_events( struct fd *fd, int user, int events )
+static inline void set_fd_epoll_events( struct uk_fd *fd, int user, int events )
 {
     int ret;
 
@@ -1070,7 +1070,7 @@ static inline void set_fd_epoll_events( struct fd *fd, int user, int events )
     }
 }
 
-static inline void remove_epoll_user( struct fd *fd, int user )
+static inline void remove_epoll_user( struct uk_fd *fd, int user )
 {
     if (port_fd == -1) return;
 
@@ -1132,27 +1132,27 @@ static inline void main_loop_epoll(void)
 #else /* HAVE_KQUEUE */
 
 static inline void init_epoll(void) { }
-static inline void set_fd_epoll_events( struct fd *fd, int user, int events ) { }
-static inline void remove_epoll_user( struct fd *fd, int user ) { }
+static inline void set_fd_epoll_events( struct uk_fd *fd, int user, int events ) { }
+static inline void remove_epoll_user( struct uk_fd *fd, int user ) { }
 static inline void main_loop_epoll(void) { }
 
 #endif /* USE_EPOLL */
 
 
 /* add a user in the poll array and return its index, or -1 on failure */
-static int add_poll_user( struct fd *fd )
+static int add_poll_user( struct uk_fd *fd )
 {
     int ret;
     if (freelist)
     {
         ret = freelist - poll_users;
-        freelist = (struct fd **)poll_users[ret];
+        freelist = (struct uk_fd **)poll_users[ret];
     }
     else
     {
         if (nb_users == allocated_users)
         {
-            struct fd **newusers;
+            struct uk_fd **newusers;
             struct pollfd *newpoll;
             int new_count = allocated_users ? (allocated_users + allocated_users / 2) : 16;
             if (!(newusers = realloc( poll_users, new_count * sizeof(*poll_users) ))) return -1;
@@ -1180,7 +1180,7 @@ static int add_poll_user( struct fd *fd )
 }
 
 /* remove a user from the poll list */
-static void remove_poll_user( struct fd *fd, int user )
+static void remove_poll_user( struct uk_fd *fd, int user )
 {
     assert( user >= 0 );
     assert( poll_users[user] == fd );
@@ -1189,7 +1189,7 @@ static void remove_poll_user( struct fd *fd, int user )
     pollfd[user].fd = -1;
     pollfd[user].events = 0;
     pollfd[user].revents = 0;
-    poll_users[user] = (struct fd *)freelist;
+    poll_users[user] = (struct uk_fd *)freelist;
     freelist = &poll_users[user];
     active_users--;
 }
@@ -1537,7 +1537,7 @@ static int file_lock_signaled( struct object *obj, struct thread *thread )
 }
 
 /* set (or remove) a Unix lock if possible for the given range */
-static int set_unix_lock( struct fd *fd, file_pos_t start, file_pos_t end, int type )
+static int set_unix_lock( struct uk_fd *fd, file_pos_t start, file_pos_t end, int type )
 {
     struct flock fl;
 
@@ -1605,7 +1605,7 @@ static inline int lock_overlaps( struct uk_file_lock *lock, file_pos_t start, fi
 }
 
 /* remove Unix locks for all bytes in the specified area that are no longer locked */
-static void remove_unix_locks( struct fd *fd, file_pos_t start, file_pos_t end )
+static void remove_unix_locks( struct uk_fd *fd, file_pos_t start, file_pos_t end )
 {
     struct hole
     {
@@ -1705,7 +1705,7 @@ static void remove_unix_locks( struct fd *fd, file_pos_t start, file_pos_t end )
 }
 
 /* create a new lock on a fd */
-static struct uk_file_lock *add_lock( struct fd *fd, int shared, file_pos_t start, file_pos_t end )
+static struct uk_file_lock *add_lock( struct uk_fd *fd, int shared, file_pos_t start, file_pos_t end )
 {
     struct uk_file_lock *lock;
 
@@ -1756,7 +1756,7 @@ void remove_process_locks( struct process *process )
 }
 
 /* remove all locks on a given fd */
-static void remove_fd_locks( struct fd *fd )
+static void remove_fd_locks( struct uk_fd *fd )
 {
     file_pos_t start = FILE_POS_T_MAX, end = 0;
     struct list_head *ptr;
@@ -1773,7 +1773,7 @@ static void remove_fd_locks( struct fd *fd )
 
 /* add a lock on an fd */
 /* returns handle to wait on */
-obj_handle_t lock_fd( struct fd *fd, file_pos_t start, file_pos_t count, int shared, int wait )
+obj_handle_t lock_fd( struct uk_fd *fd, file_pos_t start, file_pos_t count, int shared, int wait )
 {
     struct list_head *ptr;
     file_pos_t end = start + count;
@@ -1818,7 +1818,7 @@ obj_handle_t lock_fd( struct fd *fd, file_pos_t start, file_pos_t count, int sha
 }
 
 /* remove a lock on an fd */
-void unlock_fd( struct fd *fd, file_pos_t start, file_pos_t count )
+void unlock_fd( struct uk_fd *fd, file_pos_t start, file_pos_t count )
 {
     struct list_head *ptr;
     file_pos_t end = start + count;
@@ -1842,7 +1842,7 @@ void unlock_fd( struct fd *fd, file_pos_t start, file_pos_t count )
 
 static void fd_dump( struct object *obj, int verbose )
 {
-    struct fd *fd = (struct fd *)obj;
+    struct uk_fd *fd = (struct uk_fd *)obj;
     fprintf( stderr, "Fd unix_fd=%d user=%p options=%08x", fd->unix_fd, fd->user, fd->options );
     if (fd->inode) fprintf( stderr, " inode=%p unlink='%s'", fd->inode, fd->closed->unlink );
     fprintf( stderr, "\n" );
@@ -1850,7 +1850,7 @@ static void fd_dump( struct object *obj, int verbose )
 
 static void fd_destroy( struct object *obj )
 {
-    struct fd *fd = (struct fd *)obj;
+    struct uk_fd *fd = (struct uk_fd *)obj;
 
     free_async_queue( fd->read_q );
     free_async_queue( fd->write_q );
@@ -1880,7 +1880,7 @@ static void fd_destroy( struct object *obj )
 
 /* check if the desired access is possible without violating */
 /* the sharing mode of other opens of the same file */
-static unsigned int check_sharing( struct fd *fd, unsigned int access, unsigned int sharing,
+static unsigned int check_sharing( struct uk_fd *fd, unsigned int access, unsigned int sharing,
                                    unsigned int open_flags, unsigned int options )
 {
     /* only a few access bits are meaningful wrt sharing */
@@ -1897,7 +1897,7 @@ static unsigned int check_sharing( struct fd *fd, unsigned int access, unsigned 
 
     LIST_FOR_EACH( ptr, &fd->inode->open )
     {
-        struct fd *fd_ptr = LIST_ENTRY( ptr, struct fd, inode_entry );
+        struct uk_fd *fd_ptr = LIST_ENTRY( ptr, struct uk_fd, inode_entry );
         if (fd_ptr != fd)
         {
             /* if access mode is 0, sharing mode is ignored */
@@ -1927,7 +1927,7 @@ static unsigned int check_sharing( struct fd *fd, unsigned int access, unsigned 
 }
 
 /* set the events that select waits for on this fd */
-void set_fd_events( struct fd *fd, int events )
+void set_fd_events( struct uk_fd *fd, int events )
 {
     int user = fd->poll_index;
     assert( poll_users[user] == fd );
@@ -1948,7 +1948,7 @@ void set_fd_events( struct fd *fd, int events )
 }
 
 /* prepare an fd for unmounting its corresponding device */
-static inline void unmount_fd( struct fd *fd )
+static inline void unmount_fd( struct uk_fd *fd )
 {
     assert( fd->inode );
 
@@ -1969,9 +1969,9 @@ static inline void unmount_fd( struct fd *fd )
 }
 
 /* allocate an fd object, without setting the unix fd yet */
-static struct fd *alloc_fd_object(void)
+static struct uk_fd *alloc_fd_object(void)
 {
-    struct fd *fd = alloc_object( &fd_ops );
+    struct uk_fd *fd = alloc_object( &fd_ops );
 
     if (!fd) return NULL;
 
@@ -2021,9 +2021,9 @@ static struct fd *alloc_fd_object(void)
 }
 
 /* allocate a pseudo fd object, for objects that need to behave like files but don't have a unix fd */
-struct fd *alloc_pseudo_fd( const struct fd_ops *fd_user_ops, struct object *user, unsigned int options )
+struct uk_fd *alloc_pseudo_fd( const struct fd_ops *fd_user_ops, struct object *user, unsigned int options )
 {
-    struct fd *fd = alloc_object( &fd_ops );
+    struct uk_fd *fd = alloc_object( &fd_ops );
 
     if (!fd) return NULL;
 
@@ -2068,10 +2068,10 @@ struct fd *alloc_pseudo_fd( const struct fd_ops *fd_user_ops, struct object *use
 }
 
 /* duplicate an fd object for a different user */
-struct fd *dup_fd_object( struct fd *orig, unsigned int access, unsigned int sharing, unsigned int options )
+struct uk_fd *dup_fd_object( struct uk_fd *orig, unsigned int access, unsigned int sharing, unsigned int options )
 {
     unsigned int err;
-    struct fd *fd = alloc_fd_object();
+    struct uk_fd *fd = alloc_fd_object();
 
     if (!fd) return NULL;
 
@@ -2156,34 +2156,34 @@ failed:
 }
 
 /* find an existing fd object that can be reused for a mapping */
-struct fd *get_fd_object_for_mapping( struct fd *fd, unsigned int access, unsigned int sharing )
+struct uk_fd *get_fd_object_for_mapping( struct uk_fd *fd, unsigned int access, unsigned int sharing )
 {
-    struct fd *fd_ptr;
+    struct uk_fd *fd_ptr;
 
     if (!fd->inode) return NULL;
 
-    LIST_FOR_EACH_ENTRY( fd_ptr, &fd->inode->open, struct fd, inode_entry )
+    LIST_FOR_EACH_ENTRY( fd_ptr, &fd->inode->open, struct uk_fd, inode_entry )
         if (fd_ptr->access == access && fd_ptr->sharing == sharing)
-            return (struct fd *)grab_object( fd_ptr );
+            return (struct uk_fd *)grab_object( fd_ptr );
 
     return NULL;
 }
 
 /* set the status to return when the fd has no associated unix fd */
-void set_no_fd_status( struct fd *fd, unsigned int status )
+void set_no_fd_status( struct uk_fd *fd, unsigned int status )
 {
     fd->no_fd_status = status;
 }
 
 /* sets the user of an fd that previously had no user */
-void set_fd_user( struct fd *fd, const struct fd_ops *user_ops, struct object *user )
+void set_fd_user( struct uk_fd *fd, const struct fd_ops *user_ops, struct object *user )
 {
     assert( fd->fd_ops == NULL );
     fd->fd_ops = user_ops;
     fd->user   = user;
 }
 
-static char *dup_fd_name( struct fd *root, const char *name )
+static char *dup_fd_name( struct uk_fd *root, const char *name )
 {
     char *ret;
 
@@ -2202,13 +2202,13 @@ static char *dup_fd_name( struct fd *root, const char *name )
     return ret;
 }
 
-/* open() wrapper that returns a struct fd with no fd user set */
-struct fd *open_fd( struct fd *root, const char *name, int flags, mode_t *mode, unsigned int access,
+/* open() wrapper that returns a struct uk_fd with no fd user set */
+struct uk_fd *open_fd( struct uk_fd *root, const char *name, int flags, mode_t *mode, unsigned int access,
                     unsigned int sharing, unsigned int options )
 {
     struct stat st;
     struct closed_fd *closed_fd;
-    struct fd *fd;
+    struct uk_fd *fd;
     const char *unlink_name = "";
     int root_fd = -1;
     int rw_mode;
@@ -2379,10 +2379,10 @@ error:
 
 /* create an fd for an anonymous file */
 /* if the function fails the unix fd is closed */
-struct fd *create_anonymous_fd( const struct fd_ops *fd_user_ops, int unix_fd, struct object *user,
+struct uk_fd *create_anonymous_fd( const struct fd_ops *fd_user_ops, int unix_fd, struct object *user,
                                 unsigned int options )
 {
-    struct fd *fd = alloc_fd_object();
+    struct uk_fd *fd = alloc_fd_object();
 
     if (fd)
     {
@@ -2412,20 +2412,20 @@ struct fd *create_anonymous_fd( const struct fd_ops *fd_user_ops, int unix_fd, s
 }
 
 /* retrieve the object that is using an fd */
-void *get_fd_user( struct fd *fd )
+void *get_fd_user( struct uk_fd *fd )
 {
     return fd->user;
 }
 
 /* retrieve the opening options for the fd */
-unsigned int get_fd_options( struct fd *fd )
+unsigned int get_fd_options( struct uk_fd *fd )
 {
     return fd->options;
 }
 
 #ifdef CONFIG_UNIFIED_KERNEL
 
-int find_unix_fd_by_tgid(struct fd* fd, pid_t tgid)
+int find_unix_fd_by_tgid(struct uk_fd* fd, pid_t tgid)
 {
     int i=0;
 
@@ -2443,7 +2443,7 @@ int find_unix_fd_by_tgid(struct fd* fd, pid_t tgid)
 
 void inc_handle_count_by_tgid(struct object *obj, pid_t tgid)
 {
-    struct fd *fd;
+    struct uk_fd *fd;
     int i=0;
 
     if( obj->ops->get_fd && (fd=obj->ops->get_fd(obj)) )
@@ -2461,7 +2461,7 @@ void inc_handle_count_by_tgid(struct object *obj, pid_t tgid)
     }
 }
 
-int get_unix_fd_by_tgid(struct fd *fd, pid_t tgid)
+int get_unix_fd_by_tgid(struct uk_fd *fd, pid_t tgid)
 {
     int new_fd;
 
@@ -2522,7 +2522,7 @@ int get_unix_fd_by_tgid(struct fd *fd, pid_t tgid)
     }
 }
 
-void remove_unix_fd_by_tgid(struct fd* fd, pid_t tgid)
+void remove_unix_fd_by_tgid(struct uk_fd* fd, pid_t tgid)
 {
     int i=0;
     if (fd->tbl_index==0)
@@ -2541,7 +2541,7 @@ void remove_unix_fd_by_tgid(struct fd* fd, pid_t tgid)
     }
 }
 
-void destroy_map_tbl(struct fd *fd)
+void destroy_map_tbl(struct uk_fd *fd)
 {
     if (fd->map_tbl)
     {
@@ -2563,7 +2563,7 @@ void destroy_map_tbl(struct fd *fd)
 }
 
 /* retrieve the unix fd for an object */
-int get_unix_fd( struct fd *fd )
+int get_unix_fd( struct uk_fd *fd )
 {
     if (unlikely(fd->unix_fd == -1))
     {
@@ -2580,7 +2580,7 @@ int get_unix_fd( struct fd *fd )
     }
 }
 
-struct file *get_unix_file( struct fd *fd )
+struct file *get_unix_file( struct uk_fd *fd )
 {
     if (fd->unix_file)
     {
@@ -2594,7 +2594,7 @@ struct file *get_unix_file( struct fd *fd )
 }
 #else
 /* retrieve the unix fd for an object */
-int get_unix_fd( struct fd *fd )
+int get_unix_fd( struct uk_fd *fd )
 {
     if (fd->unix_fd == -1) set_error( fd->no_fd_status );
     return fd->unix_fd;
@@ -2602,32 +2602,32 @@ int get_unix_fd( struct fd *fd )
 #endif
 
 /* check if two file descriptors point to the same file */
-int is_same_file_fd( struct fd *fd1, struct fd *fd2 )
+int is_same_file_fd( struct uk_fd *fd1, struct uk_fd *fd2 )
 {
     return fd1->inode == fd2->inode;
 }
 
 /* allow the fd to be cached (can't be reset once set) */
-void allow_fd_caching( struct fd *fd )
+void allow_fd_caching( struct uk_fd *fd )
 {
     fd->cacheable = 1;
 }
 
 /* check if fd is on a removable device */
-int is_fd_removable( struct fd *fd )
+int is_fd_removable( struct uk_fd *fd )
 {
     return (fd->inode && fd->inode->device->removable);
 }
 
 /* set or clear the fd signaled state */
-void set_fd_signaled( struct fd *fd, int signaled )
+void set_fd_signaled( struct uk_fd *fd, int signaled )
 {
     fd->signaled = signaled;
     if (signaled) uk_wake_up( fd->user, 0 );
 }
 
 /* set or clear the fd signaled state */
-int is_fd_signaled( struct fd *fd )
+int is_fd_signaled( struct uk_fd *fd )
 {
     return fd->signaled;
 }
@@ -2636,7 +2636,7 @@ int is_fd_signaled( struct fd *fd )
 int fd_close_handle( struct object *obj, struct process *process, obj_handle_t handle )
 {
 #ifdef CONFIG_UNIFIED_KERNEL
-    struct fd *fd;
+    struct uk_fd *fd;
 
     if( obj->ops->get_fd && (fd=obj->ops->get_fd(obj)) )
     {
@@ -2656,7 +2656,7 @@ int fd_close_handle( struct object *obj, struct process *process, obj_handle_t h
 }
 
 /* check if events are pending and if yes return which one(s) */
-int check_fd_events( struct fd *fd, int events )
+int check_fd_events( struct uk_fd *fd, int events )
 {
     struct pollfd pfd;
 
@@ -2672,7 +2672,7 @@ int check_fd_events( struct fd *fd, int events )
 /* default signaled() routine for objects that poll() on an fd */
 int default_fd_signaled( struct object *obj, struct thread *thread )
 {
-    struct fd *fd = get_obj_fd( obj );
+    struct uk_fd *fd = get_obj_fd( obj );
     int ret = fd->signaled;
     release_object( fd );
     return ret;
@@ -2688,7 +2688,7 @@ unsigned int default_fd_map_access( struct object *obj, unsigned int access )
     return access & ~(GENERIC_READ | GENERIC_WRITE | GENERIC_EXECUTE | GENERIC_ALL);
 }
 
-int default_fd_get_poll_events( struct fd *fd )
+int default_fd_get_poll_events( struct uk_fd *fd )
 {
     int events = 0;
 
@@ -2698,7 +2698,7 @@ int default_fd_get_poll_events( struct fd *fd )
 }
 
 /* default handler for poll() events */
-void default_poll_event( struct fd *fd, int event )
+void default_poll_event( struct uk_fd *fd, int event )
 {
     if (event & (POLLIN | POLLERR | POLLHUP)) async_wake_up( fd->read_q, STATUS_ALERTED );
     if (event & (POLLOUT | POLLERR | POLLHUP)) async_wake_up( fd->write_q, STATUS_ALERTED );
@@ -2708,7 +2708,7 @@ void default_poll_event( struct fd *fd, int event )
     else if (!fd->inode) set_fd_events( fd, fd->fd_ops->get_poll_events( fd ) );
 }
 
-struct async *fd_queue_async( struct fd *fd, const async_data_t *data, int type )
+struct async *fd_queue_async( struct uk_fd *fd, const async_data_t *data, int type )
 {
     struct async_queue *queue;
     struct async *async;
@@ -2742,7 +2742,7 @@ struct async *fd_queue_async( struct fd *fd, const async_data_t *data, int type 
     return async;
 }
 
-void fd_async_wake_up( struct fd *fd, int type, unsigned int status )
+void fd_async_wake_up( struct uk_fd *fd, int type, unsigned int status )
 {
     switch (type)
     {
@@ -2760,17 +2760,17 @@ void fd_async_wake_up( struct fd *fd, int type, unsigned int status )
     }
 }
 
-void fd_reselect_async( struct fd *fd, struct async_queue *queue )
+void fd_reselect_async( struct uk_fd *fd, struct async_queue *queue )
 {
     fd->fd_ops->reselect_async( fd, queue );
 }
 
-void no_fd_queue_async( struct fd *fd, const async_data_t *data, int type, int count )
+void no_fd_queue_async( struct uk_fd *fd, const async_data_t *data, int type, int count )
 {
     set_error( STATUS_OBJECT_TYPE_MISMATCH );
 }
 
-void default_fd_queue_async( struct fd *fd, const async_data_t *data, int type, int count )
+void default_fd_queue_async( struct uk_fd *fd, const async_data_t *data, int type, int count )
 {
     struct async *async;
 
@@ -2782,7 +2782,7 @@ void default_fd_queue_async( struct fd *fd, const async_data_t *data, int type, 
 }
 
 /* default reselect_async() fd routine */
-void default_fd_reselect_async( struct fd *fd, struct async_queue *queue )
+void default_fd_reselect_async( struct uk_fd *fd, struct async_queue *queue )
 {
     if (queue != fd->wait_q)
     {
@@ -2794,7 +2794,7 @@ void default_fd_reselect_async( struct fd *fd, struct async_queue *queue )
 }
 
 /* default cancel_async() fd routine */
-void default_fd_cancel_async( struct fd *fd, struct process *process, struct thread *thread, client_ptr_t iosb )
+void default_fd_cancel_async( struct uk_fd *fd, struct process *process, struct thread *thread, client_ptr_t iosb )
 {
     int n = 0;
 
@@ -2806,7 +2806,7 @@ void default_fd_cancel_async( struct fd *fd, struct process *process, struct thr
 }
 
 /* default flush() routine */
-void no_flush( struct fd *fd, struct event **event )
+void no_flush( struct uk_fd *fd, struct event **event )
 {
     set_error( STATUS_OBJECT_TYPE_MISMATCH );
 }
@@ -2822,13 +2822,13 @@ static inline int is_valid_mounted_device( struct stat *st )
 }
 
 /* close all Unix file descriptors on a device to allow unmounting it */
-static void unmount_device( struct fd *device_fd )
+static void unmount_device( struct uk_fd *device_fd )
 {
     unsigned int i;
     struct stat st;
     struct device *device;
     struct uk_inode *inode;
-    struct fd *fd;
+    struct uk_fd *fd;
     int unix_fd = get_unix_fd( device_fd );
 
     if (unix_fd == -1) return;
@@ -2845,7 +2845,7 @@ static void unmount_device( struct fd *device_fd )
     {
         LIST_FOR_EACH_ENTRY( inode, &device->inode_hash[i], struct uk_inode, entry )
         {
-            LIST_FOR_EACH_ENTRY( fd, &inode->open, struct fd, inode_entry )
+            LIST_FOR_EACH_ENTRY( fd, &inode->open, struct uk_fd, inode_entry )
             {
                 unmount_fd( fd );
             }
@@ -2858,7 +2858,7 @@ static void unmount_device( struct fd *device_fd )
     release_object( device );
 }
 
-obj_handle_t no_fd_ioctl( struct fd *fd, ioctl_code_t code, const async_data_t *async,
+obj_handle_t no_fd_ioctl( struct uk_fd *fd, ioctl_code_t code, const async_data_t *async,
                           int blocking, const void *data, data_size_t size )
 {
     set_error( STATUS_OBJECT_TYPE_MISMATCH );
@@ -2866,7 +2866,7 @@ obj_handle_t no_fd_ioctl( struct fd *fd, ioctl_code_t code, const async_data_t *
 }
 
 /* default ioctl() routine */
-obj_handle_t default_fd_ioctl( struct fd *fd, ioctl_code_t code, const async_data_t *async,
+obj_handle_t default_fd_ioctl( struct uk_fd *fd, ioctl_code_t code, const async_data_t *async,
                                int blocking, const void *data, data_size_t size )
 {
     switch(code)
@@ -2880,11 +2880,11 @@ obj_handle_t default_fd_ioctl( struct fd *fd, ioctl_code_t code, const async_dat
     }
 }
 
-/* same as get_handle_obj but retrieve the struct fd associated to the object */
-static struct fd *get_handle_fd_obj( struct process *process, obj_handle_t handle,
+/* same as get_handle_obj but retrieve the struct uk_fd associated to the object */
+static struct uk_fd *get_handle_fd_obj( struct process *process, obj_handle_t handle,
                                      unsigned int access )
 {
-    struct fd *fd = NULL;
+    struct uk_fd *fd = NULL;
     struct object *obj;
 
     if ((obj = get_handle_obj( process, handle, access, NULL )))
@@ -2895,13 +2895,13 @@ static struct fd *get_handle_fd_obj( struct process *process, obj_handle_t handl
     return fd;
 }
 
-struct uk_completion *fd_get_completion( struct fd *fd, apc_param_t *p_key )
+struct uk_completion *fd_get_completion( struct uk_fd *fd, apc_param_t *p_key )
 {
     *p_key = fd->comp_key;
     return fd->completion ? (struct uk_completion *)grab_object( fd->completion ) : NULL;
 }
 
-void fd_copy_completion( struct fd *src, struct fd *dst )
+void fd_copy_completion( struct uk_fd *src, struct uk_fd *dst )
 {
     assert( !dst->completion );
     dst->completion = fd_get_completion( src, &dst->comp_key );
@@ -2910,7 +2910,7 @@ void fd_copy_completion( struct fd *src, struct fd *dst )
 /* flush a file buffers */
 DECL_HANDLER(flush_file)
 {
-    struct fd *fd = get_handle_fd_obj( current_thread->process, req->handle, 0 );
+    struct uk_fd *fd = get_handle_fd_obj( current_thread->process, req->handle, 0 );
     struct event * event = NULL;
 
     if (fd)
@@ -2951,7 +2951,7 @@ DECL_HANDLER(open_file_object)
 /* get the Unix name from a file handle */
 DECL_HANDLER(get_handle_unix_name)
 {
-    struct fd *fd;
+    struct uk_fd *fd;
 
     if ((fd = get_handle_fd_obj( current_thread->process, req->handle, 0 )))
     {
@@ -2970,7 +2970,7 @@ DECL_HANDLER(get_handle_unix_name)
 /* get a Unix fd to access a file */
 DECL_HANDLER(get_handle_fd)
 {
-    struct fd *fd;
+    struct uk_fd *fd;
 
     if ((fd = get_handle_fd_obj( current_thread->process, req->handle, 0 )))
     {
@@ -2999,7 +2999,7 @@ DECL_HANDLER(get_handle_fd)
 DECL_HANDLER(ioctl)
 {
     unsigned int access = (req->code >> 14) & (FILE_READ_DATA|FILE_WRITE_DATA);
-    struct fd *fd = get_handle_fd_obj( current_thread->process, req->async.handle, access );
+    struct uk_fd *fd = get_handle_fd_obj( current_thread->process, req->async.handle, access );
 
     if (fd)
     {
@@ -3014,7 +3014,7 @@ DECL_HANDLER(ioctl)
 DECL_HANDLER(register_async)
 {
     unsigned int access;
-    struct fd *fd;
+    struct uk_fd *fd;
 
     switch(req->type)
     {
@@ -3039,7 +3039,7 @@ DECL_HANDLER(register_async)
 /* cancels all async I/O */
 DECL_HANDLER(cancel_async)
 {
-    struct fd *fd = get_handle_fd_obj( current_thread->process, req->handle, 0 );
+    struct uk_fd *fd = get_handle_fd_obj( current_thread->process, req->handle, 0 );
     struct thread *thread = req->only_thread ? current_thread : NULL;
 
     if (fd)
@@ -3052,7 +3052,7 @@ DECL_HANDLER(cancel_async)
 /* attach completion object to a fd */
 DECL_HANDLER(set_completion_info)
 {
-    struct fd *fd = get_handle_fd_obj( current_thread->process, req->handle, 0 );
+    struct uk_fd *fd = get_handle_fd_obj( current_thread->process, req->handle, 0 );
 
     if (fd)
     {
@@ -3069,7 +3069,7 @@ DECL_HANDLER(set_completion_info)
 /* push new completion msg into a completion queue attached to the fd */
 DECL_HANDLER(add_fd_completion)
 {
-    struct fd *fd = get_handle_fd_obj( current_thread->process, req->handle, 0 );
+    struct uk_fd *fd = get_handle_fd_obj( current_thread->process, req->handle, 0 );
     if (fd)
     {
         if (fd->completion)

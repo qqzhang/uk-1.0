@@ -59,7 +59,7 @@ struct process
     struct list_head          thread_list;     /* thread list */
     struct thread       *debugger;        /* thread debugging this process */
     struct handle_table *handles;         /* handle entries */
-    struct fd           *msg_fd;          /* fd for sendmsg/recvmsg */
+    struct uk_fd           *msg_fd;          /* fd for sendmsg/recvmsg */
     process_id_t         id;              /* id of the process */
     process_id_t         group_id;        /* group id of the process */
     struct timeout_user *sigkill_timeout; /* timeout for final SIGKILL */

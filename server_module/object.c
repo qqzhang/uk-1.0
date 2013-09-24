@@ -404,7 +404,7 @@ int no_signal( struct object *obj, unsigned int access )
     return 0;
 }
 
-struct fd *no_get_fd( struct object *obj )
+struct uk_fd *no_get_fd( struct object *obj )
 {
     set_error( STATUS_OBJECT_TYPE_MISMATCH );
     return NULL;

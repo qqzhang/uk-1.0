@@ -59,7 +59,7 @@ struct mapping
     struct object   obj;             /* object header */
     mem_size_t      size;            /* mapping size */
     int             protect;         /* protection flags */
-    struct fd      *fd;              /* fd for mapped file */
+    struct uk_fd      *fd;              /* fd for mapped file */
     int             header_size;     /* size of headers (for PE image mapping) */
     client_ptr_t    base;            /* default base addr (for PE image mapping) */
     struct ranges  *committed;       /* list of committed ranges in this mapping */
@@ -69,10 +69,10 @@ struct mapping
 
 static void mapping_dump( struct object *obj, int verbose );
 static struct object_type *mapping_get_type( struct object *obj );
-static struct fd *mapping_get_fd( struct object *obj );
+static struct uk_fd *mapping_get_fd( struct object *obj );
 static unsigned int mapping_map_access( struct object *obj, unsigned int access );
 static void mapping_destroy( struct object *obj );
-static enum server_fd_type mapping_get_fd_type( struct fd *fd );
+static enum server_fd_type mapping_get_fd_type( struct uk_fd *fd );
 
 static const struct object_ops mapping_ops =
 {
@@ -440,7 +440,7 @@ static struct object *create_mapping( struct directory *root, const struct unico
 {
     struct mapping *mapping;
     struct uk_file *file;
-    struct fd *fd;
+    struct uk_fd *fd;
     int access = 0;
     int unix_fd;
     struct stat st;
@@ -583,10 +583,10 @@ static struct object_type *mapping_get_type( struct object *obj )
     return get_object_type( &str );
 }
 
-static struct fd *mapping_get_fd( struct object *obj )
+static struct uk_fd *mapping_get_fd( struct object *obj )
 {
     struct mapping *mapping = (struct mapping *)obj;
-    return (struct fd *)grab_object( mapping->fd );
+    return (struct uk_fd *)grab_object( mapping->fd );
 }
 
 static unsigned int mapping_map_access( struct object *obj, unsigned int access )
@@ -611,7 +611,7 @@ static void mapping_destroy( struct object *obj )
     free( mapping->committed );
 }
 
-static enum server_fd_type mapping_get_fd_type( struct fd *fd )
+static enum server_fd_type mapping_get_fd_type( struct uk_fd *fd )
 {
     return FD_TYPE_FILE;
 }
@@ -678,7 +678,7 @@ DECL_HANDLER(open_mapping)
 DECL_HANDLER(get_mapping_info)
 {
     struct mapping *mapping;
-    struct fd *fd;
+    struct uk_fd *fd;
 
     if ((mapping = get_mapping_obj( current_thread->process, req->handle, req->access )))
     {
