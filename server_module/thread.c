@@ -127,8 +127,10 @@ static void remove_thread_by_pid(struct thread *thread, pid_t pid)
 	slot = thread_hashfn(pid);
 
 	write_lock(&thread_hash_lock);
-	hlist_for_each_entry(tmp, pos, &thread_hash_table[slot], hash_entry)
+	/* in linux-3.11 hlist_for_each_entry interface have changed */
+	hlist_for_each(pos, &thread_hash_table[slot])
 	{
+        tmp = hlist_entry(pos, struct thread, hash_entry);
 		if ( tmp && tmp==thread )
 		{
 			tmp->pid = -1;
@@ -145,8 +147,10 @@ struct thread* find_thread_by_pid(pid_t pid)
 	int slot = thread_hashfn(pid);
 
 	read_lock(&thread_hash_lock);
-	hlist_for_each_entry(thread, pos, &thread_hash_table[slot], hash_entry)
+	/* in linux-3.11 hlist_for_each_entry interface have changed */
+	hlist_for_each(pos, &thread_hash_table[slot])
 	{
+        thread = hlist_entry(pos, struct thread, hash_entry);
 		if ( thread && thread->pid == pid)
 		{
 			read_unlock(&thread_hash_lock);
