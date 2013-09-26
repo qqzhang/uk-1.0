@@ -84,6 +84,7 @@ static int dummy_errno=0;
 #define SYSCALL_RETURN(ret) \
 	do{ \
 		if(ret<0) { \
+		    klog(0," errno=%d \n",(int)ret); \
 			current_thread ? (current_thread->unix_errno=-ret) : (dummy_errno=-ret); \
 			ret = -1; \
 		} \
@@ -2605,16 +2606,28 @@ int fchmod(int fildes, mode_t mode)
 	klog(0,"NOT IMPLEMENT!\n");
 	return 0;
 }
-int fcntl(int fd, int cmd, unsigned long arg)
+
+int fcntl(int fd, unsigned int cmd, unsigned long arg)
 {
-	long ret;
-	asmlinkage	long (*sys_fcntl)(unsigned int, unsigned int, unsigned long) = get_kernel_proc_address("sys_fcntl");
+    int ret;
 
-	PREPARE_KERNEL_CALL;
-	ret = sys_fcntl(fd, cmd, arg);
-	END_KERNEL_CALL;
+#if BITS_PER_LONG == 32
+    asmlinkage long (*sys_fcntl64)(unsigned int fd,
+            unsigned int cmd, unsigned long arg) = get_kernel_proc_address("sys_fcntl64");
 
-	SYSCALL_RETURN(ret);
+    PREPARE_KERNEL_CALL;
+    ret = sys_fcntl64(fd, cmd, arg);
+    END_KERNEL_CALL;
+#else
+    asmlinkage long sys_fcntl(unsigned int fd, unsigned int cmd, unsigned long arg)
+        = get_kernel_proc_address("sys_fcntl");
+
+    PREPARE_KERNEL_CALL;
+    ret = sys_fcntl(fd, cmd, arg);
+    END_KERNEL_CALL;
+#endif
+
+    SYSCALL_RETURN(ret);
 }
 
 pid_t setsid(void)
@@ -2650,7 +2663,9 @@ int clock_gettime(clockid_t clk_id, void *tp)
     asmlinkage long (*sys_clock_gettime)(clockid_t which_clock,
             struct timespec __user *tp) = get_kernel_proc_address("sys_clock_gettime");
 
+	PREPARE_KERNEL_CALL;
     ret = sys_clock_gettime( clk_id, tp);
+	END_KERNEL_CALL;
 
     SYSCALL_RETURN(ret);
 
