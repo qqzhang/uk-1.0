@@ -1865,12 +1865,12 @@ static void fd_destroy( struct object *obj )
     /* do not poll events,fput struct file. */
     uk_poll_freewait(&fd->uk_pwq);
     destroy_map_tbl( fd );
-#else /* close unix_fd in fd_close_handle now */
     if (fd->inode)
     {
         inode_add_closed_fd( fd->inode, fd->closed );
         release_object( fd->inode );
     }
+#else /* close unix_fd in fd_close_handle now */
     else  /* no inode, close it right away */
     {
         if (fd->unix_fd != -1) close( fd->unix_fd );
@@ -2640,15 +2640,7 @@ int fd_close_handle( struct object *obj, struct process *process, obj_handle_t h
 
     if( obj->ops->get_fd && (fd=obj->ops->get_fd(obj)) )
     {
-        if (fd->inode)
-        {
-            inode_add_closed_fd( fd->inode, fd->closed );
-            release_object( fd->inode );
-            fd->inode = NULL;
-        }
-
         remove_unix_fd_by_tgid(fd, current->tgid);
-
         release_object(fd); /* get_fd had increased fd object's refcount */
     }
 #endif
