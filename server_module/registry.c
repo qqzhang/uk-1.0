@@ -1786,7 +1786,7 @@ void uk_init_registry(const char __user *config_dir, int len)
 	}
 	else
 	{
-		system = build_reg_name(config_dir, len, "/sysrem.reg");
+		system = build_reg_name(config_dir, len, "/system.reg");
 		userdef = build_reg_name(config_dir, len, "/userdef.reg");
 		user = build_reg_name(config_dir, len, "/user.reg");
 	}
