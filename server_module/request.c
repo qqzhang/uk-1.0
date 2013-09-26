@@ -1059,6 +1059,18 @@ NTSTATUS NtWineService(int __user *user_req_info)
 	}
 
 out:
+    if (thread->req_data)
+    {
+        free(thread->req_data);
+        thread->req_data = NULL;
+    }
+
+    if (thread->reply_data)
+    {
+        free(thread->reply_data);
+        thread->reply_data = NULL;
+    }
+
 	return status;
 }
 
