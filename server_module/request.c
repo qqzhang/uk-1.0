@@ -908,7 +908,7 @@ NTSTATUS NtEarlyInit(int __user* init_data_ptr)
     memset(&init_data, 0, sizeof(struct init_data));
     if (copy_from_user(&init_data, init_data_ptr, sizeof(struct init_data)))
     {
-        klog(0,"copy_from_user error \n");
+        klog(0,"error: copy_from_user\n");
         return STATUS_NO_MEMORY;
     }
 
@@ -938,14 +938,14 @@ NTSTATUS NtEarlyInit(int __user* init_data_ptr)
                 }
                 else
                 {
-                    klog(0,"new_thread get error id=%d \n", thread_id);
+                    klog(0,"error: get_thread_from_id thread_id=%d \n", thread_id);
                     return STATUS_UNSUCCESSFUL;
                 }
             }
             return STATUS_SUCCESS;
 
         default:
-            klog(0,"Unkown type \n");
+            klog(0,"error : Unkown type \n");
             return STATUS_NOT_IMPLEMENTED;
     }
 }
@@ -990,7 +990,7 @@ NTSTATUS NtWineService(int __user *user_req_info)
 			req_msg.data[i].ptr, 
 			req_msg.data[i].size)) 
 			{ 
-				status = STATUS_UNSUCCESSFUL;
+				status = STATUS_NO_MEMORY;
 				goto out;
 			}
 
@@ -1103,8 +1103,8 @@ static int syscall_chardev_unlocked_ioctl(struct file *filp, unsigned int cmd, u
 
 	if ( (cmd > Nt_MaxNum) || (cmd < Nt_None) )
 	{
-		printk("%s %d : bad syscall num \n",__func__,__LINE__);
-		return -1;
+        klog(0,"error : bad syscall num\n");
+        return STATUS_INVALID_PARAMETER;
 	}
 
 	switch (cmd) 

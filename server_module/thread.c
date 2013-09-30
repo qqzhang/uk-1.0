@@ -120,8 +120,16 @@ static void remove_thread_by_pid(struct thread *thread, pid_t pid)
 
 	if (thread->pid != pid)
 	{
-		klog(0,"killed by other thread %d\n",pid);
-		pid = thread->pid;
+	    if (thread->pid < 0)
+        {
+            klog(0,"error : bad pid %d %d \n", thread->pid, thread->unix_tid);
+            return;
+        }
+        else
+        {
+            klog(0,"thread %d killed by other thread\n",thread->pid);
+            pid = thread->pid;
+        }
 	}
 
 	slot = thread_hashfn(pid);
@@ -1143,7 +1151,7 @@ int thread_get_inflight_fd( struct thread *thread, int client )
     }
     else
     {
-        klog(0,"dup fd error \n");
+        klog(0,"error : dup %d \n",new_fd);
         return -1;
     }
 }

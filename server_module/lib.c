@@ -83,7 +83,7 @@ static int dummy_errno=0;
 
 #define SYSCALL_RETURN(ret) \
 	do{ \
-		if(ret<0) { \
+		if(IS_ERR_VALUE(ret)) { \
 		    klog(0," errno=%d \n",(int)ret); \
 			current_thread ? (current_thread->unix_errno=-ret) : (dummy_errno=-ret); \
 			ret = -1; \
@@ -290,7 +290,6 @@ void *realloc(void *ptr, size_t new_size)
 void exit(int status)
 {
     asmlinkage long (*sys_exit)(int error_code) = get_kernel_proc_address("sys_exit");
-    klog(0,"sys_exit called \n");
 
     sys_exit(status);
 
@@ -379,8 +378,6 @@ FILE* fdopen(int fd, const char *mode)
     FILE* fp;
     struct file *filp = NULL;
     int flags = 0;
-
-    klog(0,"warning : use fd number in kernel!\n");
 
     if (!strcmp(mode, "r"))
 	flags = O_RDONLY;
@@ -2518,7 +2515,6 @@ int ftruncate(int fd, off_t length)
 	asmlinkage long (*sys_ftruncate)(unsigned int fd, unsigned long length)
 		= get_kernel_proc_address("sys_ftruncate");
 
-	klog(0,"warning : use fd number in kernel!\n");
 	ret = sys_ftruncate(fd, length);
 
 	SYSCALL_RETURN(ret);
@@ -2534,8 +2530,6 @@ int fstatfs(int fd, struct statfs *buf)
 	int ret;
 	asmlinkage long (*sys_fstatfs)(unsigned int fd, struct statfs __user *buf)
 		 = get_kernel_proc_address("sys_fstatfs");
-
-	klog(0,"warning : use fd number in kernel!\n");
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_fstatfs(fd, buf);
@@ -2590,7 +2584,6 @@ int fsync(int fd)
 {
     int ret;
     asmlinkage long (*sys_fsync)(unsigned int fd) = get_kernel_proc_address("sys_fsync");
-    klog(0,"warning : use fd number in kernel!\n");
 
     ret = sys_fsync(fd);
 
