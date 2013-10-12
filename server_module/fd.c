@@ -2293,7 +2293,6 @@ struct uk_fd *open_fd( struct uk_fd *root, const char *name, int flags, mode_t *
         fd->map_tbl[fd->tbl_index].unix_fd = fd->unix_fd;
         fd->map_tbl[fd->tbl_index].handle_count = 1;
         fd->tbl_index++;
-        fput(fd->unix_file);
     }
 
     closed_fd->unix_fd = -1; /* don't use closed_fd->unix_fd */
@@ -2402,7 +2401,6 @@ struct uk_fd *create_anonymous_fd( const struct fd_ops *fd_user_ops, int unix_fd
             fd->map_tbl[fd->tbl_index].unix_fd = unix_fd;
             fd->map_tbl[fd->tbl_index].handle_count = 1;
             fd->tbl_index++;
-            fput(fd->unix_file);
         }
 #endif
         return fd;
