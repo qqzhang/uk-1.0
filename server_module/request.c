@@ -1015,7 +1015,7 @@ NTSTATUS NtWineService(int __user *user_req_info)
 	}
 
 	status = get_error();
-#if 1
+#if 0
 	if (status)
     {
         if(req==90 || req==91 ||req==94 || req==96 || req==97 || req==203)

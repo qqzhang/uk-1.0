@@ -72,7 +72,6 @@ static const unsigned int supported_cpus = CPU_FLAG(CPU_ARM64);
 #include <linux/spinlock.h>
 #include <linux/rwlock.h>
 #include <linux/sched.h>
-#include <linux/completion.h>
 #include "klog.h"
 
 int uk_sched_setaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask);
@@ -316,8 +315,6 @@ static inline void init_thread_structure( struct thread *thread )
     thread->pid             = -1;  /* not known yet */
     INIT_HLIST_NODE( &thread->hash_entry );
     thread->unix_errno      = 0;
-    init_completion( &thread->completion );
-    memset( &thread->wake_info, 0, sizeof(thread->wake_info));
 #endif
 
     thread->creation_time = current_time;
@@ -782,15 +779,6 @@ static int check_wait( struct thread *thread )
     return -1;
 }
 
-#ifdef CONFIG_UNIFIED_KERNEL
-static int send_thread_wakeup( struct thread *thread, client_ptr_t cookie, int signaled )
-{
-    complete( &thread->completion );
-    thread->wake_info.cookie   = cookie;
-    thread->wake_info.signaled = signaled;
-    return 0;
-}
-#else
 /* send the wakeup signal to a thread */
 static int send_thread_wakeup( struct thread *thread, client_ptr_t cookie, int signaled )
 {
@@ -810,7 +798,6 @@ static int send_thread_wakeup( struct thread *thread, client_ptr_t cookie, int s
         fatal_protocol_error( thread, "write: %s\n", strerror( errno ));
     return -1;
 }
-#endif
 
 /* attempt to wake up a thread */
 /* return >0 if OK, 0 if the wait condition is still not satisfied */
@@ -840,6 +827,9 @@ static void thread_timeout( void *ptr )
     client_ptr_t cookie = wait->cookie;
 
     wait->user = NULL;
+#ifdef CONFIG_UNIFIED_KERNEL
+    if (!thread) return;
+#endif
     if (thread->wait != wait) return; /* not the top-level wait, ignore it */
     if (thread->suspend + thread->process->suspend > 0) return;  /* suspended, ignore it */
 
@@ -919,19 +909,15 @@ static timeout_t select_on( unsigned int count, client_ptr_t cookie, const obj_h
             goto done;
         }
     }
+#ifndef CONFIG_UNIFIED_KERNEL
     current_thread->wait->cookie = cookie;
-#ifdef CONFIG_UNIFIED_KERNEL
-    wait_for_completion_interruptible( &current_thread->completion );
-    if (cookie == current_thread->wake_info.cookie)
-    {
-        set_error( current_thread->wake_info.signaled );
-    }
-    else
-    {
-        klog(0,"cookie is broken \n");
-    }
-#else
     set_error( STATUS_PENDING );
+#else
+    if (current_thread->wait)
+    {
+        current_thread->wait->cookie = cookie;
+        set_error( STATUS_PENDING );
+    }
 #endif
 
 done:
@@ -1361,6 +1347,9 @@ DECL_HANDLER(init_thread)
     current_thread->reply_fd = create_anonymous_fd( &thread_fd_ops, reply_fd, &current_thread->obj, 0 );
     current_thread->wait_fd  = create_anonymous_fd( &thread_fd_ops, wait_fd, &current_thread->obj, 0 );
     if (!current_thread->reply_fd || !current_thread->wait_fd) return;
+#else
+    current_thread->wait_fd  = create_anonymous_fd( &thread_fd_ops, wait_fd, &current_thread->obj, 0 );
+    if (!current_thread->wait_fd) return;
 #endif
 
     if (!is_valid_address(req->teb))

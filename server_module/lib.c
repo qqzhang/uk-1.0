@@ -2349,8 +2349,15 @@ ssize_t read(unsigned int fd, void *buf, size_t size)
 
 ssize_t write(int fd, const void *buf, size_t count)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+    int ret;
+    asmlinkage long (*sys_write)(unsigned int fd, const char __user *buf,
+            size_t count) = get_kernel_proc_address("sys_write");
+
+    PREPARE_KERNEL_CALL;
+    ret = sys_write(fd, buf, count);
+    END_KERNEL_CALL;
+
+    SYSCALL_RETURN(ret);
 }
 
 ssize_t pread(int fd, void *buf, size_t count, off_t offset)
