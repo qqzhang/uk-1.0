@@ -183,15 +183,15 @@ struct uk_poll_wqueues
 };
 
 #define DEFAULT_MAP_NUM 4
-struct tgid_fd_map
+struct pid_fd_map
 {
-    pid_t tgid;
+    pid_t pid;
     int   unix_fd;
     unsigned int handle_count; /* means to : how many handles use this uinx_fd */
 };
 void destroy_map_tbl(struct uk_fd *fd);
-int get_unix_fd_by_tgid(struct uk_fd *fd, pid_t tgid);
-int find_unix_fd_by_tgid(struct uk_fd* fd, pid_t tgid);
+int get_unix_fd_by_pid(struct uk_fd *fd, pid_t pid);
+int find_unix_fd_by_pid(struct uk_fd* fd, pid_t pid);
 #endif
 
 struct uk_fd
@@ -219,11 +219,11 @@ struct uk_fd
     struct uk_completion   *completion;  /* completion object attached to this fd */
     apc_param_t          comp_key;    /* completion key to set in completion events */
 #ifdef CONFIG_UNIFIED_KERNEL
-    pid_t creator_tgid;
+    pid_t creator_pid;
     struct file *unix_file;
     int tbl_index;
     int max_index;
-    struct tgid_fd_map   *map_tbl;
+    struct pid_fd_map   *map_tbl;
     struct uk_poll_wqueues	uk_pwq;
 #endif
 };
@@ -1996,10 +1996,10 @@ static struct uk_fd *alloc_fd_object(void)
     list_init( &fd->locks );
 #ifdef CONFIG_UNIFIED_KERNEL
     fd->uk_pwq.have_inited_flag = false;
-    fd->creator_tgid = 0;
+    fd->creator_pid = 0;
     fd->unix_file    = NULL;
     fd->tbl_index = 0;
-    fd->map_tbl = malloc(sizeof(struct tgid_fd_map) * DEFAULT_MAP_NUM);
+    fd->map_tbl = malloc(sizeof(struct pid_fd_map) * DEFAULT_MAP_NUM);
     if (!fd->map_tbl)
     {
         klog(0," malloc error \n");
@@ -2007,7 +2007,7 @@ static struct uk_fd *alloc_fd_object(void)
     }
     else
     {
-        memset(fd->map_tbl, -1, sizeof(struct tgid_fd_map) * DEFAULT_MAP_NUM);
+        memset(fd->map_tbl, -1, sizeof(struct pid_fd_map) * DEFAULT_MAP_NUM);
         fd->max_index = DEFAULT_MAP_NUM;
     }
 #endif
@@ -2049,10 +2049,10 @@ struct uk_fd *alloc_pseudo_fd( const struct fd_ops *fd_user_ops, struct object *
     list_init( &fd->locks );
 #ifdef CONFIG_UNIFIED_KERNEL
     fd->uk_pwq.have_inited_flag = false;
-    fd->creator_tgid = 0;
+    fd->creator_pid = 0;
     fd->unix_file    = NULL;
     fd->tbl_index = 0;
-    fd->map_tbl = malloc(sizeof(struct tgid_fd_map) * DEFAULT_MAP_NUM);
+    fd->map_tbl = malloc(sizeof(struct pid_fd_map) * DEFAULT_MAP_NUM);
     if (!fd->map_tbl)
     {
         klog(0," malloc error \n");
@@ -2060,7 +2060,7 @@ struct uk_fd *alloc_pseudo_fd( const struct fd_ops *fd_user_ops, struct object *
     }
     else
     {
-        memset(fd->map_tbl, -1, sizeof(struct tgid_fd_map) * DEFAULT_MAP_NUM);
+        memset(fd->map_tbl, -1, sizeof(struct pid_fd_map) * DEFAULT_MAP_NUM);
         fd->max_index = DEFAULT_MAP_NUM;
     }
 #endif
@@ -2089,7 +2089,7 @@ struct uk_fd *dup_fd_object( struct uk_fd *orig, unsigned int access, unsigned i
         struct closed_fd *closed = mem_alloc( sizeof(*closed) );
         if (!closed) goto failed;
 #ifdef CONFIG_UNIFIED_KERNEL
-        if (orig->creator_tgid == current->tgid)
+        if (orig->creator_pid == current->pid)
         {
             if ((fd->unix_fd = dup( orig->unix_fd )) == -1)
             {
@@ -2097,13 +2097,13 @@ struct uk_fd *dup_fd_object( struct uk_fd *orig, unsigned int access, unsigned i
                 free( closed );
                 goto failed;
             }
-            fd->creator_tgid = current->tgid;
+            fd->creator_pid = current->pid;
             fd->unix_file = orig->unix_file;
         }
         else
         {
             fd->unix_fd = get_unix_fd(orig);
-            fd->creator_tgid = current->tgid;
+            fd->creator_pid = current->pid;
             fd->unix_file = orig->unix_file;
         }
         closed->unix_fd = -1;
@@ -2127,19 +2127,19 @@ struct uk_fd *dup_fd_object( struct uk_fd *orig, unsigned int access, unsigned i
         }
     }
 #ifdef CONFIG_UNIFIED_KERNEL
-    else if (orig->creator_tgid == current->tgid)
+    else if (orig->creator_pid == current->pid)
     {
         if ((fd->unix_fd = dup( orig->unix_fd )) == -1)
         {
             file_set_error();
             goto failed;
         }
-        fd->creator_tgid = current->tgid;
+        fd->creator_pid = current->pid;
     }
     else
     {
         fd->unix_fd = get_unix_fd(orig);
-        fd->creator_tgid = current->tgid;
+        fd->creator_pid = current->pid;
     }
 #else
     else if ((fd->unix_fd = dup( orig->unix_fd )) == -1)
@@ -2281,7 +2281,7 @@ struct uk_fd *open_fd( struct uk_fd *root, const char *name, int flags, mode_t *
     }
 
 #ifdef CONFIG_UNIFIED_KERNEL
-    fd->creator_tgid = current->tgid;
+    fd->creator_pid = current->pid;
     fd->unix_file = fget(fd->unix_fd);
     if (!fd->unix_file)
     {
@@ -2289,7 +2289,7 @@ struct uk_fd *open_fd( struct uk_fd *root, const char *name, int flags, mode_t *
     }
     else
     {
-        fd->map_tbl[fd->tbl_index].tgid = current->tgid;
+        fd->map_tbl[fd->tbl_index].pid = current->pid;
         fd->map_tbl[fd->tbl_index].unix_fd = fd->unix_fd;
         fd->map_tbl[fd->tbl_index].handle_count = 1;
         fd->tbl_index++;
@@ -2389,7 +2389,7 @@ struct uk_fd *create_anonymous_fd( const struct fd_ops *fd_user_ops, int unix_fd
         fd->unix_fd = unix_fd;
         fd->options = options;
 #ifdef CONFIG_UNIFIED_KERNEL
-        fd->creator_tgid = current->tgid;
+        fd->creator_pid = current->pid;
         fd->unix_file = fget(unix_fd);
         if (!fd->unix_file)
         {
@@ -2397,7 +2397,7 @@ struct uk_fd *create_anonymous_fd( const struct fd_ops *fd_user_ops, int unix_fd
         }
         else
         {
-            fd->map_tbl[fd->tbl_index].tgid = current->tgid;
+            fd->map_tbl[fd->tbl_index].pid = current->pid;
             fd->map_tbl[fd->tbl_index].unix_fd = unix_fd;
             fd->map_tbl[fd->tbl_index].handle_count = 1;
             fd->tbl_index++;
@@ -2423,7 +2423,7 @@ unsigned int get_fd_options( struct uk_fd *fd )
 
 #ifdef CONFIG_UNIFIED_KERNEL
 
-int find_unix_fd_by_tgid(struct uk_fd* fd, pid_t tgid)
+int find_unix_fd_by_pid(struct uk_fd* fd, pid_t pid)
 {
     int i=0;
 
@@ -2432,14 +2432,14 @@ int find_unix_fd_by_tgid(struct uk_fd* fd, pid_t tgid)
 
     for(i=0; i<fd->tbl_index; i++)
     {
-        if (fd->map_tbl[i].tgid == tgid)
+        if (fd->map_tbl[i].pid == pid)
             return fd->map_tbl[i].unix_fd;
     }
 
     return -1;
 }
 
-void inc_handle_count_by_tgid(struct object *obj, pid_t tgid)
+void inc_handle_count_by_pid(struct object *obj, pid_t pid)
 {
     struct uk_fd *fd;
     int i=0;
@@ -2451,7 +2451,7 @@ void inc_handle_count_by_tgid(struct object *obj, pid_t tgid)
 
         for(i=0; i<fd->tbl_index; i++)
         {
-            if (fd->map_tbl[i].tgid == tgid)
+            if (fd->map_tbl[i].pid == pid)
                 fd->map_tbl[i].handle_count++;
         }
 
@@ -2459,11 +2459,11 @@ void inc_handle_count_by_tgid(struct object *obj, pid_t tgid)
     }
 }
 
-int get_unix_fd_by_tgid(struct uk_fd *fd, pid_t tgid)
+int get_unix_fd_by_pid(struct uk_fd *fd, pid_t pid)
 {
     int new_fd;
 
-    new_fd = find_unix_fd_by_tgid(fd, current->tgid);
+    new_fd = find_unix_fd_by_pid(fd, current->pid);
     if (new_fd != -1)
     {
         return new_fd;
@@ -2488,7 +2488,7 @@ int get_unix_fd_by_tgid(struct uk_fd *fd, pid_t tgid)
 
     if (fd->tbl_index < fd->max_index)
     {
-        fd->map_tbl[fd->tbl_index].tgid = tgid;
+        fd->map_tbl[fd->tbl_index].pid = pid;
         fd->map_tbl[fd->tbl_index].unix_fd = new_fd;
         fd->map_tbl[fd->tbl_index].handle_count = 1;
         fd->tbl_index++;
@@ -2496,12 +2496,12 @@ int get_unix_fd_by_tgid(struct uk_fd *fd, pid_t tgid)
     }
     else /*expend table*/
     {
-        struct tgid_fd_map *new_tbl;
+        struct pid_fd_map *new_tbl;
         int new_size = fd->max_index + fd->max_index/2;
 
         klog(0,"need expend table\n");
 
-        new_tbl = realloc(fd->map_tbl, sizeof(struct tgid_fd_map) * new_size);
+        new_tbl = realloc(fd->map_tbl, sizeof(struct pid_fd_map) * new_size);
         if (!new_tbl)
         {
             klog(0, "realloc error \n");
@@ -2510,7 +2510,7 @@ int get_unix_fd_by_tgid(struct uk_fd *fd, pid_t tgid)
         else
         {
             fd->map_tbl = new_tbl;
-            fd->map_tbl[fd->tbl_index].tgid = tgid;
+            fd->map_tbl[fd->tbl_index].pid = pid;
             fd->map_tbl[fd->tbl_index].unix_fd = new_fd;
             fd->map_tbl[fd->tbl_index].handle_count = 1;
             fd->tbl_index++;
@@ -2520,7 +2520,7 @@ int get_unix_fd_by_tgid(struct uk_fd *fd, pid_t tgid)
     }
 }
 
-void remove_unix_fd_by_tgid(struct uk_fd* fd, pid_t tgid)
+void remove_unix_fd_by_pid(struct uk_fd* fd, pid_t pid)
 {
     int i=0;
     if (fd->tbl_index==0)
@@ -2528,7 +2528,7 @@ void remove_unix_fd_by_tgid(struct uk_fd* fd, pid_t tgid)
 
     for(i=0; i<fd->tbl_index; i++)
     {
-        if (fd->map_tbl[i].tgid == tgid)
+        if (fd->map_tbl[i].pid == pid)
         {
             if (!--fd->map_tbl[i].handle_count)
             {
@@ -2548,7 +2548,7 @@ void destroy_map_tbl(struct uk_fd *fd)
             int i;
             for(i=0; i<fd->tbl_index; i++)
             {
-                if (fd->map_tbl[i].tgid == current->tgid)
+                if (fd->map_tbl[i].pid == current->pid)
                     close(fd->map_tbl[i].unix_fd);
                 else
                     klog(0, "FIXME : can't close other process's fd number. obj_ops=%08x\n",((struct object*)fd->user)->ops);
@@ -2568,13 +2568,13 @@ int get_unix_fd( struct uk_fd *fd )
         set_error( fd->no_fd_status );
         return -1;
     }
-    else if (likely(fd->creator_tgid == current->tgid))
+    else if (likely(fd->creator_pid == current->pid))
     {
         return fd->unix_fd;
     }
     else
     {
-        return get_unix_fd_by_tgid(fd, current->tgid);
+        return get_unix_fd_by_pid(fd, current->pid);
     }
 }
 
@@ -2638,7 +2638,7 @@ int fd_close_handle( struct object *obj, struct process *process, obj_handle_t h
 
     if( obj->ops->get_fd && (fd=obj->ops->get_fd(obj)) )
     {
-        remove_unix_fd_by_tgid(fd, current->tgid);
+        remove_unix_fd_by_pid(fd, current->pid);
         release_object(fd); /* get_fd had increased fd object's refcount */
     }
 #endif
