@@ -938,7 +938,7 @@ NTSTATUS NtEarlyInit(int __user* init_data_ptr)
                 }
                 else
                 {
-                    klog(0,"error: get_thread_from_id thread_id=%d \n", thread_id);
+                    klog(0,"error: get_thread_from_id. type %d thread_id=%d \n", type, thread_id);
                     return STATUS_UNSUCCESSFUL;
                 }
             }

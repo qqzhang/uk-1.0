@@ -145,6 +145,10 @@ static unsigned int used_ptid_entries;      /* number of entries in use */
 static unsigned int alloc_ptid_entries;     /* number of allocated entries */
 static unsigned int next_free_ptid;         /* next free entry */
 static unsigned int last_free_ptid;         /* last free entry */
+#ifdef CONFIG_UNIFIED_KERNEL
+#include <linux/rwsem.h>
+static DECLARE_RWSEM(ptid_sem);
+#endif
 
 static void kill_all_processes(void);
 
@@ -156,6 +160,9 @@ unsigned int alloc_ptid( void *ptr )
     struct ptid_entry *entry;
     unsigned int id;
 
+#ifdef CONFIG_UNIFIED_KERNEL
+    down_write( &ptid_sem );
+#endif
     if (used_ptid_entries < alloc_ptid_entries)
     {
         id = used_ptid_entries + PTID_OFFSET;
@@ -174,6 +181,9 @@ unsigned int alloc_ptid( void *ptr )
         if (!(entry = realloc( ptid_entries, count * sizeof(*entry) )))
         {
             set_error( STATUS_NO_MEMORY );
+#ifdef CONFIG_UNIFIED_KERNEL
+            up_write( &ptid_sem );
+#endif
             return 0;
         }
         ptid_entries = entry;
@@ -183,12 +193,18 @@ unsigned int alloc_ptid( void *ptr )
     }
 
     entry->ptr = ptr;
+#ifdef CONFIG_UNIFIED_KERNEL
+    up_write( &ptid_sem );
+#endif
     return id;
 }
 
 /* free a process or thread id */
 void free_ptid( unsigned int id )
 {
+#ifdef CONFIG_UNIFIED_KERNEL
+    down_write( &ptid_sem );
+#endif
     struct ptid_entry *entry = &ptid_entries[id - PTID_OFFSET];
 
     entry->ptr  = NULL;
@@ -199,8 +215,27 @@ void free_ptid( unsigned int id )
     else next_free_ptid = id;
 
     last_free_ptid = id;
+#ifdef CONFIG_UNIFIED_KERNEL
+    up_write( &ptid_sem );
+#endif
 }
 
+#ifdef CONFIG_UNIFIED_KERNEL
+void *get_ptid_entry( unsigned int id )
+{
+    void *ptr;
+    if (id < PTID_OFFSET) return NULL;
+    down_read( &ptid_sem);
+    if (id - PTID_OFFSET >= used_ptid_entries)
+    {
+        up_read( &ptid_sem);
+        return NULL;
+    }
+    ptr = ptid_entries[id - PTID_OFFSET].ptr;
+    up_read( &ptid_sem);
+    return ptr;
+}
+#else
 /* retrieve the pointer corresponding to a process or thread id */
 void *get_ptid_entry( unsigned int id )
 {
@@ -208,6 +243,7 @@ void *get_ptid_entry( unsigned int id )
     if (id - PTID_OFFSET >= used_ptid_entries) return NULL;
     return ptid_entries[id - PTID_OFFSET].ptr;
 }
+#endif
 
 /* return the main thread of the process */
 struct thread *get_process_first_thread( struct process *process )
