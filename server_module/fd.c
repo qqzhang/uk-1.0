@@ -2551,7 +2551,10 @@ void destroy_map_tbl(struct uk_fd *fd)
                 if (fd->map_tbl[i].pid == current->pid)
                     close(fd->map_tbl[i].unix_fd);
                 else
-                    klog(0, "FIXME : can't close other process's fd number. obj_ops=%08x\n",((struct object*)fd->user)->ops);
+                {
+                    klog(0, "FIXME:can't close %d's fd %d. obj_ops=%08x\n", \
+                            fd->map_tbl[i].pid, fd->map_tbl[i].unix_fd, ((struct object*)fd->user)->ops);
+                }
             }
         }
 

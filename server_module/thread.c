@@ -413,8 +413,20 @@ static void cleanup_thread( struct thread *thread )
     {
         if (thread->inflight[i].client != -1)
         {
+#ifdef CONFIG_UNIFIED_KERNEL
+            if (current->pid == thread->unix_tid)
+            {
+                close( thread->inflight[i].server );
+                thread->inflight[i].client = thread->inflight[i].server = -1;
+            }
+            else
+            {
+                klog(0,"FIXME:can't close %d's fd %d \n", thread->unix_tid, thread->inflight[i].server);
+            }
+#else
             close( thread->inflight[i].server );
             thread->inflight[i].client = thread->inflight[i].server = -1;
+#endif
         }
     }
     thread->req_data = NULL;
