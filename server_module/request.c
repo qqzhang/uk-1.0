@@ -1080,6 +1080,14 @@ NTSTATUS NtKillThread(int __user* exit_code)
     return STATUS_SUCCESS;
 }
 
+NTSTATUS NtKillProcess(int __user* exit_code)
+{
+    struct process * process = current_thread->process;
+    kill_thread(current_thread, 0);
+    kill_process(process, 0);
+    return STATUS_SUCCESS;
+}
+
 /* for syscall_chardev_fops */
 static struct class *class;
 static struct device *dev;
@@ -1119,6 +1127,9 @@ static int syscall_chardev_unlocked_ioctl(struct file *filp, unsigned int cmd, u
 			break;
 		case Nt_KillThread:
 			err = NtKillThread(argp);
+			break;
+		case Nt_KillProcess:
+			err = NtKillProcess(argp);
 			break;
 		default:
 			break;

@@ -51,6 +51,7 @@ enum syscall
 	Nt_EarlyInit,
 	Nt_WineService,
 	Nt_KillThread,
+	Nt_KillProcess,
 	Nt_MaxNum
 };
 

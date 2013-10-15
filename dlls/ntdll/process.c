@@ -63,7 +63,7 @@ NTSTATUS WINAPI NtTerminateProcess( HANDLE handle, LONG exit_code )
 #ifdef CONFIG_UNIFIED_KERNEL
     if (self && handle)
     {
-        server_kill_thread( exit_code );
+        server_kill_process( exit_code );
         exit( exit_code );
     }
 #else
