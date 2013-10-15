@@ -272,10 +272,14 @@ static void server_shutdown_timeout( void *arg )
     if (!running_processes)
     {
         close_master_socket( 0 );
+        /* shutdown_enent is static object, close_objects() will release it */
+        shutdown_event = NULL;
         return;
     }
     if (debug_level) fprintf( stderr, "wineserver: shutting down\n" );
     if (shutdown_event) set_event( shutdown_event );
+    /* shutdown_enent is static object, close_objects() will release it */
+    shutdown_event = NULL;
     shutdown_timeout = add_timeout_user( 2 * -TICKS_PER_SEC, server_shutdown_timeout, NULL );
     close_master_socket( 4 * -TICKS_PER_SEC );
 }
@@ -344,7 +348,11 @@ static void process_sigkill( void *private )
 static void start_sigkill_timer( struct process *process )
 {
     grab_object( process );
+#ifdef CONFIG_UNIFIED_KERNEL
+    if (process->unix_pid != -1)
+#else
     if (process->unix_pid != -1 && process->msg_fd)
+#endif
         process->sigkill_timeout = add_timeout_user( -TICKS_PER_SEC, process_sigkill, process );
     else
         process_died( process );
