@@ -74,6 +74,8 @@ static const unsigned int supported_cpus = CPU_FLAG(CPU_ARM64);
 #include <linux/sched.h>
 #include "klog.h"
 
+static DEFINE_SEMAPHORE(wait_sem);
+
 int uk_sched_setaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask);
 int uk_sched_getaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask);
 
@@ -818,6 +820,9 @@ int wake_thread( struct thread *thread )
     int signaled, count;
     client_ptr_t cookie;
 
+#ifdef CONFIG_UNIFIED_KERNEL
+    down(&wait_sem);
+#endif
     for (count = 0; thread->wait; count++)
     {
         if ((signaled = check_wait( thread )) == -1) break;
@@ -828,6 +833,9 @@ int wake_thread( struct thread *thread )
         if (send_thread_wakeup( thread, cookie, signaled ) == -1) /* error */
 	    break;
     }
+#ifdef CONFIG_UNIFIED_KERNEL
+    up(&wait_sem);
+#endif
     return count;
 }
 
@@ -839,9 +847,6 @@ static void thread_timeout( void *ptr )
     client_ptr_t cookie = wait->cookie;
 
     wait->user = NULL;
-#ifdef CONFIG_UNIFIED_KERNEL
-    if (!thread) return;
-#endif
     if (thread->wait != wait) return; /* not the top-level wait, ignore it */
     if (thread->suspend + thread->process->suspend > 0) return;  /* suspended, ignore it */
 
@@ -921,16 +926,8 @@ static timeout_t select_on( unsigned int count, client_ptr_t cookie, const obj_h
             goto done;
         }
     }
-#ifndef CONFIG_UNIFIED_KERNEL
     current_thread->wait->cookie = cookie;
     set_error( STATUS_PENDING );
-#else
-    if (current_thread->wait)
-    {
-        current_thread->wait->cookie = cookie;
-        set_error( STATUS_PENDING );
-    }
-#endif
 
 done:
     while (i > 0) release_object( objects[--i] );
@@ -1556,7 +1553,13 @@ DECL_HANDLER(select)
         release_object( apc );
     }
 
+#ifdef CONFIG_UNIFIED_KERNEL
+    down(&wait_sem);
     reply->timeout = select_on( count, req->cookie, handles, req->flags, req->timeout, req->signal );
+    up(&wait_sem);
+#else
+    reply->timeout = select_on( count, req->cookie, handles, req->flags, req->timeout, req->signal );
+#endif
 
     if (get_error() == STATUS_USER_APC)
     {
