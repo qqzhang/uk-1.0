@@ -907,11 +907,17 @@ static timeout_t select_on( unsigned int count, client_ptr_t cookie, const obj_h
         if (!current_thread->wait) goto done;
     }
 
+#ifdef CONFIG_UNIFIED_KERNEL
+    down(&wait_sem);
+#endif
     if ((ret = check_wait( current_thread )) != -1)
     {
         /* condition is already satisfied */
         end_wait( current_thread );
         set_error( ret );
+#ifdef CONFIG_UNIFIED_KERNEL
+        up(&wait_sem);
+#endif
         goto done;
     }
 
@@ -922,11 +928,17 @@ static timeout_t select_on( unsigned int count, client_ptr_t cookie, const obj_h
                                                       thread_timeout, current_thread->wait )))
         {
             end_wait( current_thread );
+#ifdef CONFIG_UNIFIED_KERNEL
+            up(&wait_sem);
+#endif
             goto done;
         }
     }
     current_thread->wait->cookie = cookie;
     set_error( STATUS_PENDING );
+#ifdef CONFIG_UNIFIED_KERNEL
+    up(&wait_sem);
+#endif
 
 done:
     while (i > 0) release_object( objects[--i] );
@@ -1552,13 +1564,7 @@ DECL_HANDLER(select)
         release_object( apc );
     }
 
-#ifdef CONFIG_UNIFIED_KERNEL
-    down(&wait_sem);
     reply->timeout = select_on( count, req->cookie, handles, req->flags, req->timeout, req->signal );
-    up(&wait_sem);
-#else
-    reply->timeout = select_on( count, req->cookie, handles, req->flags, req->timeout, req->signal );
-#endif
 
     if (get_error() == STATUS_USER_APC)
     {
