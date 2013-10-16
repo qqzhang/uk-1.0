@@ -3257,20 +3257,32 @@ pid_t waitpid(pid_t pid, int *status, int options)
 long ptrace(int request, ...)
 {
     int ret;
-    long pid,addr,data;
+    pid_t pid;
+    void *addr,*data;
     va_list ap;
     asmlinkage long (*sys_ptrace)(long request, long pid, long addr, long data)
         = get_kernel_proc_address("sys_ptrace");
+    mm_segment_t oldfs;
 
     va_start(ap, request);
-    pid = va_arg(ap, long);
-    addr = va_arg(ap, long);
-    data = va_arg(ap, long);
+    pid = va_arg(ap, pid_t);
+    addr = va_arg(ap, void *);
+    data = va_arg(ap, void *);
     va_end(ap);
 
-    PREPARE_KERNEL_CALL
-    ret = sys_ptrace(request, pid, addr, data);
-    END_KERNEL_CALL
+    if(request>0 && request<4)
+        data = &ret;
+
+    oldfs = get_fs();
+    if ((ULONG)addr < (ULONG)TASK_SIZE)
+        set_fs(get_ds());
+    else
+        set_fs(KERNEL_DS);
+    ret = sys_ptrace(request, (long)pid, (long)addr, (long)data);
+    set_fs(oldfs);
+
+    if (ret>=0 && request>0 && request<4)
+        return ret;
 
     SYSCALL_RETURN(ret);
 }
