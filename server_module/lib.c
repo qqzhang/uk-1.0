@@ -2977,9 +2977,17 @@ long shutdown(int fd, int how)
 
 long recv(int fd, void *buf, size_t size, unsigned flags)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+    long ret;
+    asmlinkage long (*sys_recv)(int, void __user *, size_t, unsigned)
+        = get_kernel_proc_address("sys_recv");
+
+    PREPARE_KERNEL_CALL;
+    ret = sys_recv(fd, buf, size, flags);
+    END_KERNEL_CALL;
+
+    SYSCALL_RETURN(ret);
 }
+
 ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
                  struct sockaddr *src_addr, int *addrlen)
 {
