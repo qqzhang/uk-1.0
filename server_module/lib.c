@@ -25,6 +25,7 @@
 #include <linux/module.h>
 #include <linux/cred.h> /* for getuid() */
 #include <linux/file.h>
+#include <linux/fdtable.h>
 #if 0
 #include <linux/fs.h>
 #include <linux/vmalloc.h>
@@ -2311,6 +2312,60 @@ long close(unsigned int fd)
 	END_KERNEL_CALL;
 
 	SYSCALL_RETURN(ret);
+}
+
+int attach_files(struct files_struct *files)
+{
+    struct task_struct *tsk = current;
+
+    if (files)
+    {
+        task_lock(tsk);
+        atomic_inc(&files->count);
+        tsk->files = files;
+        task_unlock(tsk);
+        return 0;
+    }
+    else
+    {
+        return -1;
+    }
+}
+
+struct task_struct *find_task_by_pid(pid_t pid)
+{
+    return get_pid_task(find_get_pid(pid), PIDTYPE_PID);
+}
+
+void restore_files(struct files_struct *orig_files)
+{
+    struct task_struct *tsk = current;
+
+    task_lock(tsk);
+    if (tsk->files != orig_files)
+    {
+        atomic_dec(&tsk->files->count);
+        tsk->files = orig_files;
+    }
+    task_unlock(tsk);
+}
+
+int close_fd_by_pid(pid_t pid, int fd)
+{
+    int ret = 0;
+    struct files_struct *orig_files = current->files;
+    struct task_struct *task = find_task_by_pid(pid);
+
+    if (task)
+    {
+        ret = attach_files(task->files);
+        if (ret<0)
+            return ret;
+        ret = close(fd);
+        restore_files(orig_files);
+    }
+
+    return ret;
 }
 
 int open(const char *filename, int flags, ...)

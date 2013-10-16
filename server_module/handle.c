@@ -539,14 +539,7 @@ obj_handle_t duplicate_handle( struct process *src, obj_handle_t src_handle, str
             res = src_handle;
         }
         else
-#ifdef CONFIG_UNIFIED_KERNEL
             res = alloc_handle_no_access_check( dst, obj, access, attr );
-#else
-            res = alloc_handle_no_access_check( dst, obj, access, attr );
-            extern void inc_handle_count_by_tgid(struct object *obj, pid_t tgid);
-            if ( res )
-                inc_handle_count_by_tgid(obj, dst->unix_pid);
-#endif
     }
 
     release_object( obj );

@@ -182,12 +182,11 @@ struct uk_poll_wqueues
     int	pending_event;
 };
 
-#define DEFAULT_MAP_NUM 4
+#define DEFAULT_MAP_NUM 16
 struct pid_fd_map
 {
     pid_t pid;
     int   unix_fd;
-    unsigned int handle_count; /* means to : how many handles use this uinx_fd */
 };
 void destroy_map_tbl(struct uk_fd *fd);
 int get_unix_fd_by_pid(struct uk_fd *fd, pid_t pid);
@@ -2291,7 +2290,6 @@ struct uk_fd *open_fd( struct uk_fd *root, const char *name, int flags, mode_t *
     {
         fd->map_tbl[fd->tbl_index].pid = current->pid;
         fd->map_tbl[fd->tbl_index].unix_fd = fd->unix_fd;
-        fd->map_tbl[fd->tbl_index].handle_count = 1;
         fd->tbl_index++;
     }
 
@@ -2399,7 +2397,6 @@ struct uk_fd *create_anonymous_fd( const struct fd_ops *fd_user_ops, int unix_fd
         {
             fd->map_tbl[fd->tbl_index].pid = current->pid;
             fd->map_tbl[fd->tbl_index].unix_fd = unix_fd;
-            fd->map_tbl[fd->tbl_index].handle_count = 1;
             fd->tbl_index++;
         }
 #endif
@@ -2439,26 +2436,6 @@ int find_unix_fd_by_pid(struct uk_fd* fd, pid_t pid)
     return -1;
 }
 
-void inc_handle_count_by_pid(struct object *obj, pid_t pid)
-{
-    struct uk_fd *fd;
-    int i=0;
-
-    if( obj->ops->get_fd && (fd=obj->ops->get_fd(obj)) )
-    {
-        if (!fd->map_tbl || fd->tbl_index==0)
-            return;
-
-        for(i=0; i<fd->tbl_index; i++)
-        {
-            if (fd->map_tbl[i].pid == pid)
-                fd->map_tbl[i].handle_count++;
-        }
-
-        release_object(fd); /* get_fd had increased fd object's refcount */
-    }
-}
-
 int get_unix_fd_by_pid(struct uk_fd *fd, pid_t pid)
 {
     int new_fd;
@@ -2490,7 +2467,6 @@ int get_unix_fd_by_pid(struct uk_fd *fd, pid_t pid)
     {
         fd->map_tbl[fd->tbl_index].pid = pid;
         fd->map_tbl[fd->tbl_index].unix_fd = new_fd;
-        fd->map_tbl[fd->tbl_index].handle_count = 1;
         fd->tbl_index++;
         return new_fd;
     }
@@ -2499,7 +2475,7 @@ int get_unix_fd_by_pid(struct uk_fd *fd, pid_t pid)
         struct pid_fd_map *new_tbl;
         int new_size = fd->max_index + fd->max_index/2;
 
-        klog(0,"need expend table\n");
+        klog(0,"need expend table %d -> %d\n",fd->max_index, new_size);
 
         new_tbl = realloc(fd->map_tbl, sizeof(struct pid_fd_map) * new_size);
         if (!new_tbl)
@@ -2512,29 +2488,9 @@ int get_unix_fd_by_pid(struct uk_fd *fd, pid_t pid)
             fd->map_tbl = new_tbl;
             fd->map_tbl[fd->tbl_index].pid = pid;
             fd->map_tbl[fd->tbl_index].unix_fd = new_fd;
-            fd->map_tbl[fd->tbl_index].handle_count = 1;
             fd->tbl_index++;
             fd->max_index  = new_size;
             return new_fd;
-        }
-    }
-}
-
-void remove_unix_fd_by_pid(struct uk_fd* fd, pid_t pid)
-{
-    int i=0;
-    if (fd->tbl_index==0)
-        return ;
-
-    for(i=0; i<fd->tbl_index; i++)
-    {
-        if (fd->map_tbl[i].pid == pid)
-        {
-            if (!--fd->map_tbl[i].handle_count)
-            {
-                close(fd->map_tbl[i].unix_fd);
-                fd->tbl_index--;
-            }
         }
     }
 }
@@ -2551,10 +2507,7 @@ void destroy_map_tbl(struct uk_fd *fd)
                 if (fd->map_tbl[i].pid == current->pid)
                     close(fd->map_tbl[i].unix_fd);
                 else
-                {
-                    klog(0, "FIXME:can't close %d's fd %d. obj_ops=%08x\n", \
-                            fd->map_tbl[i].pid, fd->map_tbl[i].unix_fd, ((struct object*)fd->user)->ops);
-                }
+                    close_fd_by_pid(fd->map_tbl[i].pid, fd->map_tbl[i].unix_fd);
             }
         }
 
@@ -2636,15 +2589,6 @@ int is_fd_signaled( struct uk_fd *fd )
 /* handler for close_handle that refuses to close fd-associated handles in other processes */
 int fd_close_handle( struct object *obj, struct process *process, obj_handle_t handle )
 {
-#ifdef CONFIG_UNIFIED_KERNEL
-    struct uk_fd *fd;
-
-    if( obj->ops->get_fd && (fd=obj->ops->get_fd(obj)) )
-    {
-        remove_unix_fd_by_pid(fd, current->pid);
-        release_object(fd); /* get_fd had increased fd object's refcount */
-    }
-#endif
     return (!current_thread || current_thread->process == process);
 }
 
