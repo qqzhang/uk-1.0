@@ -183,9 +183,16 @@ struct thread* get_thread_by_task(struct task_struct *task)
 	}
 }
 
+static struct thread *last_thread;
 struct thread* get_current_thread(void)
 {
-	return get_thread_by_task(current);
+    if (last_thread && last_thread->pid==current->pid)
+        return last_thread;
+    else
+    {
+        last_thread = get_thread_by_task(current);
+        return last_thread;
+    }
 }
 #endif
 
