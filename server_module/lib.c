@@ -2900,16 +2900,21 @@ int poll(struct pollfd *pfds, unsigned int nfds, long timeout_msecs)
 /*epoll.h*/
 int epoll_create(int size)
 {
+    return -1;
+#if 0
 	int ret;
 	asmlinkage long (*sys_epoll_create)(int size) =  get_kernel_proc_address("sys_epoll_create");
 
 	ret = sys_epoll_create(size);
 
 	SYSCALL_RETURN(ret);
+#endif
 }
 
 int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 {
+    return -1;
+#if 0
 	int ret;
 	asmlinkage long (*sys_epoll_ctl)(int epfd, int op, int fd,
 				struct epoll_event __user *event) = get_kernel_proc_address("sys_epoll_ctl");
@@ -2917,10 +2922,13 @@ int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 	ret = sys_epoll_ctl(epfd, op, fd, event);
 
 	SYSCALL_RETURN(ret);
+#endif
 }
 
 int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
 {
+    return -1;
+#if 0
 	int ret;
 	asmlinkage long (*sys_epoll_wait)(int epfd, struct epoll_event __user *events,
 			int maxevents, int timeout) = get_kernel_proc_address("sys_epoll_wait");
@@ -2928,6 +2936,7 @@ int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
 	ret=sys_epoll_wait(epfd, events, maxevents, timeout);
 
 	SYSCALL_RETURN(ret);
+#endif
 }
 
 /*socket.h*/
