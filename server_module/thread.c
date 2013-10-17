@@ -422,18 +422,7 @@ static void cleanup_thread( struct thread *thread )
     {
         if (thread->inflight[i].client != -1)
         {
-#ifdef CONFIG_UNIFIED_KERNEL
-            if (current->pid == thread->unix_tid)
-            {
-                close( thread->inflight[i].server );
-            }
-            else
-            {
-                close_fd_by_pid( thread->unix_tid, thread->inflight[i].server );
-            }
-#else
             close( thread->inflight[i].server );
-#endif
             thread->inflight[i].client = thread->inflight[i].server = -1;
         }
     }
@@ -1145,21 +1134,9 @@ int thread_get_inflight_fd( struct thread *thread, int client )
 
     if (client == -1) return -1;
 
-    for (i = 0; i < MAX_INFLIGHT_FDS; i++)
-    {
-        if (thread->inflight[i].client == client)
-        {
-            ret = thread->inflight[i].server;
-            thread->inflight[i].server = thread->inflight[i].client = -1;
-            return ret;
-        }
-    }
-
-    /* not found , need add to cache */
     new_fd = dup( client );
     if (new_fd >= 0)
     {
-        thread_add_inflight_fd( thread, client, new_fd );
         return new_fd;
     }
     else
