@@ -115,7 +115,7 @@ static void remove_thread_by_pid(struct thread *thread, pid_t pid)
 {
 	int slot;
 	struct hlist_node *pos;
-	struct thread *tmp;
+	struct thread *tmp, *tmp1;
 
 	if (thread==NULL) return;
 
@@ -137,7 +137,7 @@ static void remove_thread_by_pid(struct thread *thread, pid_t pid)
 
 	write_lock(&thread_hash_lock);
 	/* in linux-3.11 hlist_for_each_entry interface have changed */
-	hlist_for_each(pos, &thread_hash_table[slot])
+	hlist_for_each_safe(pos, tmp1, &thread_hash_table[slot])
 	{
         tmp = hlist_entry(pos, struct thread, hash_entry);
 		if ( tmp && tmp==thread )
