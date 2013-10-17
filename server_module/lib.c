@@ -2656,10 +2656,15 @@ int chmod(const char *path, mode_t mode)
 	klog(0,"NOT IMPLEMENT!\n");
 	return 0;
 }
-int fchmod(int fildes, mode_t mode)
+int fchmod(int fd, mode_t mode)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+    long ret;
+    asmlinkage long (*sys_fchmod)(unsigned int fd, mode_t mode)
+        = get_kernel_proc_address("sys_fchmod");
+
+    ret = sys_fchmod(fd, mode);
+
+    SYSCALL_RETURN(ret);
 }
 
 int fcntl(int fd, unsigned int cmd, unsigned long arg)
