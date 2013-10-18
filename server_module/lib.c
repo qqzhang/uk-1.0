@@ -26,6 +26,7 @@
 #include <linux/cred.h> /* for getuid() */
 #include <linux/file.h>
 #include <linux/fdtable.h>
+#include <asm/uaccess.h>
 #if 0
 #include <linux/fs.h>
 #include <linux/vmalloc.h>
@@ -3277,6 +3278,7 @@ long ptrace(int request, ...)
     asmlinkage long (*sys_ptrace)(long request, long pid, long addr, long data)
         = get_kernel_proc_address("sys_ptrace");
     mm_segment_t oldfs;
+    unsigned long tmp;
 
     va_start(ap, request);
     pid = va_arg(ap, pid_t);
@@ -3284,8 +3286,44 @@ long ptrace(int request, ...)
     data = va_arg(ap, void *);
     va_end(ap);
 
+    if (pid == current->tgid)
+    {
+        switch(request)
+        {
+            case PTRACE_PEEKTEXT:
+            case PTRACE_PEEKDATA:
+                if(get_user(tmp, (unsigned long __user*)addr))
+                {
+                    klog(0,"error:get_user. addr %08x data %08x tmp %08x\n", addr, data, tmp);
+                    ret = -EFAULT;
+                    SYSCALL_RETURN(ret);
+                }
+                return tmp;
+
+            case PTRACE_POKETEXT:
+            case PTRACE_POKEDATA:
+                if(get_user(tmp, (unsigned long __user*)addr))
+                {
+                    klog(0,"error:get_user. addr %08x data %08x tmp %08x\n", addr, data, tmp);
+                    ret = -EFAULT;
+                    SYSCALL_RETURN(ret);
+                }
+                if (put_user(tmp, (unsigned long __user*)data))
+                {
+                    klog(0,"error:get_user. addr %08x data %08x tmp %08x\n", addr, data, tmp);
+                    ret = -EFAULT;
+                    SYSCALL_RETURN(ret);
+                }
+                return 0;
+
+            default:
+                klog(0,"NOT IMPLEMENT! type 0x%x\n",request);
+                return 0;
+        }
+    }
+
     if(request>0 && request<4)
-        data = &ret;
+        data = &tmp;
 
     oldfs = get_fs();
     if ((ULONG)addr < (ULONG)TASK_SIZE)
@@ -3296,7 +3334,7 @@ long ptrace(int request, ...)
     set_fs(oldfs);
 
     if (ret>=0 && request>0 && request<4)
-        return ret;
+        return tmp;
 
     SYSCALL_RETURN(ret);
 }

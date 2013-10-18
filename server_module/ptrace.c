@@ -289,6 +289,11 @@ int send_thread_signal( struct thread *thread, int sig )
 static void resume_after_ptrace( struct thread *thread )
 {
     if (thread->unix_pid == -1) return;
+
+#ifdef CONFIG_UNIFIED_KERNEL
+    if (get_ptrace_pid(thread) == current->tgid) return;
+#endif
+
     if (ptrace( PTRACE_DETACH, get_ptrace_pid(thread), (caddr_t)1, 0 ) == -1)
     {
         if (errno == ESRCH) thread->unix_pid = thread->unix_tid = -1;  /* thread got killed */
@@ -301,6 +306,10 @@ static int suspend_for_ptrace( struct thread *thread )
 {
     /* can't stop a thread while initialisation is in progress */
     if (thread->unix_pid == -1 || !is_process_init_done(thread->process)) goto error;
+
+#ifdef CONFIG_UNIFIED_KERNEL
+    if (get_ptrace_pid(thread) == current->tgid) return 1;
+#endif
 
     /* this may fail if the client is already being debugged */
     if (ptrace( PTRACE_ATTACH, get_ptrace_pid(thread), 0, 0 ) == -1)
