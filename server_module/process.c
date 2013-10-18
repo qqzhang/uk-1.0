@@ -1132,9 +1132,15 @@ DECL_HANDLER(init_process_done)
     process->ldt_copy = req->ldt_copy;
 
     generate_startup_debug_events( process, req->entry );
+#ifndef CONFIG_UNIFIED_KERNEL
     set_process_startup_state( process, STARTUP_DONE );
 
     if (req->gui) process->idle_event = create_event( NULL, NULL, 0, 1, 0, NULL );
+#else
+    if (req->gui) process->idle_event = create_event( NULL, NULL, 0, 1, 0, NULL );
+
+    set_process_startup_state( process, STARTUP_DONE );
+#endif
     stop_thread_if_suspended( current_thread );
     if (process->debugger) set_process_debug_flag( process, 1 );
 }
