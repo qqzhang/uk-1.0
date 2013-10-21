@@ -291,7 +291,7 @@ static void resume_after_ptrace( struct thread *thread )
     if (thread->unix_pid == -1) return;
 
 #ifdef CONFIG_UNIFIED_KERNEL
-    if (get_ptrace_pid(thread) == current->tgid) return;
+    if (thread->unix_pid == current->tgid) return;
 #endif
 
     if (ptrace( PTRACE_DETACH, get_ptrace_pid(thread), (caddr_t)1, 0 ) == -1)
@@ -308,7 +308,7 @@ static int suspend_for_ptrace( struct thread *thread )
     if (thread->unix_pid == -1 || !is_process_init_done(thread->process)) goto error;
 
 #ifdef CONFIG_UNIFIED_KERNEL
-    if (get_ptrace_pid(thread) == current->tgid) return 1;
+    if (thread->unix_pid == current->tgid) return 1;
 #endif
 
     /* this may fail if the client is already being debugged */

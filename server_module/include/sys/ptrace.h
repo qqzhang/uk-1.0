@@ -3,8 +3,8 @@
 
 #include <linux/ptrace.h>
 
-#define PTRACE_PEEKUSER 3
-#define PTRACE_POKEUSER 6 
+#define PTRACE_PEEKUSER PTRACE_PEEKUSR
+#define PTRACE_POKEUSER PTRACE_POKEUSR
 
 #if 0
 enum __ptrace_request

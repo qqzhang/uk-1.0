@@ -3279,6 +3279,7 @@ long ptrace(int request, ...)
         = get_kernel_proc_address("sys_ptrace");
     mm_segment_t oldfs;
     unsigned long tmp;
+    struct task_struct *child;
 
     va_start(ap, request);
     pid = va_arg(ap, pid_t);
@@ -3286,7 +3287,15 @@ long ptrace(int request, ...)
     data = va_arg(ap, void *);
     va_end(ap);
 
-    if (pid == current->tgid)
+    child = find_task_by_pid(pid);
+    if (!child)
+    {
+        klog(0,"child is killed \n");
+        ret = -ESRCH;
+        SYSCALL_RETURN(ret);
+    }
+
+    if (child->tgid == current->tgid)
     {
         switch(request)
         {
@@ -3316,17 +3325,59 @@ long ptrace(int request, ...)
                 }
                 return 0;
 
+                /* for get_thread_context() */
+            case PTRACE_PEEKUSR:
+                {
+                    long (*arch_ptrace)(struct task_struct *child, long request,
+                            unsigned long addr, unsigned long data) = get_kernel_proc_address("arch_ptrace");
+
+                    if (!arch_ptrace)
+                    {
+                        klog(0,"don't find arch_ptrace() \n");
+                        return 0;
+                    }
+
+                    data = &tmp;
+
+                    oldfs = get_fs();
+                    set_fs(KERNEL_DS);
+                    ret = arch_ptrace(current, request, addr, data);
+                    set_fs(oldfs);
+
+                    if (ret >= 0)
+                        return tmp;
+                    else
+                        SYSCALL_RETURN(ret);
+                }
+
+                /* for set_thread_context() */
+            case PTRACE_POKEUSR: /* write the word at location addr in the USER area */
+                {
+                    long (*arch_ptrace)(struct task_struct *child, long request,
+                            unsigned long addr, unsigned long data) = get_kernel_proc_address("arch_ptrace");
+
+                    if (!arch_ptrace)
+                    {
+                        klog(0,"don't find arch_ptrace() \n");
+                        return 0;
+                    }
+
+                    ret = arch_ptrace(current, request, addr, data);
+
+                    SYSCALL_RETURN(ret);
+                }
+
             default:
                 klog(0,"NOT IMPLEMENT! type 0x%x\n",request);
                 return 0;
         }
     }
 
-    if(request>0 && request<4)
+    if(request>0 && request<4) /* PTRACE_PEEKTEXT, PTRACE_PEEKDATA, PTRACE_PEEKUSR */
         data = &tmp;
 
     oldfs = get_fs();
-    if ((ULONG)addr < (ULONG)TASK_SIZE)
+    if ( request != PTRACE_PEEKUSR && (ULONG)addr < (ULONG)TASK_SIZE )
         set_fs(get_ds());
     else
         set_fs(KERNEL_DS);
