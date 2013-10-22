@@ -424,7 +424,7 @@ static void start_thread( struct startup_info *info )
             data.thread_id = teb->ClientId.UniqueThread;
             ret = ioctl(fd, Nt_EarlyInit, &data);
             if (ret)
-                ERR("ioctl failed errno=%d ret=%08x\n",errno,ret);
+                ERR("p %d t %d ioctl failed errno=%d ret=%08x\n",getpid(), syscall(224), errno,ret);
             close(fd);
         }
     }

@@ -3299,7 +3299,6 @@ long ptrace(int request, ...)
     {
         switch(request)
         {
-            case PTRACE_PEEKTEXT:
             case PTRACE_PEEKDATA:
                 if(get_user(tmp, (unsigned long __user*)addr))
                 {
@@ -3309,17 +3308,10 @@ long ptrace(int request, ...)
                 }
                 return tmp;
 
-            case PTRACE_POKETEXT:
             case PTRACE_POKEDATA:
-                if(get_user(tmp, (unsigned long __user*)addr))
+                if (put_user(data, (unsigned long __user*)addr))
                 {
-                    klog(0,"error:get_user. addr %08x data %08x tmp %08x\n", addr, data, tmp);
-                    ret = -EFAULT;
-                    SYSCALL_RETURN(ret);
-                }
-                if (put_user(tmp, (unsigned long __user*)data))
-                {
-                    klog(0,"error:get_user. addr %08x data %08x tmp %08x\n", addr, data, tmp);
+                    klog(0,"error:put_user. addr %08x data %08x tmp %08x\n", addr, data, tmp);
                     ret = -EFAULT;
                     SYSCALL_RETURN(ret);
                 }
