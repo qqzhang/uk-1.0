@@ -2606,7 +2606,9 @@ int rmdir(const char *pathname)
     int ret;
     asmlinkage long (*sys_rmdir)(const char __user *pathname) = get_kernel_proc_address("sys_rmdir");
 
+    PREPARE_KERNEL_CALL;
     ret = sys_rmdir(pathname);
+    END_KERNEL_CALL;
 
     SYSCALL_RETURN(ret);
 }
