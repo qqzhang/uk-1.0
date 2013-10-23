@@ -594,9 +594,7 @@ int server_get_unix_fd( HANDLE handle, unsigned int wanted_access, int *unix_fd,
     *needs_close = 0;
     wanted_access &= FILE_READ_DATA | FILE_WRITE_DATA;
 
-#ifndef CONFIG_UNIFIED_KERNEL
     server_enter_uninterrupted_section( &fd_cache_section, &sigset );
-#endif
 
     fd = get_cached_fd( handle, type, &access, options );
     if (fd != -1) goto done;
@@ -613,18 +611,11 @@ int server_get_unix_fd( HANDLE handle, unsigned int wanted_access, int *unix_fd,
             fd = reply->fd;
             if (fd != -1)
             {
-                *needs_close = 0;
-                if(reply->cacheable)
-                {
-                    server_enter_uninterrupted_section( &fd_cache_section, &sigset );
-                    add_fd_to_cache( handle, fd, reply->type,reply->access, reply->options );
-                    server_leave_uninterrupted_section( &fd_cache_section, &sigset );
-                }
+                *needs_close = (!reply->cacheable ||
+                                !add_fd_to_cache( handle, fd, reply->type,
+                                                  reply->access, reply->options ));
             }
-            else
-            {
-                ret = STATUS_TOO_MANY_OPENED_FILES;
-            }
+            else ret = STATUS_TOO_MANY_OPENED_FILES;
 #else
             if ((fd = receive_fd( &fd_handle )) != -1)
             {
@@ -640,9 +631,7 @@ int server_get_unix_fd( HANDLE handle, unsigned int wanted_access, int *unix_fd,
     SERVER_END_REQ;
 
 done:
-#ifndef CONFIG_UNIFIED_KERNEL
     server_leave_uninterrupted_section( &fd_cache_section, &sigset );
-#endif
     if (!ret && ((access & wanted_access) != wanted_access))
     {
         ret = STATUS_ACCESS_DENIED;
