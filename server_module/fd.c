@@ -173,6 +173,10 @@ struct closed_fd
 };
 
 #ifdef CONFIG_UNIFIED_KERNEL
+#include <linux/hardirq.h>
+
+extern struct task_struct* timer_kernel_task;
+
 struct uk_poll_wqueues
 {
     struct poll_wqueues table;
@@ -224,6 +228,8 @@ struct uk_fd
     int max_index;
     struct pid_fd_map   *map_tbl;
     struct uk_poll_wqueues	uk_pwq;
+    struct list_head poll_entry; /* for fd_poll_event to add to poll_list */
+    int event;
 #endif
 };
 
@@ -424,7 +430,6 @@ struct timeout_user *add_timeout_user( timeout_t when, timeout_callback func, vo
     }
     wine_list_add_before( ptr, &user->entry );
 #ifdef CONFIG_UNIFIED_KERNEL
-    extern struct task_struct* timer_kernel_task;
     wake_up_process(timer_kernel_task);
 #endif
     return user;
@@ -498,7 +503,27 @@ static struct uk_fd **freelist;                /* list of free entries in the ar
 static int get_next_timeout(void);
 
 #ifdef CONFIG_UNIFIED_KERNEL
-static inline void fd_poll_event( struct uk_fd *fd, int event )
+
+static LIST_HEAD(poll_list);/* for fd_poll_event */
+
+static void do_poll_event(void)
+{
+    struct uk_fd *fd;
+    LIST_HEAD(txlist);
+
+    local_bh_disable();
+    list_splice_init(&poll_list, &txlist);
+    local_bh_enable();
+
+    LIST_FOR_EACH_ENTRY( fd, &txlist, struct uk_fd, poll_entry )
+    {
+        grab_object(fd);
+        fd->fd_ops->poll_event(fd, fd->event);
+        release_object(fd);
+    }
+}
+
+static void fd_poll_event( struct uk_fd *fd, int event )
 {
     if (fd && fd->fd_ops && fd->fd_ops->poll_event)
     {
@@ -514,7 +539,16 @@ static inline void fd_poll_event( struct uk_fd *fd, int event )
             fd->uk_pwq.pending_event = event;
         }
 
-        fd->fd_ops->poll_event(fd, event);
+        if (in_softirq())
+        {
+            fd->event = event;
+            list_add( &fd->poll_entry, &poll_list );
+            wake_up_process(timer_kernel_task);
+        }
+        else
+        {
+            fd->fd_ops->poll_event(fd, event);
+        }
 
         fd->uk_pwq.pending_event = 0;
     }
@@ -1194,6 +1228,7 @@ static void remove_poll_user( struct uk_fd *fd, int user )
 }
 
 #ifdef CONFIG_UNIFIED_KERNEL
+static void do_poll_event(void);
 void timer_loop(void)
 {
     unsigned int msecs, timeout, next;
@@ -1218,6 +1253,8 @@ void timer_loop(void)
             next = msecs_to_jiffies(next) + 1;
             schedule_timeout(next);
         }
+
+        do_poll_event();
     }
 }
 #endif
@@ -1994,6 +2031,8 @@ static struct uk_fd *alloc_fd_object(void)
     list_init( &fd->inode_entry );
     list_init( &fd->locks );
 #ifdef CONFIG_UNIFIED_KERNEL
+    fd->event = 0;
+    INIT_LIST_HEAD(&fd->poll_entry);
     fd->uk_pwq.have_inited_flag = false;
     fd->creator_pid = 0;
     fd->unix_file    = NULL;
@@ -2047,6 +2086,8 @@ struct uk_fd *alloc_pseudo_fd( const struct fd_ops *fd_user_ops, struct object *
     list_init( &fd->inode_entry );
     list_init( &fd->locks );
 #ifdef CONFIG_UNIFIED_KERNEL
+    fd->event = 0;
+    INIT_LIST_HEAD(&fd->poll_entry);
     fd->uk_pwq.have_inited_flag = false;
     fd->creator_pid = 0;
     fd->unix_file    = NULL;
