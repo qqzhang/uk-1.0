@@ -167,6 +167,7 @@ struct task_struct* timer_kernel_task = NULL;
 /* module entry*/
 static int __init unifiedkernel_init(void)
 {
+    server_start_time = current_time;
 	get_kallsyms_lookup_name();
 	init_thread_hash_table();
 	create_syscall_chardev();
