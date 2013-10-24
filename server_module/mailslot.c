@@ -52,11 +52,19 @@
 #include "thread.h"
 #include "request.h"
 
+#ifdef CONFIG_UNIFIED_KERNEL
+#include <linux/file.h>
+#include "klog.h"
+#endif
+
 struct mailslot
 {
     struct object       obj;
     struct uk_fd          *fd;
     int                 write_fd;
+#ifdef CONFIG_UNIFIED_KERNEL
+    struct file        *write_file;
+#endif
     unsigned int        max_msgsize;
     timeout_t           read_timeout;
     struct list_head         writers;
@@ -205,17 +213,51 @@ static const struct fd_ops mailslot_device_fd_ops =
     default_fd_cancel_async         /* cancel_async */
 };
 
+
+#ifdef CONFIG_UNIFIED_KERNEL
+static int get_mailslot_write_fd(struct mailslot * mailslot)
+{
+    int new_fd;
+
+    if (mailslot->write_file)
+    {
+        new_fd = get_unused_fd();
+        if (new_fd<0)
+        {
+            klog(0,"get_unused_fd() error \n");
+            return -1;
+        }
+
+        fd_install(new_fd, mailslot->write_file);
+        get_file(mailslot->write_file);
+
+        return new_fd;
+    }
+    else
+    {
+        klog(0,"mailslot->write_file is NULL \n");
+        return -1;
+    }
+}
+#endif
+
 static void mailslot_destroy( struct object *obj)
 {
     struct mailslot *mailslot = (struct mailslot *) obj;
 
     assert( mailslot->fd );
 
+#ifdef CONFIG_UNIFIED_KERNEL
+    mailslot->write_fd = get_mailslot_write_fd(mailslot);
+#endif
     if (mailslot->write_fd != -1)
     {
         shutdown( mailslot->write_fd, SHUT_RDWR );
         close( mailslot->write_fd );
     }
+#ifdef CONFIG_UNIFIED_KERNEL
+    fput(mailslot->write_file);
+#endif
     release_object( mailslot->fd );
 }
 
@@ -276,7 +318,12 @@ static struct object *mailslot_open_file( struct object *obj, unsigned int acces
         }
     }
 
+#ifdef CONFIG_UNIFIED_KERNEL
+    mailslot->write_fd = get_mailslot_write_fd(mailslot);
+    if ((unix_fd = mailslot->write_fd) == -1)
+#else
     if ((unix_fd = dup( mailslot->write_fd )) == -1)
+#endif
     {
         file_set_error();
         return NULL;
@@ -443,6 +490,10 @@ static struct mailslot *create_mailslot( struct directory *root,
         fcntl( fds[1], F_SETFL, O_NONBLOCK );
         shutdown( fds[0], SHUT_RD );
         mailslot->write_fd = fds[0];
+#ifdef CONFIG_UNIFIED_KERNEL
+        mailslot->write_file = fget(fds[0]);
+        close(fds[0]);
+#endif
         if ((mailslot->fd = create_anonymous_fd( &mailslot_fd_ops, fds[1], &mailslot->obj,
                                                  FILE_SYNCHRONOUS_IO_NONALERT )))
         {
