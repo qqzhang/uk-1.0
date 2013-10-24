@@ -594,6 +594,10 @@ static void sock_destroy( struct object *obj )
     if (sock->event) release_object( sock->event );
     if (sock->fd)
     {
+#ifdef CONFIG_UNIFIED_KERNEL
+        /* the shutdown will generate POLLHUP, we don't need to handle it. */
+        set_fd_events(sock->fd, -1);
+#endif
         /* shut the socket down to force pending poll() calls in the client to return */
         shutdown( get_unix_fd(sock->fd), SHUT_RDWR );
         release_object( sock->fd );
