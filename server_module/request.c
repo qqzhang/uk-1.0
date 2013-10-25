@@ -1140,7 +1140,6 @@ static int syscall_chardev_unlocked_ioctl(struct file *filp, unsigned int cmd, u
 
 static const struct file_operations syscall_chardev_fops =
 {
-	.owner 		= THIS_MODULE,
 	.open		= syscall_chardev_open,
 	.release 	= syscall_chardev_release,
 	.unlocked_ioctl = syscall_chardev_unlocked_ioctl,
@@ -1165,7 +1164,7 @@ int create_syscall_chardev(void)
         goto bad_alloc_chrdev_region;
 	}
 
-	class = class_create(THIS_MODULE, filename);
+	class = class_create(NULL, filename);
 	if(IS_ERR(class))
     {
         ret = PTR_ERR(class);
