@@ -41,8 +41,9 @@ struct init_data
 {
     char        init_type;
     thread_id_t thread_id;
-    char *      config_dir;
+    const char  *config_dir;
     int         config_dir_len;
+    int         socketfd;
 };
 
 enum syscall
@@ -55,7 +56,9 @@ enum syscall
 	Nt_MaxNum
 };
 
+extern void server_new_thread(thread_id_t tid);
 extern void server_kill_thread(LONG exit_code);
+extern void server_kill_process(LONG exit_code);
 #endif
 
 struct __server_iovec

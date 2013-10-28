@@ -107,6 +107,7 @@ static const enum cpu_type client_cpu = CPU_ARM64;
 #endif
 
 #ifdef CONFIG_UNIFIED_KERNEL
+#include <sys/ioctl.h>
 static struct init_data init_data;
 #endif
 unsigned int server_cpus = 0;
@@ -269,7 +270,7 @@ static inline unsigned int wait_reply( struct __server_request_info *req )
 unsigned int wine_server_call( void *req_ptr )
 {
     struct __server_request_info * const req = req_ptr;
-    unsigned int ret = 0;
+    int ret = 0;
     int fd;
 
     fd = open( SYSCALL_FILE, O_WRONLY);
@@ -280,10 +281,10 @@ unsigned int wine_server_call( void *req_ptr )
     }
     else
     {
-        ret = ioctl(fd, Nt_WineService, req_ptr);
-        if (ret<0)
+        ret = ioctl(fd, Nt_WineService, req);
+        if (ret == -1)
         {
-            ERR("p %d t %d : ioctl ret=%d error %d \n", getpid(), syscall(224), ret, errno);
+            ERR("p %d t %d : ioctl ret=%d error %d \n", getpid(), (int)syscall(224), ret, errno);
         }
         close(fd);
     }
@@ -414,6 +415,7 @@ void CDECL wine_server_send_fd( int fd )
 static int receive_fd( obj_handle_t *handle )
 {
 	fprintf(stderr, "%s don't need \n",__func__);
+	return 0;
 }
 #else
 /***********************************************************************
@@ -960,9 +962,7 @@ static int server_connect(void)
 #else
 static int server_connect(void)
 {
-    struct sockaddr_un addr;
-    struct stat st;
-    int s, slen, retry, fd_cwd;
+    int fd_cwd;
 
     /* retrieve the current directory */
     fd_cwd = open( ".", O_RDONLY );
@@ -1122,7 +1122,8 @@ void server_init_process(void)
 {
     const char *env_socket = getenv( "WINESERVERSOCKET" );
     int thread_id;
-    int fd;
+    int fd, socketfd[2];
+    int ret;
 
     fd = open( SYSCALL_FILE, O_WRONLY);
     if (fd == -1)
@@ -1149,7 +1150,23 @@ void server_init_process(void)
         init_data.thread_id = 0;
     }
 
-    ioctl(fd, Nt_EarlyInit, &init_data);
+    if (socketpair( PF_UNIX, SOCK_STREAM, 0, socketfd ) == -1)
+    {
+        ERR("error:socketpair. %d \n",errno);
+        init_data.socketfd = -1;
+        ntdll_get_thread_data()->request_fd = -1;
+    }
+    else
+    {
+        init_data.socketfd = socketfd[1];
+        ntdll_get_thread_data()->request_fd = socketfd[0];
+    }
+
+    ret = ioctl(fd, Nt_EarlyInit, &init_data);
+    if (ret == -1)
+    {
+        ERR("p %d t %d : ioctl ret=%d error %d \n", getpid(), (int)syscall(224), ret, errno);
+    }
     close(fd);
 
     /* setup the signal mask */
@@ -1162,9 +1179,6 @@ void server_init_process(void)
     sigaddset( &server_block_set, SIGUSR2 );
     sigaddset( &server_block_set, SIGCHLD );
     pthread_sigmask( SIG_BLOCK, &server_block_set, NULL );
-
-    /* receive the first thread request fd on the main socket */
-    ntdll_get_thread_data()->request_fd = -1;
 }
 #endif
 
@@ -1282,6 +1296,32 @@ size_t server_init_thread( void *entry_point )
 }
 
 #ifdef CONFIG_UNIFIED_KERNEL
+void server_new_thread(thread_id_t tid)
+{
+    struct init_data data;
+    int fd , ret;
+
+    fd = open( SYSCALL_FILE, O_WRONLY);
+    if (fd == -1)
+    {
+        ERR("open SYSCALL_FILE failed errno=%d\n",errno);
+        return;
+    }
+    else
+    {
+        memset( &data, 0, sizeof(data));
+
+        data.init_type = NEW_THREAD;
+        data.thread_id = tid;
+        ret = ioctl(fd, Nt_EarlyInit, &data);
+        if (ret == -1)
+        {
+            ERR("p %d t %d : ioctl ret=%d error %d \n", getpid(), (int)syscall(224), ret, errno);
+        }
+        close(fd);
+    }
+}
+
 void server_kill_thread(LONG exit_code)
 {
     int fd,ret;
@@ -1295,9 +1335,9 @@ void server_kill_thread(LONG exit_code)
     else
     {
         ret = ioctl(fd, Nt_KillThread, &exit_code);
-        if (ret<0)
+        if (ret == -1)
         {
-            ERR("p %d t %d : ioctl ret=%d error %d \n", getpid(), syscall(224), ret, errno);
+            ERR("p %d t %d : ioctl ret=%d error %d \n", getpid(), (int)syscall(224), ret, errno);
         }
         close(fd);
     }
@@ -1316,9 +1356,9 @@ void server_kill_process(LONG exit_code)
     else
     {
         ret = ioctl(fd, Nt_KillProcess, &exit_code);
-        if (ret<0)
+        if (ret == -1)
         {
-            ERR("p %d t %d : ioctl ret=%d error %d \n", getpid(), syscall(224), ret, errno);
+            ERR("p %d t %d : ioctl ret=%d error %d \n", getpid(), (int)syscall(224), ret, errno);
         }
         close(fd);
     }

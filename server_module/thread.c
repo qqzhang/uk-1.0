@@ -114,8 +114,8 @@ void add_thread_by_pid(struct thread *thread, pid_t pid)
 static void remove_thread_by_pid(struct thread *thread, pid_t pid)
 {
 	int slot;
-	struct hlist_node *pos;
-	struct thread *tmp, *tmp1;
+	struct hlist_node *pos, *pos_tmp;
+	struct thread *tmp;
 
 	if (thread==NULL) return;
 
@@ -137,7 +137,7 @@ static void remove_thread_by_pid(struct thread *thread, pid_t pid)
 
 	write_lock(&thread_hash_lock);
 	/* in linux-3.11 hlist_for_each_entry interface have changed */
-	hlist_for_each_safe(pos, tmp1, &thread_hash_table[slot])
+	hlist_for_each_safe(pos, pos_tmp, &thread_hash_table[slot])
 	{
         tmp = hlist_entry(pos, struct thread, hash_entry);
 		if ( tmp && tmp==thread )
@@ -1129,7 +1129,6 @@ int thread_add_inflight_fd( struct thread *thread, int client, int server )
 #ifdef CONFIG_UNIFIED_KERNEL
 int thread_get_inflight_fd( struct thread *thread, int client )
 {
-    int i, ret;
     int new_fd;
 
     if (client == -1) return -1;
@@ -1299,14 +1298,12 @@ DECL_HANDLER(new_thread)
     struct thread *thread;
     int request_fd = thread_get_inflight_fd( current_thread, req->request_fd );
 
-#ifndef CONFIG_UNIFIED_KERNEL
     if (request_fd == -1 || fcntl( request_fd, F_SETFL, O_NONBLOCK ) == -1)
     {
         if (request_fd != -1) close( request_fd );
         set_error( STATUS_INVALID_HANDLE );
         return;
     }
-#endif
 
     if ((thread = create_thread( request_fd, current_thread->process )))
     {
@@ -1345,16 +1342,11 @@ DECL_HANDLER(init_thread)
         goto error;
     }
 
-#ifndef CONFIG_UNIFIED_KERNEL
     if (fcntl( reply_fd, F_SETFL, O_NONBLOCK ) == -1) goto error;
 
     current_thread->reply_fd = create_anonymous_fd( &thread_fd_ops, reply_fd, &current_thread->obj, 0 );
     current_thread->wait_fd  = create_anonymous_fd( &thread_fd_ops, wait_fd, &current_thread->obj, 0 );
     if (!current_thread->reply_fd || !current_thread->wait_fd) return;
-#else
-    current_thread->wait_fd  = create_anonymous_fd( &thread_fd_ops, wait_fd, &current_thread->obj, 0 );
-    if (!current_thread->wait_fd) return;
-#endif
 
     if (!is_valid_address(req->teb))
     {

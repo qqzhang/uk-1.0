@@ -243,7 +243,7 @@ int fchdir(int fd);
 int fsync(int fd);
 int chmod(const char *path, mode_t mode);
 int fchmod(int fildes, mode_t mode);
-int fcntl(int fd, unsigned int cmd, unsigned long arg);
+int fcntl(int fd, unsigned int cmd, ... /*unsigned long arg*/);
 
 long socket(int socket_family, int socket_type, int protocol);
 long bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);

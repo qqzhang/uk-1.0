@@ -433,8 +433,7 @@ int receive_fd( struct process *process )
 #ifdef CONFIG_UNIFIED_KERNEL
 int send_client_fd( struct process *process, int fd, obj_handle_t handle )
 {
-	klog(0,"warnnnig : don't need \n");
-	return 1;
+	return 0;
 }
 #else
 /* send an fd to a client */
@@ -917,7 +916,7 @@ NTSTATUS NtEarlyInit(int __user* init_data_ptr)
     switch( type )
     {
         case FIRST_PROCESS:
-            create_process( -1, NULL, 0 );
+            create_process( init_data.socketfd, NULL, 0 );
             if (!current_config_dir)
             {
                 current_config_dir = init_data.config_dir;
@@ -932,7 +931,7 @@ NTSTATUS NtEarlyInit(int __user* init_data_ptr)
         case NEW_THREAD:
             if (thread_id)
             {
-                if (new_thread = get_thread_from_id(thread_id))
+                if ((new_thread = get_thread_from_id(thread_id)) != NULL)
                 {
                     add_thread_by_pid( new_thread, current->pid );
                 }
@@ -1104,7 +1103,7 @@ static int syscall_chardev_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static int syscall_chardev_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+static long syscall_chardev_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	int err = 0;
 	int __user* argp = (int __user*)arg;

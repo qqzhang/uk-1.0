@@ -406,28 +406,7 @@ static void start_thread( struct startup_info *info )
     thread_data->pthread_id = pthread_self();
 
 #ifdef CONFIG_UNIFIED_KERNEL
-#include <errno.h>
-    {
-        struct init_data data;
-        int fd , ret;
-
-        fd = open( SYSCALL_FILE, O_WRONLY);
-        if (fd == -1)
-        {
-            ERR("open SYSCALL_FILE failed errno=%d\n",errno);
-        }
-        else
-        {
-            memset( &data, 0, sizeof(data));
-
-            data.init_type = NEW_THREAD;
-            data.thread_id = teb->ClientId.UniqueThread;
-            ret = ioctl(fd, Nt_EarlyInit, &data);
-            if (ret)
-                ERR("p %d t %d ioctl failed errno=%d ret=%08x\n",getpid(), syscall(224), errno,ret);
-            close(fd);
-        }
-    }
+    server_new_thread((thread_id_t)teb->ClientId.UniqueThread);
 #endif
 
     signal_init_thread( teb );

@@ -272,9 +272,11 @@ static void save_subkeys( const struct reg_key *key, const struct reg_key *base,
 #ifndef CONFIG_UNIFIED_KERNEL
         fprintf( f, "] %u\n", (unsigned int)((key->modif - ticks_1601_to_1970) / TICKS_PER_SEC) );
 #else
+        {
         u64 tmp = (key->modif - ticks_1601_to_1970);
         do_div(tmp, TICKS_PER_SEC);
         fprintf( f, "] %u\n", (unsigned int)(tmp) );
+        }
 #endif
         if (key->class)
         {
@@ -1759,7 +1761,7 @@ void destroy_reg_name( void )
     int i;
 
     for (i = 0; i < save_branch_count; i++)
-        free( save_branch_info[i].path );
+        free( (void*)save_branch_info[i].path );
 }
 
 void uk_init_registry(const char __user *config_dir, int len)

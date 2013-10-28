@@ -729,7 +729,7 @@ int mkstemps ( char *template, int suffix_len)
       gcc_uint64_t v = value;
       int fd;
 
-#ifndef CONFIG_UNIFIED_KERNEL
+#if 0
       /* Fill in the random bits.  */
       XXXXXX[0] = letters[v % 62];
       v /= 62;
@@ -2670,9 +2670,15 @@ int fchmod(int fd, mode_t mode)
     SYSCALL_RETURN(ret);
 }
 
-int fcntl(int fd, unsigned int cmd, unsigned long arg)
+int fcntl(int fd, unsigned int cmd, ... /*unsigned long arg*/)
 {
     int ret;
+    va_list ap;
+    unsigned long arg;
+
+    va_start(ap, cmd);
+    arg = va_arg(ap, unsigned long);
+    va_end(ap);
 
 #if BITS_PER_LONG == 32
     asmlinkage long (*sys_fcntl64)(unsigned int fd,
@@ -3275,18 +3281,17 @@ long ptrace(int request, ...)
 {
     int ret;
     pid_t pid;
-    void *addr,*data;
+    unsigned long addr,data,tmp;
     va_list ap;
     asmlinkage long (*sys_ptrace)(long request, long pid, long addr, long data)
         = get_kernel_proc_address("sys_ptrace");
     mm_segment_t oldfs;
-    unsigned long tmp;
     struct task_struct *child;
 
     va_start(ap, request);
     pid = va_arg(ap, pid_t);
-    addr = va_arg(ap, void *);
-    data = va_arg(ap, void *);
+    addr = va_arg(ap, unsigned long);
+    data = va_arg(ap, unsigned long);
     va_end(ap);
 
     child = find_task_by_pid(pid);
@@ -3304,7 +3309,7 @@ long ptrace(int request, ...)
             case PTRACE_PEEKDATA:
                 if(get_user(tmp, (unsigned long __user*)addr))
                 {
-                    klog(0,"error:get_user. addr %08x data %08x tmp %08x\n", addr, data, tmp);
+                    klog(0,"error:get_user. addr %08x data %08x tmp %08x\n", (UINT)addr, (UINT)data, (UINT)tmp);
                     ret = -EFAULT;
                     SYSCALL_RETURN(ret);
                 }
@@ -3313,7 +3318,7 @@ long ptrace(int request, ...)
             case PTRACE_POKEDATA:
                 if (put_user(data, (unsigned long __user*)addr))
                 {
-                    klog(0,"error:put_user. addr %08x data %08x tmp %08x\n", addr, data, tmp);
+                    klog(0,"error:put_user. addr %08x data %08x tmp %08x\n", (UINT)addr, (UINT)data, (UINT)tmp);
                     ret = -EFAULT;
                     SYSCALL_RETURN(ret);
                 }
@@ -3331,7 +3336,7 @@ long ptrace(int request, ...)
                         return 0;
                     }
 
-                    data = &tmp;
+                    data = (unsigned long)&tmp;
 
                     oldfs = get_fs();
                     set_fs(KERNEL_DS);
@@ -3368,7 +3373,7 @@ long ptrace(int request, ...)
     }
 
     if(request>0 && request<4) /* PTRACE_PEEKTEXT, PTRACE_PEEKDATA, PTRACE_PEEKUSR */
-        data = &tmp;
+        data = (unsigned long)&tmp;
 
     oldfs = get_fs();
     if ( request != PTRACE_PEEKUSR && (ULONG)addr < (ULONG)TASK_SIZE )
