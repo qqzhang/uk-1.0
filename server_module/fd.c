@@ -508,17 +508,17 @@ static LIST_HEAD(poll_list);/* for fd_poll_event */
 
 static void do_poll_event(void)
 {
-    struct uk_fd *fd;
+    struct uk_fd *fd, *pos2;
     LIST_HEAD(txlist);
 
     local_bh_disable();
     list_splice_init(&poll_list, &txlist);
     local_bh_enable();
 
-    LIST_FOR_EACH_ENTRY( fd, &txlist, struct uk_fd, poll_entry )
+    LIST_FOR_EACH_ENTRY_SAFE( fd, pos2, &txlist, struct uk_fd, poll_entry )
     {
-        grab_object(fd);
         fd->fd_ops->poll_event(fd, fd->event);
+        release_object(fd->user);
         release_object(fd);
     }
 }
@@ -541,6 +541,8 @@ static void fd_poll_event( struct uk_fd *fd, int event )
 
         if (in_softirq())
         {
+            grab_object(fd);
+            grab_object(fd->user);
             fd->event = event;
             list_add( &fd->poll_entry, &poll_list );
             wake_up_process(timer_kernel_task);
@@ -588,7 +590,7 @@ static inline unsigned int uk_do_poll_file(struct file *file, int events,poll_ta
     unsigned int mask;
 
     mask = DEFAULT_POLLMASK;
-    if (file->f_op && file->f_op->poll)
+    if (file && file->f_op && file->f_op->poll)
     {
         if (pwait)
             GET_PARAM(pwait, key) = events|POLLERR | POLLHUP;

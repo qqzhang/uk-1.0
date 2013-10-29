@@ -5,7 +5,6 @@
 #define __USE_GNU
 
 #include <stdio.h>
-#include <unistd.h>
 #include "winternl.h"
 #include "winnt.h"
 
