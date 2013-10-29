@@ -68,7 +68,7 @@ static const unsigned int supported_cpus = CPU_FLAG(CPU_ARM64);
 #endif
 
 #ifdef CONFIG_UNIFIED_KERNEL
-
+#include <linux/completion.h>
 #include <linux/spinlock.h>
 #include <linux/rwlock.h>
 #include <linux/sched.h>
@@ -324,6 +324,8 @@ static inline void init_thread_structure( struct thread *thread )
     thread->pid             = -1;  /* not known yet */
     INIT_HLIST_NODE( &thread->hash_entry );
     thread->unix_errno      = 0;
+    init_completion(&thread->completion);
+    memset(&thread->wake_info, 0, sizeof(struct wake_up_reply));
 #endif
 
     thread->creation_time = current_time;
@@ -788,6 +790,16 @@ static int check_wait( struct thread *thread )
     return -1;
 }
 
+#ifdef CONFIG_UNIFIED_KERNEL
+/* send the wakeup signal to a thread */
+static int send_thread_wakeup( struct thread *thread, client_ptr_t cookie, int signaled )
+{
+    thread->wake_info.cookie   = cookie;
+    thread->wake_info.signaled = signaled;
+    complete(&thread->completion);
+    return 0;
+}
+#else
 /* send the wakeup signal to a thread */
 static int send_thread_wakeup( struct thread *thread, client_ptr_t cookie, int signaled )
 {
@@ -807,6 +819,7 @@ static int send_thread_wakeup( struct thread *thread, client_ptr_t cookie, int s
         fatal_protocol_error( thread, "write: %s\n", strerror( errno ));
     return -1;
 }
+#endif
 
 /* attempt to wake up a thread */
 /* return >0 if OK, 0 if the wait condition is still not satisfied */

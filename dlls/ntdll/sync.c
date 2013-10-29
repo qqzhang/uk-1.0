@@ -797,6 +797,58 @@ NTSTATUS WINAPI NtSetTimerResolution(IN ULONG resolution,
  *
  * Wait for a reply on the waiting pipe of the current thread.
  */
+#ifdef CONFIG_UNIFIED_KERNEL
+#include <fcntl.h>
+static int __wait_reply( void *cookie, int fd )
+{
+    int signaled;
+    struct wake_up_reply reply;
+
+    for (;;)
+    {
+        int ret;
+        ret = read( fd, &reply, sizeof(reply) );
+        if (ret == sizeof(reply))
+        {
+            if (!reply.cookie) abort_thread( reply.signaled );  /* thread got killed */
+            if (wine_server_get_ptr(reply.cookie) == cookie) return reply.signaled;
+            /* we stole another reply, wait for the real one */
+            signaled = __wait_reply( cookie , fd);
+            /* and now put the wrong one back in the pipe */
+            for (;;)
+            {
+                ret = write( fd, &reply, sizeof(reply) );
+                if (ret == sizeof(reply)) break;
+                if (ret >= 0) server_protocol_error( "partial wakeup write %d\n", ret );
+                if (errno == EINTR) continue;
+                server_protocol_perror("wakeup write");
+            }
+            return signaled;
+        }
+        if (ret >= 0) server_protocol_error( "partial wakeup read %d\n", ret );
+        if (errno == EINTR) continue;
+        server_protocol_perror("wakeup read");
+    }
+}
+
+static int wait_reply( void *cookie )
+{
+    int fd, ret;
+
+    fd = open( SYSCALL_FILE, O_RDWR );
+    if (fd == -1)
+    {
+        ERR("open SYSCALL_FILE error %d \n",errno);
+        return -1;
+    }
+    else
+    {
+        ret = __wait_reply( cookie, fd );
+        close(fd);
+        return ret;
+    }
+}
+#else
 static int wait_reply( void *cookie )
 {
     int signaled;
@@ -827,6 +879,7 @@ static int wait_reply( void *cookie )
         server_protocol_perror("wakeup read");
     }
 }
+#endif
 
 
 /***********************************************************************
