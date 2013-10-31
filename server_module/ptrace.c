@@ -200,22 +200,21 @@ static int waitpid_thread( struct thread *thread, int signal )
 }
 
 #ifdef CONFIG_UNIFIED_KERNEL
-extern void* get_kernel_proc_address(char *funcname);
 static int tkill( int tgid, int pid, int sig )
 {
 #ifdef __linux__
     int ret;
-    asmlinkage long (*sys_tkill)(int pid, int sig) = get_kernel_proc_address("sys_tkill");
-    asmlinkage long (*sys_tgkill)(int tgid, int pid, int sig) = get_kernel_proc_address("sys_tgkill");
+    asmlinkage long (*sys_tkill)(int pid, int sig) = get_syscall(UK_tkill);
+    asmlinkage long (*sys_tgkill)(int tgid, int pid, int sig) = get_syscall(UK_tgkill);
 
     ret = sys_tgkill(tgid , pid, sig);
     if (ret < 0 && -ret == ENOSYS)
-	ret = sys_tkill( pid, sig );
+        ret = sys_tkill( pid, sig );
 
     if (ret < 0)
     {
-	current_thread->unix_errno = -ret;
-	ret = -1;
+        current_thread->unix_errno = -ret;
+        ret = -1;
     }
 
     return ret;

@@ -48,6 +48,7 @@
 #include "termios.h"
 #include "wine/unicode.h"
 #include "sys/sysctl.h"
+#include "lib.h"
 
 #define PREPARE_KERNEL_CALL \
 { \
@@ -108,6 +109,7 @@ void _assert (const char *assertion, const char *file, int line)
 typedef unsigned long (*FUNCTION_POINTER)(const char *name);
 static FUNCTION_POINTER kallsyms_lookup_name_ptr = NULL;
 unsigned long read_kallsyms(char *symbol_name);
+void *syscall_array[UK_NR_SYSCALLS] = {0};
 
 #define MAX_BUF_LEN 100
 #define PROC_HOME    "/proc/kallsyms"
@@ -198,6 +200,7 @@ e0654321 T cdrom_open    [cdrom]
 
 void get_kallsyms_lookup_name(void)
 {
+    int i;
 	kallsyms_lookup_name_ptr = (FUNCTION_POINTER)read_kallsyms("kallsyms_lookup_name");
 
 	if (!kallsyms_lookup_name_ptr) 
@@ -208,6 +211,13 @@ void get_kallsyms_lookup_name(void)
 	{
 		printk("kallsyms_lookup_name=%08x \n",(unsigned int)kallsyms_lookup_name_ptr);
 	}
+
+    for(i=0; i<UK_NR_SYSCALLS; i++)
+    {
+        syscall_array[i] = (void*)kallsyms_lookup_name_ptr(syscall_names[i]);
+        if (syscall_array[i] == NULL)
+            klog(0,"get %s addr failed \n",syscall_names[i]);
+    }
 }
 
 void* get_kernel_proc_address(char *funcname)
@@ -291,7 +301,7 @@ void *realloc(void *ptr, size_t new_size)
 
 void exit(int status)
 {
-    asmlinkage long (*sys_exit)(int error_code) = get_kernel_proc_address("sys_exit");
+    asmlinkage long (*sys_exit)(int error_code) = get_syscall(UK_exit);
 
     sys_exit(status);
 
@@ -1811,7 +1821,6 @@ static char *config_dir;
 static char *user_name;
 static char *server_dir;
 
-int stat(char *filename, struct stat *st);
 //static void fatal_error( const char *err, ... )  __attribute__((noreturn,format(printf,1,2)));
 //static void fatal_perror( const char *err, ... )  __attribute__((noreturn,format(printf,1,2)));
 static void fatal_error( const char *err, ... );
@@ -2246,7 +2255,7 @@ int sprintfW( WCHAR *str, const WCHAR *format, ...)
 
 /*time.h*/
 
-time_t time(void* v)
+time_t time(time_t * v)
 {
 	struct timeval now;
 	LARGE_INTEGER time;
@@ -2303,7 +2312,7 @@ unsigned long long int gnu_dev_makedev (unsigned int major, unsigned int minor)
 long close(unsigned int fd)
 {
 	long ret;
-	asmlinkage	long (*sys_close)(unsigned int fd) = get_kernel_proc_address("sys_close");
+	asmlinkage	long (*sys_close)(unsigned int fd) = get_syscall(UK_close);
 
 	PREPARE_KERNEL_CALL;
 	if (!current->files) /* in this case, close is called after do_exit */
@@ -2374,7 +2383,7 @@ int open(const char *filename, int flags, ...)
     int ret;
     int mode = 0;
     asmlinkage long (*sys_open)(const char __user *filename,
-	    int flags, int mode) = get_kernel_proc_address("sys_open");
+	    int flags, int mode) = get_syscall(UK_open);
 
     if (flags & O_CREAT)
     {
@@ -2394,7 +2403,7 @@ int open(const char *filename, int flags, ...)
 ssize_t read(unsigned int fd, void *buf, size_t size)
 {
     ssize_t ret;
-    asmlinkage	long (*sys_read)(unsigned int, char*, size_t) = get_kernel_proc_address("sys_read");
+    asmlinkage	long (*sys_read)(unsigned int, char*, size_t) = get_syscall(UK_read);
 
     PREPARE_KERNEL_CALL;
     ret = sys_read(fd, buf, size);
@@ -2407,7 +2416,7 @@ ssize_t write(int fd, const void *buf, size_t count)
 {
     int ret;
     asmlinkage long (*sys_write)(unsigned int fd, const char __user *buf,
-            size_t count) = get_kernel_proc_address("sys_write");
+            size_t count) = get_syscall(UK_write);
 
     PREPARE_KERNEL_CALL;
     ret = sys_write(fd, buf, count);
@@ -2479,7 +2488,7 @@ ssize_t pwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 long dup(unsigned int fd)
 {
 	long ret;
-	asmlinkage	long (*sys_dup)(unsigned int) = get_kernel_proc_address("sys_dup");
+	asmlinkage	long (*sys_dup)(unsigned int) = get_syscall(UK_dup);
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_dup(fd);
@@ -2491,7 +2500,7 @@ long dup(unsigned int fd)
 long dup2(unsigned int oldfd, unsigned int newfd)
 {
 	long ret;
-	asmlinkage	long (*sys_dup2)(unsigned int, unsigned int) = get_kernel_proc_address("sys_dup2");
+	asmlinkage	long (*sys_dup2)(unsigned int, unsigned int) = get_syscall(UK_dup2);
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_dup2(oldfd, newfd);
@@ -2500,24 +2509,24 @@ long dup2(unsigned int oldfd, unsigned int newfd)
 	SYSCALL_RETURN(ret);
 }
 
-int stat(char *filename, struct stat *st)
+int stat(const char *filename, struct stat *st)
 {
     int ret;
     asmlinkage long (*sys_newstat)(char __user *filename,
-            struct stat __user *statbuf) = get_kernel_proc_address("sys_newstat");
+            struct stat __user *statbuf) = get_syscall(UK_newstat);
 
     PREPARE_KERNEL_CALL;
-    ret = sys_newstat(filename, st);
+    ret = sys_newstat((char __user *)filename, st);
     END_KERNEL_CALL;
 
     SYSCALL_RETURN(ret);
 }
 
-long fstat(unsigned int fd, struct stat *st)
+int fstat(unsigned int fd, struct stat *st)
 {
-    long ret;
+    int ret;
     asmlinkage long (*sys_newfstat)(unsigned int fd, struct stat __user *statbuf)
-        = get_kernel_proc_address("sys_newfstat");
+        = get_syscall(UK_newfstat);
 
     PREPARE_KERNEL_CALL;
     ret = sys_newfstat(fd, st);
@@ -2526,14 +2535,14 @@ long fstat(unsigned int fd, struct stat *st)
     SYSCALL_RETURN(ret);
 }
 
-int lstat(char *path, void *buf)
+int lstat(const char *path, void *buf)
 {
 	int ret = 0;
     asmlinkage long (*sys_newlstat)(char __user *filename,
-            struct stat __user *statbuf) = get_kernel_proc_address("sys_newlstat");
+            struct stat __user *statbuf) = get_syscall(UK_newlstat);
 
     PREPARE_KERNEL_CALL;
-    ret = sys_newlstat(path, buf);
+    ret = sys_newlstat((char __user *)path, buf);
 	END_KERNEL_CALL;
 
 	SYSCALL_RETURN(ret);
@@ -2547,7 +2556,7 @@ int symlink(const char *oldpath, const char *newpath)
 int unlink(const char *pathname)
 {
 	int ret;
-	asmlinkage	long (*sys_unlink)(const char*) = get_kernel_proc_address("sys_unlink");
+	asmlinkage	long (*sys_unlink)(const char*) = get_syscall(UK_unlink);
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_unlink(pathname);
@@ -2559,7 +2568,7 @@ int unlink(const char *pathname)
 int rename(const char *oldpath, const char *newpath)
 {
 	int ret;
-	asmlinkage	long (*sys_rename)(const char*, const char*) = get_kernel_proc_address("sys_rename");
+	asmlinkage	long (*sys_rename)(const char*, const char*) = get_syscall(UK_rename);
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_rename(oldpath, newpath);
@@ -2576,7 +2585,7 @@ int ftruncate(int fd, off_t length)
 {
 	int ret=0;
 	asmlinkage long (*sys_ftruncate)(unsigned int fd, unsigned long length)
-		= get_kernel_proc_address("sys_ftruncate");
+		= get_syscall(UK_ftruncate);
 
 	ret = sys_ftruncate(fd, length);
 
@@ -2592,7 +2601,7 @@ int fstatfs(int fd, struct statfs *buf)
 {
 	int ret;
 	asmlinkage long (*sys_fstatfs)(unsigned int fd, struct statfs __user *buf)
-		 = get_kernel_proc_address("sys_fstatfs");
+		 = get_syscall(UK_fstatfs);
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_fstatfs(fd, buf);
@@ -2604,7 +2613,7 @@ int fstatfs(int fd, struct statfs *buf)
 int rmdir(const char *pathname)
 {
     int ret;
-    asmlinkage long (*sys_rmdir)(const char __user *pathname) = get_kernel_proc_address("sys_rmdir");
+    asmlinkage long (*sys_rmdir)(const char __user *pathname) = get_syscall(UK_rmdir);
 
     PREPARE_KERNEL_CALL;
     ret = sys_rmdir(pathname);
@@ -2616,7 +2625,7 @@ int rmdir(const char *pathname)
 int mkdir(const char *pathname, mode_t mode)
 {
 	long ret;
-	asmlinkage	long (*sys_mkdir)(const char *pathname, int mode) = get_kernel_proc_address("sys_mkdir");
+	asmlinkage	long (*sys_mkdir)(const char *pathname, int mode) = get_syscall(UK_mkdir);
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_mkdir(pathname, mode);
@@ -2629,7 +2638,7 @@ int mkdir(const char *pathname, mode_t mode)
 int chdir(const char *path)
 {
 	int ret;
-	asmlinkage long (*sys_chdir)(const char __user *filename) = get_kernel_proc_address("sys_chdir");
+	asmlinkage long (*sys_chdir)(const char __user *filename) = get_syscall(UK_chdir);
 
 	ret = sys_chdir(path);
 
@@ -2639,7 +2648,7 @@ int chdir(const char *path)
 int fchdir(int fd)
 {
 	int ret;
-	asmlinkage long (*sys_fchdir)(unsigned int fd) = get_kernel_proc_address("sys_fchdir");
+	asmlinkage long (*sys_fchdir)(unsigned int fd) = get_syscall(UK_fchdir);
 
 	ret = sys_fchdir(fd);
 
@@ -2648,7 +2657,7 @@ int fchdir(int fd)
 int fsync(int fd)
 {
     int ret;
-    asmlinkage long (*sys_fsync)(unsigned int fd) = get_kernel_proc_address("sys_fsync");
+    asmlinkage long (*sys_fsync)(unsigned int fd) = get_syscall(UK_fsync);
 
     ret = sys_fsync(fd);
 
@@ -2662,8 +2671,7 @@ int chmod(const char *path, mode_t mode)
 int fchmod(int fd, mode_t mode)
 {
     long ret;
-    asmlinkage long (*sys_fchmod)(unsigned int fd, mode_t mode)
-        = get_kernel_proc_address("sys_fchmod");
+    asmlinkage long (*sys_fchmod)(unsigned int fd, mode_t mode) = get_syscall(UK_fchmod);
 
     ret = sys_fchmod(fd, mode);
 
@@ -2675,26 +2683,15 @@ int fcntl(int fd, unsigned int cmd, ... /*unsigned long arg*/)
     int ret;
     va_list ap;
     unsigned long arg;
+    asmlinkage long (*sys_fcntl)(unsigned int fd, unsigned int cmd, unsigned long arg) = get_syscall(UK_fcntl);
 
     va_start(ap, cmd);
     arg = va_arg(ap, unsigned long);
     va_end(ap);
 
-#if BITS_PER_LONG == 32
-    asmlinkage long (*sys_fcntl64)(unsigned int fd,
-            unsigned int cmd, unsigned long arg) = get_kernel_proc_address("sys_fcntl64");
-
-    PREPARE_KERNEL_CALL;
-    ret = sys_fcntl64(fd, cmd, arg);
-    END_KERNEL_CALL;
-#else
-    asmlinkage long sys_fcntl(unsigned int fd, unsigned int cmd, unsigned long arg)
-        = get_kernel_proc_address("sys_fcntl");
-
     PREPARE_KERNEL_CALL;
     ret = sys_fcntl(fd, cmd, arg);
     END_KERNEL_CALL;
-#endif
 
     SYSCALL_RETURN(ret);
 }
@@ -2730,7 +2727,7 @@ int clock_gettime(clockid_t clk_id, void *tp)
 {
     int ret = 0 ;
     asmlinkage long (*sys_clock_gettime)(clockid_t which_clock,
-            struct timespec __user *tp) = get_kernel_proc_address("sys_clock_gettime");
+            struct timespec __user *tp) = get_syscall(UK_clock_gettime);
 
 	PREPARE_KERNEL_CALL;
     ret = sys_clock_gettime( clk_id, tp);
@@ -2757,20 +2754,23 @@ int  raise(int sig)
 unsigned int alarm(unsigned int seconds)
 {
     int ret;
-    asmlinkage long (*sys_alarm)(unsigned int seconds) = get_kernel_proc_address("sys_alarm");
+    asmlinkage long (*sys_alarm)(unsigned int seconds) = get_syscall(UK_alarm);
 
     ret = sys_alarm(seconds);
 
     SYSCALL_RETURN(ret);
 }
 
-int sigaction(int sig, const struct old_sigaction __user *act, struct old_sigaction __user *oldact)
+//int sigaction(int sig, const struct old_sigaction __user *act, struct old_sigaction __user *oldact)
+int sigaction(int sig, const struct sigaction *act, struct sigaction *oldact)
 {
 	long ret;
 	asmlinkage int (*sys_sigaction)(int sig, const struct old_sigaction __user *act,
-					      struct old_sigaction __user *oact) = get_kernel_proc_address("sys_sigaction");
+					      struct old_sigaction __user *oact) = get_syscall(UK_sigaction);
 
-	ret = sys_sigaction(sig, act, oldact); 
+	PREPARE_KERNEL_CALL;
+	ret = sys_sigaction(sig, (const struct old_sigaction __user *)act, (struct old_sigaction __user *)oldact); 
+	END_KERNEL_CALL;
 
 	SYSCALL_RETURN(ret);
 }
@@ -2778,7 +2778,7 @@ int sigaction(int sig, const struct old_sigaction __user *act, struct old_sigact
 int kill(pid_t pid, int sig)
 {
 	long ret;
-	asmlinkage long (*sys_kill)(int, int) = get_kernel_proc_address("sys_kill");
+	asmlinkage long (*sys_kill)(int, int) = get_syscall(UK_kill);
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_kill(pid, sig);
@@ -2791,7 +2791,7 @@ int kill(pid_t pid, int sig)
 long tgkill(int tgid, int pid, int sig);
 {
 	long ret;
-	asmlinkage long (*sys_tgkill)(int tgid, int pid, int sig) = get_kernel_proc_address("sys_tgkill");
+	asmlinkage long (*sys_tgkill)(int tgid, int pid, int sig) = get_syscall(UK_tgkill);
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_tgkill(tgid, pid, sig);
@@ -2803,7 +2803,7 @@ long tgkill(int tgid, int pid, int sig);
 long tkill(int pid, int sig);
 {
 	long ret;
-	asmlinkage long (*sys_tkill)(int pid, int sig) = get_kernel_proc_address("sys_tkill");
+	asmlinkage long (*sys_tkill)(int pid, int sig) =  get_syscall(UK_tkill);
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_tkill(pid, sig);
@@ -2837,53 +2837,10 @@ ssize_t filp_pwrite(struct file *filp, const char *buf, size_t count, off_t pos)
 	SYSCALL_RETURN(ret);
 }
 
-//long filp_truncate(struct file *file, loff_t length, int small)
-long filp_truncate(struct file *file, long length, int small)
-{
-	struct inode * inode;
-	struct dentry *dentry;
-	int error;
-	loff_t len = length;
-	int (*do_truncate)(struct dentry*, loff_t, unsigned int, struct file*)
-		= get_kernel_proc_address("do_truncate");
-
-	error = -EINVAL;
-	if (length < 0)
-		goto out;
-	if (!file)
-		goto out;
-
-	/* explicitly opened as large or we are on 64-bit box */
-	if (file->f_flags & O_LARGEFILE)
-		small = 0;
-
-	dentry = file->f_path.dentry;
-	inode = dentry->d_inode;
-	error = -EINVAL;
-	if (!S_ISREG(inode->i_mode) || !(file->f_mode & FMODE_WRITE))
-		goto out;
-
-	error = -EINVAL;
-	/* Cannot ftruncate over 2^31 bytes without large file support */
-	if (small && length > MAX_NON_LFS)
-		goto out;
-
-	error = -EPERM;
-	if (IS_APPEND(inode))
-		goto out;
-
-	error = locks_verify_truncate(inode, file, length);
-	if (!error)
-		error = do_truncate(dentry, len, ATTR_MTIME | ATTR_CTIME, file);
-
-out:
-	return error;
-}
-
 ssize_t readlink(const char *path, char *buf, size_t bufsiz)
 {
 	long ret;
-	asmlinkage	long (*sys_readlink)(const char*, char*, int) = get_kernel_proc_address("sys_readlink");
+	asmlinkage	long (*sys_readlink)(const char*, char*, int) = get_syscall(UK_readlink);
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_readlink(path, buf, bufsiz);
@@ -2896,8 +2853,7 @@ ssize_t readlink(const char *path, char *buf, size_t bufsiz)
 int poll(struct pollfd *pfds, unsigned int nfds, long timeout_msecs)
 {
 	long ret;
-	asmlinkage	long (*sys_poll)(struct pollfd*, unsigned int, long) 
-		= get_kernel_proc_address("sys_poll");
+	asmlinkage	long (*sys_poll)(struct pollfd*, unsigned int, long) = get_syscall(UK_poll);
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_poll(pfds, nfds, timeout_msecs);
@@ -2912,7 +2868,7 @@ int epoll_create(int size)
     return -1;
 #if 0
 	int ret;
-	asmlinkage long (*sys_epoll_create)(int size) =  get_kernel_proc_address("sys_epoll_create");
+	asmlinkage long (*sys_epoll_create)(int size) = get_syscall(UK_epoll_create);
 
 	ret = sys_epoll_create(size);
 
@@ -2926,7 +2882,7 @@ int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 #if 0
 	int ret;
 	asmlinkage long (*sys_epoll_ctl)(int epfd, int op, int fd,
-				struct epoll_event __user *event) = get_kernel_proc_address("sys_epoll_ctl");
+				struct epoll_event __user *event) = get_syscall(UK_epoll_ctl);
 
 	ret = sys_epoll_ctl(epfd, op, fd, event);
 
@@ -2940,7 +2896,7 @@ int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
 #if 0
 	int ret;
 	asmlinkage long (*sys_epoll_wait)(int epfd, struct epoll_event __user *events,
-			int maxevents, int timeout) = get_kernel_proc_address("sys_epoll_wait");
+			int maxevents, int timeout) = get_syscall(UK_epoll_wait);
 
 	ret=sys_epoll_wait(epfd, events, maxevents, timeout);
 
@@ -2952,7 +2908,7 @@ int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
 long socket(int family, int type, int protocol)
 {
 	int ret;
-	asmlinkage	long (*sys_socket)(int, int, int) = get_kernel_proc_address("sys_socket");
+	asmlinkage	long (*sys_socket)(int, int, int) = get_syscall(UK_socket);
 	ret = sys_socket(family, type, protocol);
 	SYSCALL_RETURN(ret);
 }
@@ -2975,8 +2931,7 @@ long connect(int sockfd, const struct sockaddr *addr, int addrlen)
 long accept(int fd, struct sockaddr* peer_sockaddr, int* peer_addrlen)
 {
 	long ret;
-	asmlinkage	long (*sys_accept)(int, struct sockaddr*, int*)
-		= get_kernel_proc_address("sys_accept");
+	asmlinkage	long (*sys_accept)(int, struct sockaddr*, int*) = get_syscall(UK_accept);
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_accept(fd, peer_sockaddr, peer_addrlen);
@@ -2988,7 +2943,7 @@ long accept(int fd, struct sockaddr* peer_sockaddr, int* peer_addrlen)
 long shutdown(int fd, int how)
 {
 	long ret;
-	asmlinkage	long (*sys_shutdown)(int, int) = get_kernel_proc_address("sys_shutdown");
+	asmlinkage	long (*sys_shutdown)(int, int) = get_syscall(UK_shutdown);
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_shutdown(fd, how);
@@ -3001,8 +2956,7 @@ long shutdown(int fd, int how)
 long recv(int fd, void *buf, size_t size, unsigned flags)
 {
     long ret;
-    asmlinkage long (*sys_recv)(int, void __user *, size_t, unsigned)
-        = get_kernel_proc_address("sys_recv");
+    asmlinkage long (*sys_recv)(int, void __user *, size_t, unsigned) = get_syscall(UK_recv);
 
     PREPARE_KERNEL_CALL;
     ret = sys_recv(fd, buf, size, flags);
@@ -3019,7 +2973,7 @@ ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
 #if 0
 	long ret;
 	asmlinkage long (*sys_recvfrom)(int, void*, size_t, unsigned, struct sockaddr*, int*) 
-		= get_kernel_proc_address("sys_recvfrom");
+		= get_syscall(UK_recvfrom);
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_recvfrom(fd, buf, size, flags, NULL, NULL);
@@ -3035,7 +2989,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
 #if 0
 	int ret;
 	asmlinkage long (*sys_recvmsg)(int, struct msghdr __user*, unsigned)
-		= get_kernel_proc_address("sys_recvmsg");
+		= get_syscall(UK_recvmsg);
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_recvmsg(sockfd,msg,flags);
@@ -3063,7 +3017,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 #if 0
 	int ret;
 	asmlinkage long (*sys_sendmsg)(int, const struct msghdr __user*, unsigned)
-		= get_kernel_proc_address("sys_sendmsg");
+		= get_syscall(UK_sendmsg);
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_sendmsg(sockfd,msg,flags);
@@ -3076,8 +3030,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 long socketpair(int family, int type, int protocol, int *sockvec)
 {
 	long ret;
-	asmlinkage	long (*sys_socketpair)(int, int, int, int*) 
-		= get_kernel_proc_address("sys_socketpair");
+	asmlinkage	long (*sys_socketpair)(int, int, int, int*) = get_syscall(UK_socketpair);
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_socketpair(family, type, protocol, sockvec);
@@ -3090,7 +3043,7 @@ long getsockopt(int fd, int level, int optname, void *optval, unsigned int *optl
 {
 	long ret;
 	asmlinkage	long (*sys_getsockopt)(int fd, int level, int optname,
-			char * optval, int * optlen) = get_kernel_proc_address("sys_getsockopt");
+			char * optval, int * optlen) = get_syscall(UK_getsockopt);
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_getsockopt(fd, level, optname, optval, optlen);
@@ -3103,7 +3056,7 @@ int setsockopt(int fd, int level, int optname, const void *optval, int optlen)
 {
 	long ret;
 	asmlinkage	long (*sys_setsockopt)(int fd, int level, int optname,
-			char * optval, int optlen) = get_kernel_proc_address("sys_setsockopt");
+			char * optval, int optlen) = get_syscall(UK_setsockopt);
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_setsockopt(fd, level, optname, (char *)optval, optlen);
@@ -3116,7 +3069,7 @@ int getsockname(int sockfd, struct sockaddr *addr, int* addrlen )
 {
 	int ret;
 	asmlinkage long (*sys_getsockname)(int, struct sockaddr __user*, int __user*)
-		= get_kernel_proc_address("sys_getsockname");
+		= get_syscall(UK_getsockname);
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_getsockname(sockfd,addr,addrlen);
@@ -3129,8 +3082,7 @@ int getpeername(int sockfd, struct sockaddr *addr, int* addrlen )
 {
 	int ret;
 	asmlinkage long (*sys_getpeername)(int, struct sockaddr __user*, int __user*)
-
-		= get_kernel_proc_address("sys_getpeername");
+		= get_syscall(UK_getpeername);
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_getpeername(sockfd,addr,addrlen);
@@ -3148,7 +3100,7 @@ int getpeername(int sockfd, struct sockaddr *addr, int* addrlen )
 int inotify_init(void)
 {
 	int ret;
-	asmlinkage long (*sys_inotify_init)(void) = get_kernel_proc_address("sys_inotify_init");
+	asmlinkage long (*sys_inotify_init)(void) = get_syscall(UK_inotify_init);
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_inotify_init();
@@ -3161,7 +3113,7 @@ int inotify_add_watch(int fd,const char *pathname,unsigned int mask)
 {
 	int ret;
 	asmlinkage long (*sys_inotify_add_watch)(int, const char __user*, u32)
-		= get_kernel_proc_address("sys_inotify_add_watch");
+		= get_syscall(UK_inotify_add_watch);
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_inotify_add_watch(fd,pathname,mask);
@@ -3173,7 +3125,7 @@ int inotify_add_watch(int fd,const char *pathname,unsigned int mask)
 int inotify_rm_watch(int fd,int wd)
 {
 	int ret;
-	asmlinkage long (*sys_inotify_rm_watch)(int, __s32) = get_kernel_proc_address("sys_inotify_rm_watch");
+	asmlinkage long (*sys_inotify_rm_watch)(int, __s32) = get_syscall(UK_inotify_rm_watch);
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_inotify_rm_watch(fd,wd);
@@ -3189,7 +3141,7 @@ int mmap(unsigned long addr, size_t len, int prot, int flags, int fd, off_t off)
 
     asmlinkage long (*sys_mmap_pgoff)(unsigned long addr, unsigned long len,
             unsigned long prot, unsigned long flags,
-            unsigned long fd, unsigned long pgoff) = get_kernel_proc_address("sys_mmap_pgoff");
+            unsigned long fd, unsigned long pgoff) = get_syscall(UK_mmap_pgoff);
 
     ret = -EINVAL;
     if (off & ~PAGE_MASK)
@@ -3203,7 +3155,7 @@ out:
 int munmap(unsigned long addr, size_t length)
 {
     int ret;
-    asmlinkage long (*sys_munmap)(unsigned long addr, size_t len) = get_kernel_proc_address("sys_munmap");
+    asmlinkage long (*sys_munmap)(unsigned long addr, size_t len) = get_syscall(UK_munmap);
 
     ret = sys_munmap(addr, length);
 
@@ -3213,7 +3165,7 @@ int munmap(unsigned long addr, size_t length)
 int pipe(int *fildes)
 {
 	int ret;
-	asmlinkage long (*sys_pipe)(int*) = get_kernel_proc_address("sys_pipe");
+	asmlinkage long (*sys_pipe)(int*) = get_syscall(UK_pipe);
 
 	PREPARE_KERNEL_CALL;
 	ret = sys_pipe(fildes); 
@@ -3267,8 +3219,7 @@ pid_t wait(int *status)
 pid_t waitpid(pid_t pid, int *status, int options)
 {
     int ret;
-    asmlinkage long (*sys_waitpid)(pid_t pid, int __user *stat_addr, int options)
-        = get_kernel_proc_address("sys_waitpid");
+    asmlinkage long (*sys_waitpid)(pid_t pid, int __user *stat_addr, int options) = get_syscall(UK_waitpid);
 
     PREPARE_KERNEL_CALL
     ret = sys_waitpid(pid, status, options);
@@ -3283,8 +3234,7 @@ long ptrace(int request, ...)
     pid_t pid;
     unsigned long addr,data,tmp;
     va_list ap;
-    asmlinkage long (*sys_ptrace)(long request, long pid, long addr, long data)
-        = get_kernel_proc_address("sys_ptrace");
+    asmlinkage long (*sys_ptrace)(long request, long pid, long addr, long data) = get_syscall(UK_ptrace);
     mm_segment_t oldfs;
     struct task_struct *child;
 
@@ -3412,7 +3362,7 @@ int getrlimit(int resource, struct rlimit *rlim)
 {
 	int ret;
 	asmlinkage long (*sys_getrlimit)(unsigned int resource,
-			struct rlimit __user *rlim) = get_kernel_proc_address("sys_getrlimit");
+			struct rlimit __user *rlim) = get_syscall(UK_getrlimit);
 
 	ret = sys_getrlimit(resource, rlim);
 
@@ -3425,7 +3375,7 @@ int uk_sched_setaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask)
     int ret;
 
     asmlinkage long (*sys_sched_setaffinity)(pid_t pid, unsigned int len,
-            unsigned long __user *user_mask_ptr) = get_kernel_proc_address("sys_sched_setaffinity");
+            unsigned long __user *user_mask_ptr) = get_syscall(UK_sched_setaffinity);
 
     memcpy(&kernel_mask, mask, sizeof(struct cpumask));
 
@@ -3441,7 +3391,7 @@ int uk_sched_getaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask)
     struct cpumask kernel_mask;
     int ret;
     asmlinkage long (*sys_sched_getaffinity)(pid_t pid, unsigned int len,
-            unsigned long __user *user_mask_ptr) = get_kernel_proc_address("sys_sched_getaffinity");
+            unsigned long __user *user_mask_ptr) = get_syscall(UK_sched_getaffinity);
 
     PREPARE_KERNEL_CALL;
     ret = sys_sched_getaffinity(pid, sizeof(struct cpumask), (unsigned long __user *)&kernel_mask);
