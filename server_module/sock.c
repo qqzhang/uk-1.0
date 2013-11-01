@@ -57,6 +57,10 @@
 #include "request.h"
 #include "user.h"
 
+#ifdef CONFIG_UNIFIED_KERNEL
+#include <linux/hardirq.h>
+#endif
+
 /* From winsock.h */
 #define FD_MAX_EVENTS              10
 #define FD_READ_BIT                0
@@ -275,7 +279,15 @@ static void sock_wake_up( struct sock *sock )
             if (sock->pmask & (1 << event))
             {
                 lparam_t lparam = (1 << event) | (sock_get_error(sock->errors[event]) << 16);
+#ifdef CONFIG_UNIFIED_KERNEL
+                extern void post_message_atomic( user_handle_t win, unsigned int message, lparam_t wparam, lparam_t lparam );
+                if (in_softirq())
+                    post_message_atomic( sock->window, sock->message, sock->wparam, lparam );
+                else
+                    post_message( sock->window, sock->message, sock->wparam, lparam );
+#else
                 post_message( sock->window, sock->message, sock->wparam, lparam );
+#endif
             }
         }
         sock->pmask = 0;
@@ -407,6 +419,7 @@ static void sock_poll_event( struct uk_fd *fd, int event )
     }
     else
     {
+#ifndef CONFIG_UNIFIED_KERNEL
         /* normal data flow */
         if ( sock->type == SOCK_STREAM && ( event & POLLIN ) )
         {
@@ -435,6 +448,7 @@ static void sock_poll_event( struct uk_fd *fd, int event )
                 }
             }
         }
+#endif
 
         if ( (hangup_seen || event & (POLLHUP|POLLERR)) && (sock->state & (FD_READ|FD_WRITE)) )
         {

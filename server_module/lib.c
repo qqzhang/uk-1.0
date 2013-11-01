@@ -239,6 +239,20 @@ void* get_kernel_proc_address(char *funcname)
 
 /*stdlib.h*/
 
+void *malloc_atomic(size_t size)
+{
+	void	*addr;
+
+	if (size > MAXSIZE_ALLOC || !(addr = kmalloc(size, GFP_ATOMIC)))
+	{
+		klog(0,"kmalloc size %x err, too large\n", size);
+		set_error(STATUS_NO_MEMORY);
+		return NULL;
+	}
+
+	return addr;
+}
+
 void *malloc(size_t size)
 {
 	void	*addr;
@@ -274,6 +288,29 @@ void free(void *p)
 {
 	if (p)
 		kfree(p);
+}
+
+void *realloc_atomic(void *ptr, size_t new_size)
+{
+    void *new_ptr;
+
+	if (!new_size)
+	{
+		free(ptr);
+		return NULL;
+	}
+
+	if (!ptr)
+		return malloc_atomic(new_size);
+
+	new_ptr = malloc_atomic(new_size);
+	if (new_ptr)
+	{
+		memcpy(new_ptr, ptr, new_size);
+		free(ptr);
+	}
+
+	return new_ptr;
 }
 
 void *realloc(void *ptr, size_t new_size)

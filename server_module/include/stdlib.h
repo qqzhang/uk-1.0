@@ -21,4 +21,6 @@ double         strtod(const char*,char**);
 long           strtol(const char*,char**,int);
 unsigned long  strtoul(const char*,char**,int);
 
+void*          malloc_atomic(size_t size);
+void*          realloc_atomic(void*,size_t);
 #endif

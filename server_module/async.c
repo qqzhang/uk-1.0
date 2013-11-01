@@ -32,6 +32,10 @@
 #include "file.h"
 #include "request.h"
 
+#ifdef CONFIG_UNIFIED_KERNEL
+#include <linux/hardirq.h>
+#endif
+
 struct async
 {
     struct object        obj;             /* object header */
@@ -162,7 +166,19 @@ void async_terminate( struct async *async, unsigned int status )
     data.async_io.user   = async->data.arg;
     data.async_io.sb     = async->data.iosb;
     data.async_io.status = status;
+#ifdef CONFIG_UNIFIED_KERNEL
+    extern int thread_queue_apc_atomic( struct thread *thread, struct object *owner, const apc_call_t *call_data );
+    if (in_softirq())
+    {
+        thread_queue_apc_atomic( async->thread, &async->obj, &data );
+    }
+    else
+    {
+        thread_queue_apc( async->thread, &async->obj, &data );
+    }
+#else
     thread_queue_apc( async->thread, &async->obj, &data );
+#endif
     async->status = status;
     async_reselect( async );
     release_object( async );  /* so that it gets destroyed when the async is done */

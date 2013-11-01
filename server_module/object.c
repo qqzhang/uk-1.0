@@ -200,6 +200,27 @@ WCHAR *get_object_full_name( struct object *obj, data_size_t *ret_len )
     return (WCHAR *)ret;
 }
 
+#ifdef CONFIG_UNIFIED_KERNEL
+void *alloc_object_atomic( const struct object_ops *ops )
+{
+    struct object *obj = malloc_atomic( ops->size );
+    if (obj)
+    {
+        obj->refcount = 1;
+        obj->ops      = ops;
+        obj->name     = NULL;
+        obj->sd       = NULL;
+        list_init( &obj->wait_queue );
+#ifdef DEBUG_OBJECTS
+        wine_list_add_head( &object_list, &obj->obj_list );
+#endif
+        return obj;
+    }
+    return NULL;
+}
+
+#endif
+
 /* allocate and initialize an object */
 void *alloc_object( const struct object_ops *ops )
 {

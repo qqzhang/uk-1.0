@@ -74,8 +74,6 @@ static const unsigned int supported_cpus = CPU_FLAG(CPU_ARM64);
 #include <linux/sched.h>
 #include "klog.h"
 
-static DEFINE_SEMAPHORE(wait_sem);
-
 int uk_sched_setaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask);
 int uk_sched_getaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask);
 
@@ -791,6 +789,32 @@ static int check_wait( struct thread *thread )
 }
 
 #ifdef CONFIG_UNIFIED_KERNEL
+ssize_t uk_thread_wait(char __user *buf, size_t len)
+{
+    ssize_t ret;
+    struct thread *thread = current_thread ?: get_thread_from_tid(current->pid);
+
+    ret = wait_for_completion_interruptible( &thread->completion );
+    if (ret)
+    {
+        ret = -EINTR;
+    }
+    else
+    {
+        if(copy_to_user(buf, &thread->wake_info, sizeof(struct wake_up_reply)))
+        {
+            klog(0,"error:cpoy_to_user \n");
+            ret = -EFAULT;
+        }
+        else
+        {
+            ret = sizeof(struct wake_up_reply);
+        }
+    }
+
+    return ret;
+}
+
 /* send the wakeup signal to a thread */
 static int send_thread_wakeup( struct thread *thread, client_ptr_t cookie, int signaled )
 {
@@ -799,6 +823,7 @@ static int send_thread_wakeup( struct thread *thread, client_ptr_t cookie, int s
     complete(&thread->completion);
     return 0;
 }
+
 #else
 /* send the wakeup signal to a thread */
 static int send_thread_wakeup( struct thread *thread, client_ptr_t cookie, int signaled )
@@ -828,9 +853,6 @@ int wake_thread( struct thread *thread )
     int signaled, count;
     client_ptr_t cookie;
 
-#ifdef CONFIG_UNIFIED_KERNEL
-    down(&wait_sem);
-#endif
     for (count = 0; thread->wait; count++)
     {
         if ((signaled = check_wait( thread )) == -1) break;
@@ -841,9 +863,6 @@ int wake_thread( struct thread *thread )
         if (send_thread_wakeup( thread, cookie, signaled ) == -1) /* error */
 	    break;
     }
-#ifdef CONFIG_UNIFIED_KERNEL
-    up(&wait_sem);
-#endif
     return count;
 }
 
@@ -917,7 +936,7 @@ static timeout_t select_on( unsigned int count, client_ptr_t cookie, const obj_h
     }
 
 #ifdef CONFIG_UNIFIED_KERNEL
-    down(&wait_sem);
+    local_bh_disable();
 #endif
     if ((ret = check_wait( current_thread )) != -1)
     {
@@ -925,7 +944,7 @@ static timeout_t select_on( unsigned int count, client_ptr_t cookie, const obj_h
         end_wait( current_thread );
         set_error( ret );
 #ifdef CONFIG_UNIFIED_KERNEL
-        up(&wait_sem);
+        local_bh_enable();
 #endif
         goto done;
     }
@@ -933,12 +952,18 @@ static timeout_t select_on( unsigned int count, client_ptr_t cookie, const obj_h
     /* now we need to wait */
     if (current_thread->wait->timeout != TIMEOUT_INFINITE)
     {
+#ifdef CONFIG_UNIFIED_KERNEL
+        extern struct timeout_user *add_timeout_user_atomic( timeout_t when, timeout_callback func, void *private );
+        if (!(current_thread->wait->user = add_timeout_user_atomic( current_thread->wait->timeout,
+                                                      thread_timeout, current_thread->wait )))
+#else
         if (!(current_thread->wait->user = add_timeout_user( current_thread->wait->timeout,
                                                       thread_timeout, current_thread->wait )))
+#endif
         {
             end_wait( current_thread );
 #ifdef CONFIG_UNIFIED_KERNEL
-            up(&wait_sem);
+            local_bh_enable();
 #endif
             goto done;
         }
@@ -946,7 +971,7 @@ static timeout_t select_on( unsigned int count, client_ptr_t cookie, const obj_h
     current_thread->wait->cookie = cookie;
     set_error( STATUS_PENDING );
 #ifdef CONFIG_UNIFIED_KERNEL
-    up(&wait_sem);
+    local_bh_enable();
 #endif
 
 done:
@@ -1044,6 +1069,29 @@ static int queue_apc( struct process *process, struct thread *thread, struct thr
 
     return 1;
 }
+
+#ifdef CONFIG_UNIFIED_KERNEL
+extern void *alloc_object_atomic( const struct object_ops *ops );
+int thread_queue_apc_atomic( struct thread *thread, struct object *owner, const apc_call_t *call_data )
+{
+    struct thread_apc *apc;
+    int ret = 0;
+
+    if ((apc = alloc_object_atomic( &thread_apc_ops )))
+    {
+        apc->call        = *call_data;
+        apc->caller      = NULL;
+        apc->owner       = owner;
+        apc->executed    = 0;
+        apc->result.type = APC_NONE;
+        if (owner) grab_object( owner );
+
+        ret = queue_apc( NULL, thread, apc );
+        release_object( apc );
+    }
+    return ret;
+}
+#endif
 
 /* queue an async procedure call */
 int thread_queue_apc( struct thread *thread, struct object *owner, const apc_call_t *call_data )

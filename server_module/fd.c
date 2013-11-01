@@ -228,7 +228,6 @@ struct uk_fd
     int max_index;
     struct pid_fd_map   *map_tbl;
     struct uk_poll_wqueues	uk_pwq;
-    struct list_head poll_entry; /* for fd_poll_event to add to poll_list */
     int event;
 #endif
 };
@@ -410,6 +409,30 @@ static inline void set_current_time(void)
 }
 #endif
 
+#ifdef CONFIG_UNIFIED_KERNEL
+struct timeout_user *add_timeout_user_atomic( timeout_t when, timeout_callback func, void *private )
+{
+    struct timeout_user *user;
+    struct list_head *ptr;
+
+    if (!(user = malloc_atomic( sizeof(*user) ))) return NULL;
+    user->when     = (when > 0) ? when : current_time - when;
+    user->callback = func;
+    user->private  = private;
+
+    /* Now insert it in the linked list */
+
+    LIST_FOR_EACH( ptr, &timeout_list )
+    {
+        struct timeout_user *timeout = LIST_ENTRY( ptr, struct timeout_user, entry );
+        if (timeout->when >= user->when) break;
+    }
+    wine_list_add_before( ptr, &user->entry );
+    wake_up_process(timer_kernel_task);
+    return user;
+}
+#endif
+
 /* add a timeout user */
 struct timeout_user *add_timeout_user( timeout_t when, timeout_callback func, void *private )
 {
@@ -503,26 +526,6 @@ static struct uk_fd **freelist;                /* list of free entries in the ar
 static int get_next_timeout(void);
 
 #ifdef CONFIG_UNIFIED_KERNEL
-
-static LIST_HEAD(poll_list);/* for fd_poll_event */
-
-static void do_poll_event(void)
-{
-    struct uk_fd *fd, *pos2;
-    LIST_HEAD(txlist);
-
-    local_bh_disable();
-    list_splice_init(&poll_list, &txlist);
-    local_bh_enable();
-
-    LIST_FOR_EACH_ENTRY_SAFE( fd, pos2, &txlist, struct uk_fd, poll_entry )
-    {
-        fd->fd_ops->poll_event(fd, fd->event);
-        release_object(fd->user);
-        release_object(fd);
-    }
-}
-
 static void fd_poll_event( struct uk_fd *fd, int event )
 {
     if (fd && fd->fd_ops && fd->fd_ops->poll_event)
@@ -539,18 +542,7 @@ static void fd_poll_event( struct uk_fd *fd, int event )
             fd->uk_pwq.pending_event = event;
         }
 
-        if (in_softirq())
-        {
-            grab_object(fd);
-            grab_object(fd->user);
-            fd->event = event;
-            list_add( &fd->poll_entry, &poll_list );
-            wake_up_process(timer_kernel_task);
-        }
-        else
-        {
-            fd->fd_ops->poll_event(fd, event);
-        }
+        fd->fd_ops->poll_event(fd, event);
 
         fd->uk_pwq.pending_event = 0;
     }
@@ -624,11 +616,10 @@ static inline unsigned int uk_do_pollfd(struct pollfd *pollfd, poll_table *pwait
 }
 
 /* old __pollwake use default */
-static int __uk_pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key,int entry_events)
+static int __uk_pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key,int mask)
 {
     struct poll_wqueues *pwq = wait->private;
     struct uk_poll_wqueues *uk_pwq;
-    int events;
     struct file *file;
     int poll_events;
     struct poll_table_entry *entry;
@@ -647,14 +638,8 @@ static int __uk_pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key,
     entry = uk_poll_get_entry(uk_pwq);
 
     /*need to filter the key.*/
-    events = (int)(key) & entry_events;
     file = get_unix_file(uk_pwq->fd);
-    poll_events = file->f_op->poll(file,NULL) & entry_events;
-
-    if(events != poll_events )
-    {
-        printk("poll_events:%d.events:%d,(int)(key):%d,entry_events:%d.\n",poll_events,events,(int)(key),entry_events);	
-    }
+    poll_events = file->f_op->poll(file,NULL) & mask;
 
     /* use fd_poll_event to deal with events.*/
     if(uk_pwq->fd != NULL && poll_events != 0)
@@ -1230,7 +1215,6 @@ static void remove_poll_user( struct uk_fd *fd, int user )
 }
 
 #ifdef CONFIG_UNIFIED_KERNEL
-static void do_poll_event(void);
 void timer_loop(void)
 {
     unsigned int msecs, timeout, next;
@@ -1255,8 +1239,6 @@ void timer_loop(void)
             next = msecs_to_jiffies(next) + 1;
             schedule_timeout(next);
         }
-
-        do_poll_event();
     }
 }
 #endif
@@ -2034,7 +2016,6 @@ static struct uk_fd *alloc_fd_object(void)
     list_init( &fd->locks );
 #ifdef CONFIG_UNIFIED_KERNEL
     fd->event = 0;
-    INIT_LIST_HEAD(&fd->poll_entry);
     fd->uk_pwq.have_inited_flag = false;
     fd->creator_pid = 0;
     fd->unix_file    = NULL;
@@ -2089,7 +2070,6 @@ struct uk_fd *alloc_pseudo_fd( const struct fd_ops *fd_user_ops, struct object *
     list_init( &fd->locks );
 #ifdef CONFIG_UNIFIED_KERNEL
     fd->event = 0;
-    INIT_LIST_HEAD(&fd->poll_entry);
     fd->uk_pwq.have_inited_flag = false;
     fd->creator_pid = 0;
     fd->unix_file    = NULL;
@@ -2522,7 +2502,14 @@ int get_unix_fd_by_pid(struct uk_fd *fd, pid_t pid)
 
         klog(0,"need expend table %d -> %d\n",fd->max_index, new_size);
 
-        new_tbl = realloc(fd->map_tbl, sizeof(struct pid_fd_map) * new_size);
+        if (in_softirq())
+        {
+            new_tbl = realloc_atomic(fd->map_tbl, sizeof(struct pid_fd_map) * new_size);
+        }
+        else
+        {
+            new_tbl = realloc(fd->map_tbl, sizeof(struct pid_fd_map) * new_size);
+        }
         if (!new_tbl)
         {
             klog(0, "realloc error \n");

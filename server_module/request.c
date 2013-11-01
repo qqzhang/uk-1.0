@@ -896,6 +896,7 @@ void close_master_socket( timeout_t timeout )
 
 char __user *current_config_dir;
 extern void uk_init_registry(const char __user* config_dir, int len);
+extern ssize_t uk_thread_wait(char __user *buf, size_t len);
 
 NTSTATUS NtEarlyInit(int __user* init_data_ptr)
 {
@@ -1105,28 +1106,7 @@ static int syscall_chardev_release(struct inode *inode, struct file *file)
 
 static ssize_t syscall_chardev_read(struct file *filp, char __user *buf, size_t len, loff_t *ppos)
 {
-    ssize_t ret;
-    struct thread *thread = current_thread ?: get_thread_from_tid(current->pid);
-
-    ret = wait_for_completion_interruptible( &thread->completion );
-    if (ret)
-    {
-        ret = -EINTR;
-    }
-    else
-    {
-        if(copy_to_user(buf, &thread->wake_info, sizeof(struct wake_up_reply)))
-        {
-            klog(0,"error:cpoy_to_user \n");
-            ret = -EFAULT;
-        }
-        else
-        {
-            ret = sizeof(struct wake_up_reply);
-        }
-    }
-
-    return ret;
+    return uk_thread_wait(buf, len);
 }
 
 static ssize_t syscall_chardev_write(struct file *filp, char __user *buf, size_t len, loff_t *ppos)

@@ -2045,6 +2045,38 @@ void queue_cleanup_window( struct thread *thread, user_handle_t win )
     thread_input_cleanup_window( queue, win );
 }
 
+#ifdef CONFIG_UNIFIED_KERNEL
+void post_message_atomic( user_handle_t win, unsigned int message, lparam_t wparam, lparam_t lparam )
+{
+    struct message *msg;
+    struct thread *thread = get_window_thread( win );
+
+    if (!thread) return;
+
+    if (thread->queue && (msg = malloc_atomic( sizeof(*msg) )))
+    {
+        msg->type      = MSG_POSTED;
+        msg->win       = get_user_full_handle( win );
+        msg->msg       = message;
+        msg->wparam    = wparam;
+        msg->lparam    = lparam;
+        msg->time      = get_tick_count();
+        msg->result    = NULL;
+        msg->data      = NULL;
+        msg->data_size = 0;
+
+        wine_list_add_tail( &thread->queue->msg_list[POST_MESSAGE], &msg->entry );
+        set_queue_bits( thread->queue, QS_POSTMESSAGE|QS_ALLPOSTMESSAGE );
+        if (message == WM_HOTKEY)
+        {
+            set_queue_bits( thread->queue, QS_HOTKEY );
+            thread->queue->hotkey_count++;
+        }
+    }
+    release_object( thread );
+}
+#endif
+
 /* post a message to a window; used by socket handling */
 void post_message( user_handle_t win, unsigned int message, lparam_t wparam, lparam_t lparam )
 {
