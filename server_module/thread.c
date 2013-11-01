@@ -1071,13 +1071,17 @@ static int queue_apc( struct process *process, struct thread *thread, struct thr
 }
 
 #ifdef CONFIG_UNIFIED_KERNEL
-extern void *alloc_object_atomic( const struct object_ops *ops );
-int thread_queue_apc_atomic( struct thread *thread, struct object *owner, const apc_call_t *call_data )
+void *async_alloc_apc(void)
 {
-    struct thread_apc *apc;
+    return alloc_object( &thread_apc_ops);
+}
+
+int async_queue_apc( void *async_apc, struct thread *thread, struct object *owner, const apc_call_t *call_data )
+{
+    struct thread_apc *apc = (struct thread_apc *)async_apc;
     int ret = 0;
 
-    if ((apc = alloc_object_atomic( &thread_apc_ops )))
+    if (apc)
     {
         apc->call        = *call_data;
         apc->caller      = NULL;

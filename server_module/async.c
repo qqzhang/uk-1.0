@@ -34,6 +34,9 @@
 
 #ifdef CONFIG_UNIFIED_KERNEL
 #include <linux/hardirq.h>
+extern void *async_alloc_apc(void);
+extern int async_queue_apc( void *async_apc, struct thread *thread,
+        struct object *owner, const apc_call_t *call_data );
 #endif
 
 struct async
@@ -47,6 +50,9 @@ struct async
     unsigned int         timeout_status;  /* status to report upon timeout */
     struct event        *event;
     async_data_t         data;            /* data for async I/O call */
+#ifdef CONFIG_UNIFIED_KERNEL
+    void                *apc;
+#endif
 };
 
 static void async_dump( struct object *obj, int verbose );
@@ -167,17 +173,8 @@ void async_terminate( struct async *async, unsigned int status )
     data.async_io.sb     = async->data.iosb;
     data.async_io.status = status;
 #ifdef CONFIG_UNIFIED_KERNEL
-    extern int thread_queue_apc_atomic( struct thread *thread, struct object *owner, const apc_call_t *call_data );
-    if (in_softirq())
-    {
-        thread_queue_apc_atomic( async->thread, &async->obj, &data );
-    }
-    else
-    {
-        thread_queue_apc( async->thread, &async->obj, &data );
-    }
-#else
-    thread_queue_apc( async->thread, &async->obj, &data );
+    async_queue_apc( async->apc, async->thread, &async->obj, &data );
+    async->apc = NULL;
 #endif
     async->status = status;
     async_reselect( async );
@@ -238,6 +235,9 @@ struct async *create_async( struct thread *thread, struct async_queue *queue, co
     async->data    = *data;
     async->timeout = NULL;
     async->queue   = (struct async_queue *)grab_object( queue );
+#ifdef CONFIG_UNIFIED_KERNEL
+    async->apc     = async_alloc_apc();
+#endif
 
     wine_list_add_tail( &queue->queue, &async->queue_entry );
     grab_object( async );
