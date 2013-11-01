@@ -199,33 +199,6 @@ static int waitpid_thread( struct thread *thread, int signal )
     return (thread->unix_pid != -1);
 }
 
-#ifdef CONFIG_UNIFIED_KERNEL
-static int tkill( int tgid, int pid, int sig )
-{
-#ifdef __linux__
-    int ret;
-    asmlinkage long (*sys_tkill)(int pid, int sig) = get_syscall(UK_tkill);
-    asmlinkage long (*sys_tgkill)(int tgid, int pid, int sig) = get_syscall(UK_tgkill);
-
-    ret = sys_tgkill(tgid , pid, sig);
-    if (ret < 0 && -ret == ENOSYS)
-        ret = sys_tkill( pid, sig );
-
-    if (ret < 0)
-    {
-        current_thread->unix_errno = -ret;
-        ret = -1;
-    }
-
-    return ret;
-#elif (defined(__FreeBSD__) || defined (__FreeBSD_kernel__)) && defined(HAVE_THR_KILL2)
-    return thr_kill2( tgid, pid, sig );
-#else
-    errno = ENOSYS;
-    return -1;
-#endif
-}
-#else
 /* send a signal to a specific thread */
 static inline int tkill( int tgid, int pid, int sig )
 {
@@ -240,7 +213,6 @@ static inline int tkill( int tgid, int pid, int sig )
     return -1;
 #endif
 }
-#endif
 
 /* initialize the process tracing mechanism */
 void init_tracing_mechanism(void)

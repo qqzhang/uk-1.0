@@ -238,7 +238,6 @@ void* get_kernel_proc_address(char *funcname)
 
 
 /*stdlib.h*/
-
 void *malloc_atomic(size_t size)
 {
 	void	*addr;
@@ -3388,10 +3387,49 @@ long sysconf(int name)
 	return 0;
     }
 }
+
 int syscall(int number, ...)
 {
-	klog(0,"NOT IMPLEMENT!\n");
-	return 0;
+    va_list ap;
+    int ret;
+
+    switch(number)
+    {
+        case __NR_tgkill:
+            {
+                asmlinkage long (*sys_tgkill)(int tgid, int pid, int sig) = get_syscall(UK_tgkill);
+                int tgid, pid, sig;
+
+                va_start(ap, number);
+                tgid = va_arg(ap, int);
+                pid = va_arg(ap, int);
+                sig= va_arg(ap, int);
+                va_end(ap);
+
+                ret = sys_tgkill(tgid, pid, sig);
+
+                SYSCALL_RETURN(ret);
+            }
+
+        case __NR_tkill:
+            {
+                asmlinkage long (*sys_tkill)(int pid, int sig) = get_syscall(UK_tkill);
+                int pid, sig;
+
+                va_start(ap, number);
+                pid = va_arg(ap, int);
+                sig= va_arg(ap, int);
+                va_end(ap);
+
+                ret = sys_tkill(pid, sig);
+
+                SYSCALL_RETURN(ret);
+            }
+
+        default:
+            klog(0,"NOT IMPLEMENT!\n");
+            return 0;
+    }
 }
 
 /* sys/resource.h*/
