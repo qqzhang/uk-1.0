@@ -8,6 +8,11 @@
 #define EPOLL_CTL_DEL 2
 #define EPOLL_CTL_MOD 3
 
+#define EPOLLIN  POLLIN
+#define EPOLLOUT POLLOUT
+#define EPOLLERR POLLERR
+#define EPOLLHUP POLLHUP
+
 /* Set the One Shot behaviour for the target file descriptor */
 #define EPOLLONESHOT (1 << 30)
 

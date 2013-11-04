@@ -99,7 +99,7 @@ int *_errno(void)
 	return current_thread ? &(current_thread->unix_errno) : &dummy_errno;
 }
 
-void _assert (const char *assertion, const char *file, int line)
+void _assert (const char *assertion, const char *file, unsigned int line)
 {
 	printk ("Detected: %s %u:Assertion %s failed!\n", file, line, assertion);
 	dump_stack();

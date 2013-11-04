@@ -1,7 +1,7 @@
 #ifndef _UK_ASSERT_H_
 #define _UK_ASSERT_H_
 
-#define NDEBUG
+//#define NDEBUG
 
 #undef assert
 
