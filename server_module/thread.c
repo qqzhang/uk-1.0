@@ -717,6 +717,9 @@ static int wait_on( unsigned int count, struct object *objects[], int flags, tim
     unsigned int i;
 
     if (!(wait = mem_alloc( FIELD_OFFSET(struct thread_wait, queues[count]) ))) return 0;
+#ifdef CONFIG_UNIFIED_KERNEL
+    local_bh_disable();
+#endif
     wait->next    = current_thread->wait;
     wait->thread  = current_thread;
     wait->count   = count;
@@ -733,9 +736,15 @@ static int wait_on( unsigned int count, struct object *objects[], int flags, tim
         {
             wait->count = i;
             end_wait( current_thread );
+#ifdef CONFIG_UNIFIED_KERNEL
+            local_bh_enable();
+#endif
             return 0;
         }
     }
+#ifdef CONFIG_UNIFIED_KERNEL
+    local_bh_enable();
+#endif
     return 1;
 }
 
@@ -853,6 +862,9 @@ int wake_thread( struct thread *thread )
     int signaled, count;
     client_ptr_t cookie;
 
+#ifdef CONFIG_UNIFIED_KERNEL
+    local_bh_disable();
+#endif
     for (count = 0; thread->wait; count++)
     {
         if ((signaled = check_wait( thread )) == -1) break;
@@ -863,6 +875,9 @@ int wake_thread( struct thread *thread )
         if (send_thread_wakeup( thread, cookie, signaled ) == -1) /* error */
 	    break;
     }
+#ifdef CONFIG_UNIFIED_KERNEL
+    local_bh_enable();
+#endif
     return count;
 }
 
@@ -873,6 +888,9 @@ static void thread_timeout( void *ptr )
     struct thread *thread = wait->thread;
     client_ptr_t cookie = wait->cookie;
 
+#ifdef CONFIG_UNIFIED_KERNEL
+    local_bh_disable();
+#endif
     wait->user = NULL;
     if (thread->wait != wait) return; /* not the top-level wait, ignore it */
     if (thread->suspend + thread->process->suspend > 0) return;  /* suspended, ignore it */
@@ -882,6 +900,9 @@ static void thread_timeout( void *ptr )
     if (send_thread_wakeup( thread, cookie, STATUS_TIMEOUT ) == -1) return;
     /* check if other objects have become signaled in the meantime */
     wake_thread( thread );
+#ifdef CONFIG_UNIFIED_KERNEL
+    local_bh_enable();
+#endif
 }
 
 /* try signaling an event flag, a semaphore or a mutex */
@@ -920,9 +941,17 @@ static timeout_t select_on( unsigned int count, client_ptr_t cookie, const obj_h
             break;
     }
 
+#ifdef CONFIG_UNIFIED_KERNEL
+    if (i < count) goto done_1;
+    if (!wait_on( count, objects, flags, timeout )) goto done_1;
+#else
     if (i < count) goto done;
     if (!wait_on( count, objects, flags, timeout )) goto done;
+#endif
 
+#ifdef CONFIG_UNIFIED_KERNEL
+    local_bh_disable();
+#endif
     /* signal the object */
     if (signal_obj)
     {
@@ -936,16 +965,14 @@ static timeout_t select_on( unsigned int count, client_ptr_t cookie, const obj_h
     }
 
 #ifdef CONFIG_UNIFIED_KERNEL
-    local_bh_disable();
+    if (!current_thread->wait) goto done;
 #endif
+
     if ((ret = check_wait( current_thread )) != -1)
     {
         /* condition is already satisfied */
         end_wait( current_thread );
         set_error( ret );
-#ifdef CONFIG_UNIFIED_KERNEL
-        local_bh_enable();
-#endif
         goto done;
     }
 
@@ -962,19 +989,17 @@ static timeout_t select_on( unsigned int count, client_ptr_t cookie, const obj_h
 #endif
         {
             end_wait( current_thread );
-#ifdef CONFIG_UNIFIED_KERNEL
-            local_bh_enable();
-#endif
             goto done;
         }
     }
     current_thread->wait->cookie = cookie;
     set_error( STATUS_PENDING );
-#ifdef CONFIG_UNIFIED_KERNEL
-    local_bh_enable();
-#endif
 
 done:
+#ifdef CONFIG_UNIFIED_KERNEL
+    local_bh_enable();
+done_1:
+#endif
     while (i > 0) release_object( objects[--i] );
     return timeout;
 }

@@ -645,7 +645,9 @@ static int __uk_pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key,
     if(uk_pwq->fd != NULL && poll_events != 0)
     {
         spin_unlock(&entry->wait_address->lock);
+        local_irq_enable();
         fd_poll_event(uk_pwq->fd, poll_events );
+        local_irq_disable();
         spin_lock(&entry->wait_address->lock);
     }
 
