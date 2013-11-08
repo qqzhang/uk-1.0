@@ -98,7 +98,25 @@ void close_objects(void)
 #endif  /* DEBUG_OBJECTS */
 
 /*****************************************************************/
+#ifdef MEM_LEAK_CHECK
+/* malloc replacement */
+void *_mem_alloc( size_t size, const char *func, const char *filename, int lineno )
+{
+    void *ptr = _malloc( size, func, filename, lineno );
+    if (ptr) memset( ptr, 0x55, size );
+    else set_error( STATUS_NO_MEMORY );
+    return ptr;
+}
 
+/* duplicate a block of memory */
+void *_memdup( const void *data, size_t len, const char *func, const char *filename, int lineno )
+{
+    void *ptr = _malloc( len, func, filename, lineno );
+    if (ptr) memcpy( ptr, data, len );
+    else set_error( STATUS_NO_MEMORY );
+    return ptr;
+}
+#else
 /* malloc replacement */
 void *mem_alloc( size_t size )
 {
@@ -116,6 +134,7 @@ void *memdup( const void *data, size_t len )
     else set_error( STATUS_NO_MEMORY );
     return ptr;
 }
+#endif
 
 
 /*****************************************************************/

@@ -111,8 +111,15 @@ struct wait_queue_entry
     struct thread  *thread;
 };
 
+#ifdef MEM_LEAK_CHECK
+void *_mem_alloc( size_t size, const char *func, const char *filename, int lineno );
+void *_memdup( const void *data, size_t len, const char *func, const char *filename, int lineno );
+#define mem_alloc(size) _mem_alloc((size), __func__, __FILE__, __LINE__)
+#define memdup( data, len ) _memdup((data), (len), __func__, __FILE__, __LINE__)
+#else
 extern void *mem_alloc( size_t size );  /* malloc wrapper */
 extern void *memdup( const void *data, size_t len );
+#endif
 extern void *alloc_object( const struct object_ops *ops );
 extern const WCHAR *get_object_name( struct object *obj, data_size_t *len );
 extern WCHAR *get_object_full_name( struct object *obj, data_size_t *ret_len );

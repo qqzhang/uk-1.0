@@ -197,6 +197,11 @@ static void __exit unifiedkernel_exit(void)
 #endif
 
     destroy_reg_name();
+
+#ifdef MEM_LEAK_CHECK
+    void print_mem_list(void);
+    print_mem_list();
+#endif
 }
 
 module_init(unifiedkernel_init);

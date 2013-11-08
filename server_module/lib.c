@@ -40,6 +40,7 @@
 #define WIN32_NO_STATUS
 #include "winternl.h"
 #include "stdio.h"
+#include "stdlib.h"
 #include "assert.h"
 #include "errno.h"
 #include "klog.h"
@@ -237,6 +238,195 @@ void* get_kernel_proc_address(char *funcname)
 }
 
 
+#ifdef MEM_LEAK_CHECK
+static LIST_HEAD(mem_leak_list);
+
+#define NAME_LEN 32
+struct mem_leak
+{
+    struct list_head entry;
+    void *p;
+    size_t size;
+    int line;
+    char filename[16];
+    char func[NAME_LEN];
+};
+
+char *strrchr(const char *s, int c)
+{
+    const char *p = s + strlen(s);
+    do
+    {
+        if (*p == (char)c)
+            return (char *)p;
+    } while (--p >= s);
+
+    return NULL;
+}
+
+void add_to_list(gfp_t flags, void *ptr, size_t size, const char *func, const char *filename, int line)
+{
+    char *p;
+    struct mem_leak *mem_leak = kzalloc(sizeof(struct mem_leak), flags);
+    if(!mem_leak)
+    {
+        klog(0," alloc mem_leak error \n");
+        return;
+    }
+
+    mem_leak->p = ptr;
+    mem_leak->line = line;
+    mem_leak->size = size;
+    strncpy(mem_leak->func, func, NAME_LEN);
+
+    p = strrchr(filename, '/');
+    strcpy(mem_leak->filename,p+1);
+
+    list_add(&mem_leak->entry, &mem_leak_list);
+}
+
+void remove_from_list(void *ptr)
+{
+    struct mem_leak *mem_leak = NULL;
+    struct list_head *pos = NULL, *pos1 = NULL;
+
+    LIST_FOR_EACH_SAFE(pos, pos1, &mem_leak_list)
+    {
+        mem_leak = (struct mem_leak *)pos;
+
+        if(mem_leak->p == ptr)
+        {
+            list_del(&mem_leak->entry);
+            kfree(mem_leak);
+        }
+    }
+}
+
+void print_mem_list(void)
+{
+    unsigned long long total=0;
+    struct mem_leak *mem_leak = NULL;
+    struct list_head *pos = NULL;
+    struct list_head *pos1 = NULL;
+
+    LIST_FOR_EACH_SAFE(pos, pos1, &mem_leak_list)
+    {
+        mem_leak = (struct mem_leak *)pos;
+
+        printk("ptr %08x size %08x %s[%d]:%s\n",\
+                mem_leak->p,mem_leak->size,mem_leak->filename,mem_leak->line,mem_leak->func);
+
+        total += mem_leak->size;
+        list_del(&mem_leak->entry);
+        kfree((void*)mem_leak);
+    }
+    printk("total %08lx\n",total);
+}
+
+void *_malloc_atomic(size_t size, const char *func, const char *filename, int line)
+{
+    void	*addr;
+
+    if (size > MAXSIZE_ALLOC || !(addr = kmalloc(size, GFP_ATOMIC)))
+    {
+        klog(0,"kmalloc size %x err, too large\n", size);
+        set_error(STATUS_NO_MEMORY);
+        return NULL;
+    }
+
+    add_to_list(GFP_ATOMIC, addr, size, func, filename, line);
+    return addr;
+}
+
+void *_malloc(size_t size, const char *func, const char *filename, int line)
+{
+    void	*addr;
+
+    if (size > MAXSIZE_ALLOC || !(addr = kmalloc(size, GFP_KERNEL)))
+    {
+        klog(0,"kmalloc size %x err, too large\n", size);
+        set_error(STATUS_NO_MEMORY);
+        return NULL;
+    }
+
+    add_to_list(GFP_KERNEL, addr, size, func, filename, line);
+    return addr;
+}
+
+void _free(void *p)
+{
+    if(p)
+    {
+        kfree(p);
+        remove_from_list(p);
+    }
+}
+
+void *_calloc(size_t nmemb, size_t size, const char *func, const char *filename, int line)
+{
+    void	*addr;
+    size_t	total = nmemb * size;
+
+    if (total > MAXSIZE_ALLOC || !(addr = _malloc(total, func, filename, line)))
+    {
+        klog(0,"kmalloc size %x err, too large\n", total);
+        set_error(STATUS_NO_MEMORY);
+        return NULL;
+    }
+
+    memset(addr, 0, total);
+
+    return addr;
+}
+
+void *_realloc_atomic(void *ptr, size_t new_size, const char *func, const char* filename, int line)
+{
+    void *new_ptr;
+
+    if (!new_size)
+    {
+        _free(ptr);
+        return NULL;
+    }
+
+    if (!ptr)
+        return _malloc_atomic(new_size, func, filename, line);
+
+    new_ptr = _malloc_atomic(new_size, func, filename, line);
+    if (new_ptr)
+    {
+        memcpy(new_ptr, ptr, new_size);
+        _free(ptr);
+    }
+
+    return new_ptr;
+}
+
+void *_realloc(void *ptr, size_t new_size, const char *func, const char* filename, int line)
+{
+    void *new_ptr;
+
+    if (!new_size)
+    {
+        _free(ptr);
+        return NULL;
+    }
+
+    if (!ptr)
+        return _malloc(new_size, func, filename, line);
+
+    new_ptr = _malloc(new_size, func, filename, line);
+    if (new_ptr)
+    {
+        memcpy(new_ptr, ptr, new_size);
+        _free(ptr);
+    }
+
+    return new_ptr;
+}
+
+#else
+
 /*stdlib.h*/
 void *malloc_atomic(size_t size)
 {
@@ -334,6 +524,7 @@ void *realloc(void *ptr, size_t new_size)
 
 	return new_ptr;
 }
+#endif
 
 void exit(int status)
 {
