@@ -3399,6 +3399,9 @@ int syscall(int number, ...)
             {
                 asmlinkage long (*sys_tgkill)(int tgid, int pid, int sig) = get_syscall(UK_tgkill);
                 int tgid, pid, sig;
+                struct task_struct *target = NULL;
+                pid_t old_tgid = -1;
+                char need_restore = 0;
 
                 va_start(ap, number);
                 tgid = va_arg(ap, int);
@@ -3406,7 +3409,25 @@ int syscall(int number, ...)
                 sig= va_arg(ap, int);
                 va_end(ap);
 
+                target = find_task_by_pid(pid);
+                if (!target)
+                {
+                    ret = -ESRCH;
+                    SYSCALL_RETURN(ret);
+                }
+                else if (target->tgid != current->tgid)
+                {
+                    old_tgid = target->tgid;
+                    target->tgid = current->tgid;
+                    need_restore = 1;
+                }
+
                 ret = sys_tgkill(tgid, pid, sig);
+
+                if (need_restore)
+                {
+                    target->tgid = old_tgid;
+                }
 
                 SYSCALL_RETURN(ret);
             }
