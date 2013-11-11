@@ -717,9 +717,6 @@ static int wait_on( unsigned int count, struct object *objects[], int flags, tim
     unsigned int i;
 
     if (!(wait = mem_alloc( FIELD_OFFSET(struct thread_wait, queues[count]) ))) return 0;
-#ifdef CONFIG_UNIFIED_KERNEL
-    local_bh_disable();
-#endif
     wait->next    = current_thread->wait;
     wait->thread  = current_thread;
     wait->count   = count;
@@ -736,15 +733,9 @@ static int wait_on( unsigned int count, struct object *objects[], int flags, tim
         {
             wait->count = i;
             end_wait( current_thread );
-#ifdef CONFIG_UNIFIED_KERNEL
-            local_bh_enable();
-#endif
             return 0;
         }
     }
-#ifdef CONFIG_UNIFIED_KERNEL
-    local_bh_enable();
-#endif
     return 1;
 }
 
@@ -920,6 +911,127 @@ static int signal_object( obj_handle_t handle )
     return ret;
 }
 
+#ifdef CONFIG_UNIFIED_KERNEL
+extern struct timeout_user *alloc_timeout_user(void);
+struct timeout_user *parse_private( timeout_callback func, void *private)
+{
+    if (func == thread_timeout)
+    {
+        struct thread_wait *wait = (struct thread_wait *)private;
+        return (struct timeout_user *)wait->user;
+    }
+    else
+    {
+        return NULL;
+    }
+}
+
+/* select on a list of handles */
+static timeout_t select_on( unsigned int count, client_ptr_t cookie, const obj_handle_t *handles,
+                            int flags, timeout_t timeout, obj_handle_t signal_obj )
+{
+    int ret;
+    unsigned int i;
+    struct object *objects[MAXIMUM_WAIT_OBJECTS];
+    struct thread_wait *wait;
+    struct wait_queue_entry *entry;
+    struct timeout_user *user = NULL;
+    char need_free = 0;
+
+    if (timeout <= 0) timeout = current_time - timeout;
+
+    if (count > MAXIMUM_WAIT_OBJECTS)
+    {
+        set_error( STATUS_INVALID_PARAMETER );
+        return 0;
+    }
+    for (i = 0; i < count; i++)
+    {
+        if (!(objects[i] = get_handle_obj( current_thread->process, handles[i], SYNCHRONIZE, NULL )))
+            break;
+    }
+
+    if (i < count) goto done_1;
+
+    if (!(wait = mem_alloc( FIELD_OFFSET(struct thread_wait, queues[count]) )))
+        goto done_1;
+
+    if (timeout != TIMEOUT_INFINITE)
+    {
+        user = alloc_timeout_user();
+        if (!user) goto done_1;
+        need_free = 1;
+    }
+
+    local_bh_disable();
+
+    wait->next    = current_thread->wait;
+    wait->thread  = current_thread;
+    wait->count   = count;
+    wait->flags   = flags;
+    wait->user    = NULL;
+    wait->timeout = timeout;
+    current_thread->wait = wait;
+
+    for (i = 0, entry = wait->queues; i < count; i++, entry++)
+    {
+        struct object *obj = objects[i];
+        entry->thread = current_thread;
+        if (!obj->ops->add_queue( obj, entry ))
+        {
+            wait->count = i;
+            end_wait( current_thread );
+            goto done;
+        }
+    }
+
+    /* signal the object */
+    if (signal_obj)
+    {
+        if (!signal_object( signal_obj ))
+        {
+            end_wait( current_thread );
+            goto done;
+        }
+        /* check if we woke ourselves up */
+        if (!current_thread->wait) goto done;
+    }
+
+    if (!current_thread->wait) goto done;
+
+    if ((ret = check_wait( current_thread )) != -1)
+    {
+        /* condition is already satisfied */
+        end_wait( current_thread );
+        set_error( ret );
+        goto done;
+    }
+
+    /* now we need to wait */
+    if (current_thread->wait->timeout != TIMEOUT_INFINITE)
+    {
+        current_thread->wait->user = user;
+        if (!(current_thread->wait->user = add_timeout_user( current_thread->wait->timeout,
+                                                      thread_timeout, current_thread->wait )))
+        {
+            end_wait( current_thread );
+            goto done;
+        }
+    }
+    current_thread->wait->cookie = cookie;
+    set_error( STATUS_PENDING );
+    need_free = 0;
+
+done:
+    local_bh_enable();
+    if (need_free) free(user);
+done_1:
+    while (i > 0) release_object( objects[--i] );
+    return timeout;
+}
+
+#else
+
 /* select on a list of handles */
 static timeout_t select_on( unsigned int count, client_ptr_t cookie, const obj_handle_t *handles,
                             int flags, timeout_t timeout, obj_handle_t signal_obj )
@@ -937,72 +1049,51 @@ static timeout_t select_on( unsigned int count, client_ptr_t cookie, const obj_h
     }
     for (i = 0; i < count; i++)
     {
-        if (!(objects[i] = get_handle_obj( current_thread->process, handles[i], SYNCHRONIZE, NULL )))
+        if (!(objects[i] = get_handle_obj( current->process, handles[i], SYNCHRONIZE, NULL )))
             break;
     }
 
-#ifdef CONFIG_UNIFIED_KERNEL
-    if (i < count) goto done_1;
-    if (!wait_on( count, objects, flags, timeout )) goto done_1;
-#else
     if (i < count) goto done;
     if (!wait_on( count, objects, flags, timeout )) goto done;
-#endif
 
-#ifdef CONFIG_UNIFIED_KERNEL
-    local_bh_disable();
-#endif
     /* signal the object */
     if (signal_obj)
     {
         if (!signal_object( signal_obj ))
         {
-            end_wait( current_thread );
+            end_wait( current );
             goto done;
         }
         /* check if we woke ourselves up */
-        if (!current_thread->wait) goto done;
+        if (!current->wait) goto done;
     }
 
-#ifdef CONFIG_UNIFIED_KERNEL
-    if (!current_thread->wait) goto done;
-#endif
-
-    if ((ret = check_wait( current_thread )) != -1)
+    if ((ret = check_wait( current )) != -1)
     {
         /* condition is already satisfied */
-        end_wait( current_thread );
+        end_wait( current );
         set_error( ret );
         goto done;
     }
 
     /* now we need to wait */
-    if (current_thread->wait->timeout != TIMEOUT_INFINITE)
+    if (current->wait->timeout != TIMEOUT_INFINITE)
     {
-#ifdef CONFIG_UNIFIED_KERNEL
-        extern struct timeout_user *add_timeout_user_atomic( timeout_t when, timeout_callback func, void *private );
-        if (!(current_thread->wait->user = add_timeout_user_atomic( current_thread->wait->timeout,
-                                                      thread_timeout, current_thread->wait )))
-#else
-        if (!(current_thread->wait->user = add_timeout_user( current_thread->wait->timeout,
-                                                      thread_timeout, current_thread->wait )))
-#endif
+        if (!(current->wait->user = add_timeout_user( current->wait->timeout,
+                                                      thread_timeout, current->wait )))
         {
-            end_wait( current_thread );
+            end_wait( current );
             goto done;
         }
     }
-    current_thread->wait->cookie = cookie;
+    current->wait->cookie = cookie;
     set_error( STATUS_PENDING );
 
 done:
-#ifdef CONFIG_UNIFIED_KERNEL
-    local_bh_enable();
-done_1:
-#endif
     while (i > 0) release_object( objects[--i] );
     return timeout;
 }
+#endif
 
 /* attempt to wake threads sleeping on the object wait queue */
 void uk_wake_up( struct object *obj, int max )

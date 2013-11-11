@@ -410,26 +410,10 @@ static inline void set_current_time(void)
 #endif
 
 #ifdef CONFIG_UNIFIED_KERNEL
-struct timeout_user *add_timeout_user_atomic( timeout_t when, timeout_callback func, void *private )
+extern struct timeout_user *parse_private( timeout_callback func, void *private);
+struct timeout_user *alloc_timeout_user(void)
 {
-    struct timeout_user *user;
-    struct list_head *ptr;
-
-    if (!(user = malloc_atomic( sizeof(*user) ))) return NULL;
-    user->when     = (when > 0) ? when : current_time - when;
-    user->callback = func;
-    user->private  = private;
-
-    /* Now insert it in the linked list */
-
-    LIST_FOR_EACH( ptr, &timeout_list )
-    {
-        struct timeout_user *timeout = LIST_ENTRY( ptr, struct timeout_user, entry );
-        if (timeout->when >= user->when) break;
-    }
-    wine_list_add_before( ptr, &user->entry );
-    wake_up_process(timer_kernel_task);
-    return user;
+    return (struct timeout_user *)mem_alloc( sizeof(struct timeout_user) );
 }
 #endif
 
@@ -439,6 +423,9 @@ struct timeout_user *add_timeout_user( timeout_t when, timeout_callback func, vo
     struct timeout_user *user;
     struct list_head *ptr;
 
+#ifdef CONFIG_UNIFIED_KERNEL
+    if (!(user = parse_private(func, private))) /*only for thread_timeout()*/
+#endif
     if (!(user = mem_alloc( sizeof(*user) ))) return NULL;
     user->when     = (when > 0) ? when : current_time - when;
     user->callback = func;
