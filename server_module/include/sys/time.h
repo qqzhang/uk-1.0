@@ -3,7 +3,12 @@
 
 #include <linux/time.h>
 
-extern time_t get_current_time(void);
+#if BITS_PER_LONG == 32
+extern long long get_current_time(void);
+#elif BITS_PER_LONG == 64
+extern long get_current_time(void);
+#endif
+
 #define current_time (get_current_time())
 #if 0
 struct timeval {

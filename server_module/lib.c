@@ -49,6 +49,7 @@
 #include "termios.h"
 #include "wine/unicode.h"
 #include "sys/sysctl.h"
+#include "sys/time.h"
 #include "lib.h"
 
 #define PREPARE_KERNEL_CALL \
@@ -63,11 +64,6 @@
 
 #define MAXSIZE_ALLOC (128*1024) //128K
 
-#define TICKSPERSEC        10000000
-#define SECSPERDAY         86400
-/* 1601 to 1970 is 369 years plus 89 leap days */
-#define SECS_1601_TO_1970  ((369 * 365 + 89) * (ULONGLONG)SECSPERDAY)
-#define TICKS_1601_TO_1970 (SECS_1601_TO_1970 * TICKSPERSEC)
 
 char *optarg = NULL;
 int optind, opterr, optopt;
@@ -2481,6 +2477,11 @@ int sprintfW( WCHAR *str, const WCHAR *format, ...)
 }
 
 /*time.h*/
+#define TICKSPERSEC        10000000
+#define SECSPERDAY         86400
+/* 1601 to 1970 is 369 years plus 89 leap days */
+#define SECS_1601_TO_1970  ((369 * 365 + 89) * (ULONGLONG)SECSPERDAY)
+#define TICKS_1601_TO_1970 (SECS_1601_TO_1970 * TICKSPERSEC)
 
 time_t time(time_t * v)
 {
@@ -2500,14 +2501,25 @@ time_t time(time_t * v)
 	return t;
 }
 
-time_t get_current_time(void)
-{
-	struct timespec ts;
+#undef timeout_t
+#if BITS_PER_LONG == 32
+#define timeout_t long long
+#elif BITS_PER_LONG == 64
+#define timeout_t long
+#endif
 
-	getnstimeofday(&ts);
-	return (time_t)ts.tv_sec * TICKSPERSEC + ts.tv_nsec / 100 + TICKS_1601_TO_1970;
+timeout_t get_current_time(void)
+{
+	struct timeval now;
+
+	PREPARE_KERNEL_CALL;
+	do_gettimeofday(&now);
+	END_KERNEL_CALL;
+
+	return (timeout_t)now.tv_sec * (timeout_t)TICKSPERSEC  + now.tv_usec * 10 + TICKS_1601_TO_1970;
 }
 
+#undef timeout_t
 #undef TICKSPERSEC
 #undef SECSPERDAY
 #undef SECS_1601_TO_1970
