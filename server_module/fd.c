@@ -554,17 +554,25 @@ int uk_remove_fd_events(struct uk_poll_wqueues *uk_pwq);
 static struct poll_table_entry *uk_poll_get_entry(struct uk_poll_wqueues *uk_pwq);
 struct file *get_unix_file( struct uk_fd *fd );
 
-/*
- * unifiedkernel use the function to poll struct file.
- */
+unsigned long inline get_pt_key(poll_table *t)
+{
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 4, 0))
+    return t->key;
+#else
+    return t->_key;
+#endif
+}
 
-# if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 4, 0))   
-#define GET_PARAM(a, b) (a->b)
-# else              
-#define GET_PARAM(a, b) (a->_##b) 
-# endif             
-    
-static inline unsigned int uk_do_poll_file(struct file *file, int events,poll_table *pwait)
+unsigned long inline set_pt_key(poll_table *t, unsigned long key)
+{
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 4, 0))
+    return t->key = key;
+#else
+    return t->_key = key;
+#endif
+}
+
+static inline unsigned int uk_do_poll_file(struct file *file, int events, poll_table *pwait)
 {
     unsigned int mask;
 
@@ -572,7 +580,8 @@ static inline unsigned int uk_do_poll_file(struct file *file, int events,poll_ta
     if (file && file->f_op && file->f_op->poll)
     {
         if (pwait)
-            GET_PARAM(pwait, key) = events|POLLERR | POLLHUP;
+            set_pt_key(pwait, events | POLLERR | POLLHUP);
+
         mask = file->f_op->poll(file, pwait);
     }
     /* Mask out unneeded events. */
@@ -587,12 +596,14 @@ static inline unsigned int uk_do_pollfd(struct pollfd *pollfd, poll_table *pwait
 
     mask = 0;
     fd = pollfd->fd;
-    if (fd >= 0) {
+    if (fd >= 0)
+    {
         struct file * file;
 
         file = fget(fd);
         mask = POLLNVAL;
-        if (file != NULL) {
+        if (file)
+        {
             uk_do_poll_file(file,pollfd->events,pwait);
             fput(file);
         }
@@ -629,7 +640,7 @@ static int __uk_pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key,
     poll_events = file->f_op->poll(file,NULL) & mask;
 
     /* use fd_poll_event to deal with events.*/
-    if(uk_pwq->fd != NULL && poll_events != 0)
+    if(uk_pwq->fd && poll_events != 0)
     {
         spin_unlock(&entry->wait_address->lock);
         local_irq_enable();
@@ -663,7 +674,7 @@ static struct poll_table_entry *uk_poll_get_entry(struct uk_poll_wqueues *uk_pwq
  * if struct file have data,must deal with it.
  * private_data is struct uk_fd
  */
-int uk_add_fd_events(struct uk_poll_wqueues *uk_pwq,struct uk_fd *fd,struct file *file,int events)
+int uk_add_fd_events(struct uk_poll_wqueues *uk_pwq, struct uk_fd *fd, struct file *file, int events)
 {
     if(uk_pwq->have_inited_flag == false)
     {
@@ -743,7 +754,7 @@ static void __uk_pollwait(struct file *filp, wait_queue_head_t *wait_address,
         get_file(filp);
         entry->filp = filp;
         entry->wait_address = wait_address;
-        entry->key = GET_PARAM(p, key);
+        entry->key = get_pt_key(p);
         init_waitqueue_func_entry(&entry->wait, uk_pollwake);
         entry->wait.private = pwq;
         add_wait_queue(wait_address, &entry->wait);
