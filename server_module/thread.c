@@ -1321,7 +1321,7 @@ int thread_get_inflight_fd( struct thread *thread, int client )
     }
     else
     {
-        klog(0,"error : dup %d \n",new_fd);
+        klog(0,"error : dup (%d) errno %d \n", client , errno);
         return -1;
     }
 }

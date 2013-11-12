@@ -554,7 +554,7 @@ int uk_remove_fd_events(struct uk_poll_wqueues *uk_pwq);
 static struct poll_table_entry *uk_poll_get_entry(struct uk_poll_wqueues *uk_pwq);
 struct file *get_unix_file( struct uk_fd *fd );
 
-unsigned long inline get_pt_key(poll_table *t)
+static inline unsigned long get_pt_key(poll_table *t)
 {
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 4, 0))
     return t->key;
@@ -563,12 +563,12 @@ unsigned long inline get_pt_key(poll_table *t)
 #endif
 }
 
-unsigned long inline set_pt_key(poll_table *t, unsigned long key)
+static inline void set_pt_key(poll_table *t, unsigned long key)
 {
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 4, 0))
-    return t->key = key;
+    t->key = key;
 #else
-    return t->_key = key;
+    t->_key = key;
 #endif
 }
 
@@ -787,22 +787,6 @@ void uk_poll_freewait(struct uk_poll_wqueues *uk_pwq)
         fput(entry->filp);
         uk_pwq->have_inited_flag = false;
     }
-}
-
-void uk_freewait_for_sock_destroy(struct uk_fd *fd)
-{
-    uk_poll_freewait(&fd->uk_pwq);
-}
-
-void uk_wake_poll_freewait(struct uk_fd *fd)
-{
-    uk_poll_freewait(&fd->uk_pwq);
-}
-
-
-int uk_wake_poll_add_fd_events(struct uk_fd *fd,struct file *file,int events)
-{
-    return uk_add_fd_events(&fd->uk_pwq,fd,file,events);
 }
 
 #endif
@@ -1882,15 +1866,14 @@ static void fd_destroy( struct object *obj )
     list_remove( &fd->inode_entry );
     if (fd->poll_index != -1) remove_poll_user( fd, fd->poll_index );
 #ifdef CONFIG_UNIFIED_KERNEL
-    /* do not poll events,fput struct file. */
     uk_poll_freewait(&fd->uk_pwq);
-    destroy_map_tbl( fd );
+    destroy_map_tbl( fd ); /* fd->unix_fd will be closed by destroy_map_tbl */
     if (fd->inode)
     {
         inode_add_closed_fd( fd->inode, fd->closed );
         release_object( fd->inode );
     }
-#else /* close unix_fd in fd_close_handle now */
+#else
     else  /* no inode, close it right away */
     {
         if (fd->unix_fd != -1) close( fd->unix_fd );
@@ -2018,7 +2001,7 @@ static struct uk_fd *alloc_fd_object(void)
     fd->event = 0;
     fd->uk_pwq.have_inited_flag = false;
     fd->creator_pid = 0;
-    fd->unix_file    = NULL;
+    fd->unix_file = NULL;
     fd->tbl_index = 0;
     fd->map_tbl = malloc(sizeof(struct pid_fd_map) * DEFAULT_MAP_NUM);
     if (!fd->map_tbl)
@@ -2072,7 +2055,7 @@ struct uk_fd *alloc_pseudo_fd( const struct fd_ops *fd_user_ops, struct object *
     fd->event = 0;
     fd->uk_pwq.have_inited_flag = false;
     fd->creator_pid = 0;
-    fd->unix_file    = NULL;
+    fd->unix_file = NULL;
     fd->tbl_index = 0;
     fd->map_tbl = malloc(sizeof(struct pid_fd_map) * DEFAULT_MAP_NUM);
     if (!fd->map_tbl)
@@ -2465,7 +2448,13 @@ int get_unix_fd_by_pid(struct uk_fd *fd, pid_t pid)
 {
     int new_fd;
 
-    new_fd = find_unix_fd_by_pid(fd, current->pid);
+    if (!fd->unix_file)
+    {
+        klog(0,"fd->unix_file is NULL\n");
+        return -1;
+    }
+
+    new_fd = find_unix_fd_by_pid(fd, pid);
     if (new_fd != -1)
     {
         return new_fd;
@@ -2476,12 +2465,6 @@ int get_unix_fd_by_pid(struct uk_fd *fd, pid_t pid)
     if (new_fd<0)
     {
         klog(0,"get_unused_fd() error \n");
-        return -1;
-    }
-
-    if (!fd->unix_file)
-    {
-        klog(0,"fd->unix_file is NULL\n");
         return -1;
     }
 
@@ -2510,6 +2493,7 @@ int get_unix_fd_by_pid(struct uk_fd *fd, pid_t pid)
         {
             new_tbl = realloc(fd->map_tbl, sizeof(struct pid_fd_map) * new_size);
         }
+
         if (!new_tbl)
         {
             klog(0, "realloc error \n");
@@ -2521,7 +2505,7 @@ int get_unix_fd_by_pid(struct uk_fd *fd, pid_t pid)
             fd->map_tbl[fd->tbl_index].pid = pid;
             fd->map_tbl[fd->tbl_index].unix_fd = new_fd;
             fd->tbl_index++;
-            fd->max_index  = new_size;
+            fd->max_index = new_size;
             return new_fd;
         }
     }
@@ -2574,7 +2558,7 @@ struct file *get_unix_file( struct uk_fd *fd )
     }
     else
     {
-        klog(0," unix_fd is invalid \n");
+        klog(0,"error:fd->unix_file is NULL \n");
         return NULL;
     }
 }
