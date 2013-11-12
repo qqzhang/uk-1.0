@@ -20,12 +20,14 @@
  *   Dec 2008 - Created.
  */
 #include <linux/kernel.h>
+#include <linux/version.h>
 #include <linux/syscalls.h>
 #include <linux/slab.h>
 #include <linux/module.h>
 #include <linux/cred.h> /* for getuid() */
 #include <linux/file.h>
 #include <linux/fdtable.h>
+#include <linux/pid.h>
 #include <asm/uaccess.h>
 #if 0
 #include <linux/fs.h>
@@ -2581,9 +2583,19 @@ int attach_files(struct files_struct *files)
     }
 }
 
-struct task_struct *find_task_by_pid(pid_t pid)
+struct task_struct *uk_find_task_by_pid(pid_t pid)
 {
-    return get_pid_task(find_get_pid(pid), PIDTYPE_PID);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,19)) 
+    struct task_struct *t;
+
+    rcu_read_lock();
+    t = pid_task(find_pid_ns(pid, ns_of_pid(task_pid(current))), PIDTYPE_PID);
+    rcu_read_lock();
+
+    return t;
+#else
+    return find_task_by_pid(pid);
+#endif
 }
 
 void restore_files(struct files_struct *orig_files)
@@ -2603,7 +2615,7 @@ int close_fd_by_pid(pid_t pid, int fd)
 {
     int ret = 0;
     struct files_struct *orig_files = current->files;
-    struct task_struct *task = find_task_by_pid(pid);
+    struct task_struct *task = uk_find_task_by_pid(pid);
 
     if (task)
     {
@@ -3483,7 +3495,7 @@ long ptrace(int request, ...)
     data = va_arg(ap, unsigned long);
     va_end(ap);
 
-    child = find_task_by_pid(pid);
+    child = uk_find_task_by_pid(pid);
     if (!child)
     {
         klog(0,"child is killed \n");
@@ -3612,7 +3624,7 @@ int syscall(int number, ...)
                 sig= va_arg(ap, int);
                 va_end(ap);
 
-                target = find_task_by_pid(pid);
+                target = uk_find_task_by_pid(pid);
                 if (!target)
                 {
                     ret = -ESRCH;

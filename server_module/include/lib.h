@@ -163,7 +163,7 @@ int syscall(int number, ...);
 int getrlimit(int resource, struct rlimit *rlim);
 
 int close_fd_by_pid(pid_t pid, int fd);
-struct task_struct *find_task_by_pid(pid_t pid);
+struct task_struct *uk_find_task_by_pid(pid_t pid);
 
 enum syscalls
 {
