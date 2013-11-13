@@ -2609,6 +2609,23 @@ int fd_close_handle( struct object *obj, struct process *process, obj_handle_t h
 }
 
 /* check if events are pending and if yes return which one(s) */
+#ifdef CONFIG_UNIFIED_KERNEL
+int check_fd_events( struct uk_fd *fd, int events )
+{
+    struct file *filp;
+    int mask = 0;
+
+    if (get_unix_fd(fd) == -1) return POLLERR;
+    if (fd->inode) return events;  /* regular files are always signaled */
+
+    filp = get_unix_file(fd);
+    if (filp && filp->f_op && filp->f_op->poll)
+    {
+        mask = filp->f_op->poll(filp, NULL);
+    }
+    return mask & events;
+}
+#else
 int check_fd_events( struct uk_fd *fd, int events )
 {
     struct pollfd pfd;
@@ -2621,6 +2638,7 @@ int check_fd_events( struct uk_fd *fd, int events )
     if (poll( &pfd, 1, 0 ) <= 0) return 0;
     return pfd.revents;
 }
+#endif
 
 /* default signaled() routine for objects that poll() on an fd */
 int default_fd_signaled( struct object *obj, struct thread *thread )

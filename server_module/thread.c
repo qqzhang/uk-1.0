@@ -872,6 +872,38 @@ int wake_thread( struct thread *thread )
     return count;
 }
 
+#ifdef CONFIG_UNIFIED_KERNEL
+/* thread wait timeout */
+static void thread_timeout( void *ptr )
+{
+    struct thread_wait *wait = ptr;
+    struct thread *thread;
+    client_ptr_t cookie;
+
+    local_bh_disable();
+
+    thread = wait->thread;
+    cookie = wait->cookie;
+
+    wait->user = NULL;
+    if (thread->wait != wait) goto out; /* not the top-level wait, ignore it */
+    if (thread->suspend + thread->process->suspend > 0) goto out;  /* suspended, ignore it */
+
+    if (debug_level) fprintf( stderr, "%04x: *wakeup* signaled=TIMEOUT\n", thread->id );
+    end_wait( thread );
+
+    local_bh_enable();
+
+    if (send_thread_wakeup( thread, cookie, STATUS_TIMEOUT ) == -1) return;
+    /* check if other objects have become signaled in the meantime */
+    wake_thread( thread );
+    return;
+
+out:
+    local_bh_enable();
+    return;
+}
+#else
 /* thread wait timeout */
 static void thread_timeout( void *ptr )
 {
@@ -879,9 +911,6 @@ static void thread_timeout( void *ptr )
     struct thread *thread = wait->thread;
     client_ptr_t cookie = wait->cookie;
 
-#ifdef CONFIG_UNIFIED_KERNEL
-    local_bh_disable();
-#endif
     wait->user = NULL;
     if (thread->wait != wait) return; /* not the top-level wait, ignore it */
     if (thread->suspend + thread->process->suspend > 0) return;  /* suspended, ignore it */
@@ -891,10 +920,8 @@ static void thread_timeout( void *ptr )
     if (send_thread_wakeup( thread, cookie, STATUS_TIMEOUT ) == -1) return;
     /* check if other objects have become signaled in the meantime */
     wake_thread( thread );
-#ifdef CONFIG_UNIFIED_KERNEL
-    local_bh_enable();
-#endif
 }
+#endif
 
 /* try signaling an event flag, a semaphore or a mutex */
 static int signal_object( obj_handle_t handle )
