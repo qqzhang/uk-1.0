@@ -1244,7 +1244,9 @@ size_t server_init_thread( void *entry_point )
     wine_server_send_fd( reply_pipe[1] );
     wine_server_send_fd( ntdll_get_thread_data()->wait_fd[1] );
     ntdll_get_thread_data()->reply_fd = reply_pipe[0];
+#ifndef CONFIG_UNIFIED_KERNEL
     close( reply_pipe[1] );
+#endif
 
     SERVER_START_REQ( init_thread )
     {
@@ -1264,6 +1266,10 @@ size_t server_init_thread( void *entry_point )
         server_cpus       = reply->all_cpus;
     }
     SERVER_END_REQ;
+
+#ifdef CONFIG_UNIFIED_KERNEL
+    close( reply_pipe[1] );
+#endif
 
     is_wow64 = !is_win64 && (server_cpus & (1 << CPU_x86_64)) != 0;
     ntdll_get_thread_data()->wow64_redir = is_wow64;

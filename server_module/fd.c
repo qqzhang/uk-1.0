@@ -642,11 +642,7 @@ static int __uk_pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key,
     /* use fd_poll_event to deal with events.*/
     if(uk_pwq->fd && poll_events != 0)
     {
-        spin_unlock(&entry->wait_address->lock);
-        local_irq_enable();
         fd_poll_event(uk_pwq->fd, poll_events );
-        local_irq_disable();
-        spin_lock(&entry->wait_address->lock);
     }
 
     return 1;
@@ -655,13 +651,22 @@ static int __uk_pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key,
 static int uk_pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key)
 {
     struct poll_table_entry *entry;
+    int ret;
 
     entry = container_of(wait, struct poll_table_entry, wait);
 
     if (key && !((unsigned long)key & entry->key))
         return 0;
 
-    return __uk_pollwake(wait, mode, sync, key,entry->key);
+    spin_unlock(&entry->wait_address->lock);
+    local_irq_enable();
+
+    ret = __uk_pollwake(wait, mode, sync, key,entry->key);
+
+    local_irq_disable();
+    spin_lock(&entry->wait_address->lock);
+
+    return ret;
 }
 
 /* only one poll_table_entry */
@@ -1203,8 +1208,6 @@ void timer_loop(void)
 {
     unsigned int msecs, timeout, next;
 
-    msecs = 10000;
-    timeout = msecs_to_jiffies(msecs) + 1;
     while (1)
     {
         next = get_next_timeout();
@@ -1213,16 +1216,11 @@ void timer_loop(void)
             return;
         }
 
+        msecs = (next==-1) ? 10000 : next;
+        timeout = msecs_to_jiffies(msecs) + 1;
+
         set_current_state(TASK_INTERRUPTIBLE);
-        if (next == -1)
-        {
-            schedule_timeout(timeout);
-        }
-        else
-        {
-            next = msecs_to_jiffies(next) + 1;
-            schedule_timeout(next);
-        }
+        schedule_timeout(timeout);
     }
 }
 #endif
