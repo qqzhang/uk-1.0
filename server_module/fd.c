@@ -2089,11 +2089,11 @@ struct uk_fd *dup_fd_object( struct uk_fd *orig, unsigned int access, unsigned i
         strcpy( fd->unix_name, orig->unix_name );
     }
 
+#ifdef CONFIG_UNIFIED_KERNEL
     if (orig->inode)
     {
         struct closed_fd *closed = mem_alloc( sizeof(*closed) );
         if (!closed) goto failed;
-#ifdef CONFIG_UNIFIED_KERNEL
         if (orig->creator_pid == current->pid)
         {
             if ((fd->unix_fd = dup( orig->unix_fd )) == -1)
@@ -2102,25 +2102,30 @@ struct uk_fd *dup_fd_object( struct uk_fd *orig, unsigned int access, unsigned i
                 free( closed );
                 goto failed;
             }
-            fd->creator_pid = current->pid;
-            fd->unix_file = orig->unix_file;
         }
         else
         {
-            fd->unix_fd = get_unix_fd(orig);
-            fd->creator_pid = current->pid;
-            fd->unix_file = orig->unix_file;
+            int new_fd = -1;
+            new_fd = get_unused_fd();
+            if (new_fd<0)
+            {
+                klog(0,"get_unused_fd() error %d\n",new_fd);
+                errno = -new_fd;
+                file_set_error();
+                goto failed;
+            }
+
+            fd_install(new_fd, orig->unix_file);
+            get_file(fd->unix_file);
+            fd->unix_fd = new_fd;
         }
+        fd->creator_pid = current->pid;
+        fd->unix_file = orig->unix_file;
+        fd->map_tbl[fd->tbl_index].pid = current->pid;
+        fd->map_tbl[fd->tbl_index].unix_fd = fd->unix_fd;
+        fd->tbl_index++;
+
         closed->unix_fd = -1;
-#else
-        if ((fd->unix_fd = dup( orig->unix_fd )) == -1)
-        {
-            file_set_error();
-            free( closed );
-            goto failed;
-        }
-        closed->unix_fd = fd->unix_fd;
-#endif
         closed->unlink[0] = 0;
         fd->closed = closed;
         fd->inode = (struct uk_inode *)grab_object( orig->inode );
@@ -2131,22 +2136,60 @@ struct uk_fd *dup_fd_object( struct uk_fd *orig, unsigned int access, unsigned i
             goto failed;
         }
     }
-#ifdef CONFIG_UNIFIED_KERNEL
-    else if (orig->creator_pid == current->pid)
+    else
     {
+        if (orig->creator_pid == current->pid)
+        {
+            if ((fd->unix_fd = dup( orig->unix_fd )) == -1)
+            {
+                file_set_error();
+                goto failed;
+            }
+        }
+        else
+        {
+            int new_fd = -1;
+            new_fd = get_unused_fd();
+            if (new_fd<0)
+            {
+                klog(0,"get_unused_fd() error %d\n",new_fd);
+                errno = -new_fd;
+                file_set_error();
+                goto failed;
+            }
+
+            fd_install(new_fd, orig->unix_file);
+            get_file(fd->unix_file);
+            fd->unix_fd = new_fd;
+        }
+        fd->creator_pid = current->pid;
+        fd->unix_file = orig->unix_file;
+        fd->map_tbl[fd->tbl_index].pid = current->pid;
+        fd->map_tbl[fd->tbl_index].unix_fd = fd->unix_fd;
+        fd->tbl_index++;
+    }
+#else
+    if (orig->inode)
+    {
+        struct closed_fd *closed = mem_alloc( sizeof(*closed) );
+        if (!closed) goto failed;
         if ((fd->unix_fd = dup( orig->unix_fd )) == -1)
         {
             file_set_error();
+            free( closed );
             goto failed;
         }
-        fd->creator_pid = current->pid;
+        closed->unix_fd = fd->unix_fd;
+        closed->unlink[0] = 0;
+        fd->closed = closed;
+        fd->inode = (struct uk_inode *)grab_object( orig->inode );
+        wine_list_add_head( &fd->inode->open, &fd->inode_entry );
+        if ((err = check_sharing( fd, access, sharing, 0, options )))
+        {
+            set_error( err );
+            goto failed;
+        }
     }
-    else
-    {
-        fd->unix_fd = get_unix_fd(orig);
-        fd->creator_pid = current->pid;
-    }
-#else
     else if ((fd->unix_fd = dup( orig->unix_fd )) == -1)
     {
         file_set_error();
