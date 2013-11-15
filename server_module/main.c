@@ -173,6 +173,7 @@ static int __init unifiedkernel_init(void)
 	create_syscall_chardev();
 	init_directories();
 	/*init_registry(); */ /* NtEarlyInit will call uk_init_registry() */
+	init_uk_lock();
 
 	timer_kernel_task = kthread_create((void*)timer_loop, NULL, "timer_thread");
 	if(!IS_ERR(timer_kernel_task))

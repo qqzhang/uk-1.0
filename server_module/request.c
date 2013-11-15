@@ -1139,6 +1139,7 @@ static long syscall_chardev_unlocked_ioctl(struct file *filp, unsigned int cmd, 
         return STATUS_INVALID_PARAMETER;
 	}
 
+    uk_lock();
 	switch (cmd) 
 	{
 		case Nt_None:
@@ -1158,6 +1159,7 @@ static long syscall_chardev_unlocked_ioctl(struct file *filp, unsigned int cmd, 
 		default:
 			break;
 	}
+    uk_unlock();
 
 	return err;
 }

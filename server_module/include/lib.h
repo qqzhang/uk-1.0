@@ -291,4 +291,8 @@ extern void *syscall_array[UK_NR_SYSCALLS];
 
 #define get_syscall(n) syscall_array[n]
 
+extern void init_uk_lock(void);
+extern void uk_lock(void);
+extern void uk_unlock(void);
+
 #endif

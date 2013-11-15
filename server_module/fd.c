@@ -1190,7 +1190,9 @@ void timer_loop(void)
 
     while (1)
     {
+        uk_lock();
         next = get_next_timeout();
+        uk_unlock();
         if (kthread_should_stop())
         {
             return;

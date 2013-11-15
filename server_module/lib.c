@@ -209,7 +209,7 @@ void get_kallsyms_lookup_name(void)
 	} 
 	else 
 	{
-		printk("kallsyms_lookup_name=%08x \n",(unsigned int)kallsyms_lookup_name_ptr);
+		printk("UK:kallsyms_lookup_name=%08x \n",(unsigned int)kallsyms_lookup_name_ptr);
 	}
 
     for(i=0; i<UK_NR_SYSCALLS; i++)
@@ -3731,5 +3731,71 @@ int tcflush(int fd, int queue_selector)
 	//return __ioctl (fd, TCFLSH, queue_selector);
 	klog(0,"NOT IMPLEMENT!\n");
 	return 0;
+}
+
+/* uk_lock / uk_unlock*/
+
+static struct semaphore uk_sem;
+
+struct uk_lock_operations
+{
+    void (*lock)(void);
+    void (*unlock)(void);
+};
+
+static struct uk_lock_operations *uk_lock_ops;
+
+void biglock_lock(void)
+{
+    down(&uk_sem);
+}
+
+void biglock_unlock(void)
+{
+    up(&uk_sem);
+}
+
+static struct uk_lock_operations uk_biglock_ops = {
+    .lock = biglock_lock,
+    .unlock = biglock_unlock,
+};
+
+void dummy_lock(void)
+{
+}
+
+void dummy_unlock(void)
+{
+}
+
+static struct uk_lock_operations uk_nolock_ops = {
+    .lock = dummy_lock,
+    .unlock = dummy_unlock,
+};
+
+
+void init_uk_lock(void)
+{
+    sema_init(&uk_sem, 1);
+
+    if (nr_cpu_ids == 1)
+    {
+        uk_lock_ops = &uk_nolock_ops;
+    }
+    else /*  use biglock */
+    {
+        printk("UK:nr_cpu_ids=%d, use biglock \n",nr_cpu_ids);
+        uk_lock_ops = &uk_biglock_ops;
+    }
+}
+
+void uk_lock(void)
+{
+    uk_lock_ops->lock();
+}
+
+void uk_unlock(void)
+{
+    uk_lock_ops->unlock();
 }
 
