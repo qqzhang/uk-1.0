@@ -162,7 +162,7 @@ int syscall(int number, ...);
 /* sys/resource.h*/
 int getrlimit(int resource, struct rlimit *rlim);
 
-int close_fd_by_pid(pid_t pid, int fd);
+int close_fd_by_pid(int fd, pid_t pid);
 struct task_struct *uk_find_task_by_pid(pid_t pid);
 
 enum syscalls

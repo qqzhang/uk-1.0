@@ -2585,7 +2585,7 @@ void destroy_map_tbl(struct uk_fd *fd)
                 if (fd->map_tbl[i].pid == current->pid)
                     close(fd->map_tbl[i].unix_fd);
                 else
-                    close_fd_by_pid(fd->map_tbl[i].pid, fd->map_tbl[i].unix_fd);
+                    close_fd_by_pid(fd->map_tbl[i].unix_fd, fd->map_tbl[i].pid);
             }
         }
 

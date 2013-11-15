@@ -2566,27 +2566,9 @@ long close(unsigned int fd)
 	SYSCALL_RETURN(ret);
 }
 
-int attach_files(struct files_struct *files)
-{
-    struct task_struct *tsk = current;
-
-    if (files)
-    {
-        task_lock(tsk);
-        atomic_inc(&files->count);
-        tsk->files = files;
-        task_unlock(tsk);
-        return 0;
-    }
-    else
-    {
-        return -1;
-    }
-}
-
 struct task_struct *uk_find_task_by_pid(pid_t pid)
 {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,19)) 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,19))
     struct task_struct *t;
 
     rcu_read_lock();
@@ -2599,34 +2581,84 @@ struct task_struct *uk_find_task_by_pid(pid_t pid)
 #endif
 }
 
-void restore_files(struct files_struct *orig_files)
+int attach_files(struct task_struct *task, struct files_struct *files)
 {
-    struct task_struct *tsk = current;
-
-    task_lock(tsk);
-    if (tsk->files != orig_files)
+    if (files)
     {
-        atomic_dec(&tsk->files->count);
-        tsk->files = orig_files;
+        task_lock(task);
+        task->files = files;
+        task_unlock(task);
+        return 0;
     }
-    task_unlock(tsk);
+    else
+    {
+        return -1;
+    }
 }
 
-int close_fd_by_pid(pid_t pid, int fd)
+void restore_files(struct task_struct *task, struct files_struct *orig_files)
+{
+    task_lock(task);
+    if (task->files != orig_files)
+    {
+        task->files = orig_files;
+    }
+    task_unlock(task);
+}
+
+struct files_struct *get_files(struct task_struct *task)
+{
+    struct files_struct *files;
+
+    task_lock(task);
+    files = task->files;
+    if (files)
+        atomic_inc(&files->count);
+    task_unlock(task);
+
+    return files;
+}
+
+void put_files(struct files_struct *files)
+{
+    if (atomic_dec_and_test(&files->count))
+    {
+        klog(0,"NON IMPLEMENT \n");
+    }
+}
+
+int close_fd_by_pid(int fd, pid_t pid)
 {
     int ret = 0;
-    struct files_struct *orig_files = current->files;
-    struct task_struct *task = uk_find_task_by_pid(pid);
+    struct files_struct *ofiles, *tfiles;
+    struct task_struct *task;
 
-    if (task)
+    task = uk_find_task_by_pid(pid);
+    if (!task)
     {
-        ret = attach_files(task->files);
-        if (ret<0)
-            return ret;
-        ret = close(fd);
-        restore_files(orig_files);
+        klog(0,"target task %d is exit \n", pid);
+        return -ESRCH;
     }
 
+    ofiles = get_files(current);
+
+    tfiles = get_files(task);
+    if (!tfiles)
+    {
+        klog(0,"target files is NULL \n");
+        ret = -EBADF;
+        goto out;
+    }
+
+    ret = attach_files(current, tfiles);
+    put_files(tfiles);
+    if (ret<0) goto out;
+
+    ret = close(fd);
+    restore_files(current, ofiles);
+
+out:
+    if (ofiles) put_files(ofiles);
     return ret;
 }
 
