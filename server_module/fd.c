@@ -186,6 +186,10 @@ struct uk_poll_wqueues
     int	pending_event;
 };
 
+#define FD_UNINIT 0x1
+#define FD_ADDED  0x2
+#define FD_REMOVED 0x4
+
 #define DEFAULT_MAP_NUM 16
 struct pid_fd_map
 {
@@ -228,7 +232,8 @@ struct uk_fd
     int max_index;
     struct pid_fd_map   *map_tbl;
     struct uk_poll_wqueues	uk_pwq;
-    int event;
+    int events;
+    atomic_t state;
 #endif
 };
 
@@ -801,30 +806,6 @@ static inline void init_epoll(void)
     epoll_fd = epoll_create( 128 );
 }
 
-#ifdef CONFIG_UNIFIED_KERNEL
-/* set the events that epoll waits for on this fd; helper for set_fd_events */
-static inline void set_fd_epoll_events( struct uk_fd *fd, int user, int events )
-{
-    if (events == -1)  /* stop waiting on this fd completely */
-    {
-        if (pollfd[user].fd == -1) return;  /* already removed */
-        //ctl = EPOLL_CTL_DEL;
-        uk_remove_fd_events(&fd->uk_pwq);
-    }
-    else if (pollfd[user].fd == -1)
-    {
-        if (pollfd[user].events) return;  /* stopped waiting on it, don't restart */
-        //ctl = EPOLL_CTL_ADD;
-        uk_add_fd_events(&fd->uk_pwq,fd,get_unix_file(fd),events);
-    }
-    else
-    {
-        if (pollfd[user].events == events) return;  /* nothing to do */
-        //ctl = EPOLL_CTL_MOD;
-        uk_modify_fd_events(&fd->uk_pwq,events);
-    }
-}
-#else
 /* set the events that epoll waits for on this fd; helper for set_fd_events */
 static inline void set_fd_epoll_events( struct uk_fd *fd, int user, int events )
 {
@@ -863,7 +844,6 @@ static inline void set_fd_epoll_events( struct uk_fd *fd, int user, int events )
         else perror( "epoll_ctl" );  /* should not happen */
     }
 }
-#endif
 
 static inline void remove_epoll_user( struct uk_fd *fd, int user )
 {
@@ -1928,6 +1908,41 @@ static unsigned int check_sharing( struct uk_fd *fd, unsigned int access, unsign
 }
 
 /* set the events that select waits for on this fd */
+#ifdef CONFIG_UNIFIED_KERNEL
+void set_fd_events( struct uk_fd *fd, int events )
+{
+    if (events == -1)  /* stop waiting on this fd completely */
+    {
+        if (atomic_read(&fd->state)==FD_REMOVED) goto done;  /* already removed */
+        //ctl = EPOLL_CTL_DEL;
+        uk_remove_fd_events(&fd->uk_pwq);
+        atomic_set(&fd->state,FD_REMOVED);
+    }
+    else if (atomic_read(&fd->state) != FD_ADDED)
+    {
+        if (fd->events) goto done;  /* stopped waiting on it, don't restart */
+        //ctl = EPOLL_CTL_ADD;
+        uk_add_fd_events(&fd->uk_pwq,fd,get_unix_file(fd),events);
+        atomic_set(&fd->state, FD_ADDED);
+    }
+    else
+    {
+        if (fd->events == events) goto done;  /* nothing to do */
+        //ctl = EPOLL_CTL_MOD;
+        uk_modify_fd_events(&fd->uk_pwq,events);
+    }
+
+done:
+    if (events == -1)  /* stop waiting on this fd completely */
+    {
+        fd->events = POLLERR;
+    }
+    else if (atomic_read(&fd->state)==FD_ADDED || !fd->events)
+    {
+        fd->events = events;
+    }
+}
+#else
 void set_fd_events( struct uk_fd *fd, int events )
 {
     int user = fd->poll_index;
@@ -1947,6 +1962,7 @@ void set_fd_events( struct uk_fd *fd, int events )
         pollfd[user].events = events;
     }
 }
+#endif
 
 /* prepare an fd for unmounting its corresponding device */
 static inline void unmount_fd( struct uk_fd *fd )
@@ -1996,7 +2012,8 @@ static struct uk_fd *alloc_fd_object(void)
     list_init( &fd->inode_entry );
     list_init( &fd->locks );
 #ifdef CONFIG_UNIFIED_KERNEL
-    fd->event = 0;
+    fd->events = 0;
+    atomic_set(&fd->state, FD_UNINIT);
     fd->uk_pwq.have_inited_flag = false;
     fd->creator_pid = 0;
     fd->unix_file = NULL;
@@ -2012,13 +2029,14 @@ static struct uk_fd *alloc_fd_object(void)
         memset(fd->map_tbl, -1, sizeof(struct pid_fd_map) * DEFAULT_MAP_NUM);
         fd->max_index = DEFAULT_MAP_NUM;
     }
-#endif
+#else
 
     if ((fd->poll_index = add_poll_user( fd )) == -1)
     {
         release_object( fd );
         return NULL;
     }
+#endif
     return fd;
 }
 
@@ -2050,7 +2068,8 @@ struct uk_fd *alloc_pseudo_fd( const struct fd_ops *fd_user_ops, struct object *
     list_init( &fd->inode_entry );
     list_init( &fd->locks );
 #ifdef CONFIG_UNIFIED_KERNEL
-    fd->event = 0;
+    fd->events = 0;
+    atomic_set(&fd->state, FD_UNINIT);
     fd->uk_pwq.have_inited_flag = false;
     fd->creator_pid = 0;
     fd->unix_file = NULL;
