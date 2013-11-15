@@ -1,5 +1,5 @@
 #include <linux/kernel.h>
-#include <linux/module.h>
+//#include <linux/module.h>
 #include <linux/string.h>
 #include <linux/sched.h>
 

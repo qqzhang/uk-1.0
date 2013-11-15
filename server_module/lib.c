@@ -66,6 +66,7 @@
 
 #define MAXSIZE_ALLOC (128*1024) //128K
 
+#define stdin   ((FILE*)0)
 
 char *optarg = NULL;
 int optind, opterr, optopt;

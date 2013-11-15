@@ -29,7 +29,7 @@ typedef struct _iobuf
 } FILE;
 
 
-#define stdin   ((FILE*)0)
+//#define stdin   ((FILE*)0) /*define in lib.c*/
 #define stdout  ((FILE*)1)
 #define stderr  ((FILE*)2)
 

@@ -1,8 +1,12 @@
 #ifndef _STRING_H_
 #define _STRING_H_
 
-#include <linux/types.h>
+#include <linux/string.h>
 
+char* strdup(const char* buf);
+char* strerror(int);
+
+#if 0
 void*    memchr(const void*,int,size_t);
 int      memcmp(const void*,const void*,size_t);
 void*    memcpy(void*,const void*,size_t);
@@ -47,5 +51,6 @@ char* strnset(char* str, int value, unsigned int len);
 char* strrev(char* str);
 char* strset(char* str, int value);
 char* strupr(char* str);
+#endif
 
 #endif
