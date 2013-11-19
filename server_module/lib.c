@@ -653,8 +653,6 @@ FILE* fdopen(int fd, const char *mode)
     filp->f_flags |= flags;
     fp->filp = filp;
 
-    fput(filp);
-
     return fp;
 }
 
