@@ -295,6 +295,13 @@ static void sock_wake_up( struct sock *sock )
     }
 }
 
+#ifdef CONFIG_UNIFIED_KERNEL
+extern int uk_sock_error( struct uk_fd *fd );
+static inline int sock_error( struct uk_fd *fd )
+{
+    return uk_sock_error( fd );
+}
+#else
 static inline int sock_error( struct uk_fd *fd )
 {
     unsigned int optval = 0;
@@ -303,6 +310,7 @@ static inline int sock_error( struct uk_fd *fd )
     getsockopt( get_unix_fd(fd), SOL_SOCKET, SO_ERROR, (void *) &optval, &optlen);
     return optval;
 }
+#endif
 
 static int sock_dispatch_asyncs( struct sock *sock, int event, int error )
 {

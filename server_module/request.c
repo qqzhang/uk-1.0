@@ -497,6 +497,7 @@ int send_client_fd( struct process *process, int fd, obj_handle_t handle )
 /* get current_thread tick count to return to client */
 unsigned int get_tick_count(void)
 {
+#ifndef CONFIG_UNIFIED_KERNEL
 #ifdef HAVE_CLOCK_GETTIME
     struct timespec ts;
 #ifdef CLOCK_MONOTONIC_RAW
@@ -511,7 +512,6 @@ unsigned int get_tick_count(void)
     if (!timebase.denom) mach_timebase_info( &timebase );
     return mach_absolute_time() * timebase.numer / timebase.denom / 1000000;
 #endif
-#ifndef CONFIG_UNIFIED_KERNEL
     return (current_time - server_start_time) / 10000;
 #else
     {

@@ -2,7 +2,9 @@
 #define _SYS_SOCKET_H_
 
 #include <linux/uio.h>
+#include <linux/net.h>
 
+#if 0
 enum sock_type {
 	SOCK_STREAM	= 1,
 	SOCK_DGRAM	= 2,
@@ -284,12 +286,6 @@ static inline struct cmsghdr * cmsg_nxthdr (struct msghdr *__msg, struct cmsghdr
 			     ((mhdr)->msg_controllen - \
 			      ((char *)(cmsg) - (char *)(mhdr)->msg_control)))
 
-#define UNIX_PATH_MAX	108
-
-struct sockaddr_un {
-	sa_family_t sun_family;	/* AF_UNIX */
-	char sun_path[UNIX_PATH_MAX];	/* pathname */
-};
 			      
 struct sockaddr 
 {
@@ -305,6 +301,14 @@ enum
 #define SHUT_WR		SHUT_WR
   SHUT_RDWR		/* No more receptions or transmissions.  */
 #define SHUT_RDWR	SHUT_RDWR
+};
+#endif
+
+#define UNIX_PATH_MAX	108
+
+struct sockaddr_un {
+	sa_family_t sun_family;	/* AF_UNIX */
+	char sun_path[UNIX_PATH_MAX];	/* pathname */
 };
 
 #endif

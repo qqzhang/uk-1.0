@@ -28,6 +28,8 @@
 #include <linux/file.h>
 #include <linux/fdtable.h>
 #include <linux/pid.h>
+#include <linux/net.h>
+#include <net/sock.h>
 #include <asm/uaccess.h>
 #if 0
 #include <linux/fs.h>
@@ -37,6 +39,7 @@
 #include <linux/string.h>
 #include <linux/statfs.h>
 #endif
+#undef PARITY_NONE
 
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
@@ -3827,5 +3830,34 @@ void uk_lock(void)
 void uk_unlock(void)
 {
     uk_lock_ops->unlock();
+}
+
+
+extern struct file *get_unix_file( struct uk_fd *fd );
+int uk_sock_error( struct uk_fd *fd )
+{
+    unsigned int optval = 0;
+    struct file *file;
+    struct socket *sock;
+    struct sock *sk;
+
+    file = get_unix_file(fd);
+    if (!file) return optval;
+
+    sock = file->private_data;
+    if (!sock) return optval;
+
+    sk = sock->sk;
+    if (!sk) return optval;
+
+    if (likely(!sk->sk_err))
+        optval = 0;
+    else
+        optval = xchg(&sk->sk_err, 0);
+
+    if (optval == 0)
+        optval = xchg(&sk->sk_err_soft, 0);
+
+    return optval;
 }
 
