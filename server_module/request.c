@@ -953,70 +953,70 @@ NTSTATUS NtEarlyInit(int __user* init_data_ptr)
 extern char *req_names[];
 NTSTATUS NtWineService(int __user *user_req_info)
 {
-	struct thread *thread;
-	struct __server_request_info req_msg;
-	union generic_reply reply;
-	enum request req = -1;
-	NTSTATUS status = STATUS_SUCCESS;
-	int i;
+    struct thread *thread;
+    struct __server_request_info req_msg;
+    union generic_reply reply;
+    enum request req = -1;
+    NTSTATUS status = STATUS_SUCCESS;
+    int i;
 
-	thread = get_current_thread();
+    thread = get_current_thread();
 
-	if(!user_req_info || !thread)
-	{
-	    return STATUS_INVALID_PARAMETER;
-	}
+    if(!user_req_info || !thread)
+    {
+        return STATUS_INVALID_PARAMETER;
+    }
 
-	if (copy_from_user(&req_msg, user_req_info, sizeof(req_msg)))
-	{
-	    return STATUS_NO_MEMORY;
-	}
+    if (copy_from_user(&req_msg, user_req_info, sizeof(req_msg)))
+    {
+        return STATUS_NO_MEMORY;
+    }
 
-	memcpy(&thread->req, &req_msg, sizeof(thread->req));
-	req = thread->req.request_header.req;
-	thread->req_toread = thread->req.request_header.request_size; 
+    memcpy(&thread->req, &req_msg, sizeof(thread->req));
+    req = thread->req.request_header.req;
+    thread->req_toread = thread->req.request_header.request_size; 
 
-	if (thread->req_toread )
-	{
-		if (!(thread->req_data = malloc(thread->req_toread))) 
-		{
-			return STATUS_NO_MEMORY;
-		}
+    if (thread->req_toread )
+    {
+        if (!(thread->req_data = malloc(thread->req_toread)))
+        {
+            return STATUS_NO_MEMORY;
+        }
 
-		for (i=0; i<req_msg.data_count; ++i)
-		{
-			if(copy_from_user(
-			(char *)thread->req_data + thread->req.request_header.request_size - thread->req_toread, 
-			req_msg.data[i].ptr, 
-			req_msg.data[i].size)) 
-			{ 
-				status = STATUS_NO_MEMORY;
-				goto out;
-			}
+        for (i=0; i<req_msg.data_count; ++i)
+        {
+            if(copy_from_user(
+                        (char *)thread->req_data + thread->req.request_header.request_size - thread->req_toread, 
+                        req_msg.data[i].ptr, 
+                        req_msg.data[i].size))
+            { 
+                status = STATUS_NO_MEMORY;
+                goto out;
+            }
 
-			thread->req_toread -= req_msg.data[i].size;		
-		}
-	}
+            thread->req_toread -= req_msg.data[i].size;
+        }
+    }
 
-	thread->reply_size = 0;
-	clear_error();
-	memset( &reply, 0, sizeof(reply) );
+    thread->reply_size = 0;
+    clear_error();
+    memset( &reply, 0, sizeof(reply) );
 
-	if (debug_level) trace_request();
+    if (debug_level) trace_request();
 
-	if (req < REQ_NB_REQUESTS)
-	{
-	//	klog (0, "req=%d : %s \n",req, req_names[req]);
-		req_handlers[req]( &thread->req, &reply ); /* call handle */
-	}
-	else
-	{
-		set_error( STATUS_NOT_IMPLEMENTED );
-	}
+    if (req < REQ_NB_REQUESTS)
+    {
+        //	klog (0, "req=%d : %s \n",req, req_names[req]);
+        req_handlers[req]( &thread->req, &reply ); /* call handle */
+    }
+    else
+    {
+        set_error( STATUS_NOT_IMPLEMENTED );
+    }
 
-	status = get_error();
+    status = get_error();
 #if 0
-	if (status)
+    if (status)
     {
         if(req==90 || req==91 ||req==94 || req==96 || req==97 || req==203)
         {
@@ -1028,35 +1028,35 @@ NTSTATUS NtWineService(int __user *user_req_info)
     }
 #endif
 
-	//if (thread->reply_fd)
-	if (thread)
-	{
-		reply.reply_header.error = thread->error;
-		reply.reply_header.reply_size = thread->reply_size;
-		if (debug_level) trace_reply( req, &reply );
-	}
-	else
-	{
-		thread->exit_code = 1;
-		kill_thread( thread, 1 );  /* no way to continue without reply fd */
-	}
+    //if (thread->reply_fd)
+    if (thread)
+    {
+        reply.reply_header.error = thread->error;
+        reply.reply_header.reply_size = thread->reply_size;
+        if (debug_level) trace_reply( req, &reply );
+    }
+    else
+    {
+        thread->exit_code = 1;
+        kill_thread( thread, 1 );  /* no way to continue without reply fd */
+    }
 
-	/* FIXME */
-	/* make sure : &user_req_info == &user_req_info.u.reply */
-	if (copy_to_user(user_req_info, &reply, sizeof(reply))) 
-	{
-		status = STATUS_NO_MEMORY;
-		goto out;
-	}
+    /* FIXME */
+    /* make sure : &user_req_info == &user_req_info.u.reply */
+    if (copy_to_user(user_req_info, &reply, sizeof(reply))) 
+    {
+        status = STATUS_NO_MEMORY;
+        goto out;
+    }
 
-	if (thread->reply_size) 
-	{
-		if (copy_to_user(req_msg.reply_data, thread->reply_data, thread->reply_size)) 
-		{
-			status = STATUS_NO_MEMORY;
-			goto out;
-		}
-	}
+    if (thread->reply_size)
+    {
+        if (copy_to_user(req_msg.reply_data, thread->reply_data, thread->reply_size))
+        {
+            status = STATUS_NO_MEMORY;
+            goto out;
+        }
+    }
 
 out:
     if (thread->req_data)
@@ -1071,7 +1071,7 @@ out:
         thread->reply_data = NULL;
     }
 
-	return status;
+    return status;
 }
 
 NTSTATUS NtKillThread(int __user* exit_code)
@@ -1096,12 +1096,12 @@ static dev_t devno;
 
 static int syscall_chardev_open(struct inode *inode, struct file *file)
 {
-	return 0;
+    return 0;
 }
 
 static int syscall_chardev_release(struct inode *inode, struct file *file)
 {
-	return 0;
+    return 0;
 }
 
 static ssize_t syscall_chardev_read(struct file *filp, char __user *buf, size_t len, loff_t *ppos)
@@ -1130,93 +1130,93 @@ static ssize_t syscall_chardev_write(struct file *filp, char __user *buf, size_t
 
 static long syscall_chardev_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
-	int err = 0;
-	int __user* argp = (int __user*)arg;
+    int err = 0;
+    int __user* argp = (int __user*)arg;
 
-	if ( (cmd > Nt_MaxNum) || (cmd < Nt_None) )
-	{
+    if ( (cmd > Nt_MaxNum) || (cmd < Nt_None) )
+    {
         klog(0,"error : bad syscall num\n");
         return STATUS_INVALID_PARAMETER;
-	}
+    }
 
     uk_lock();
-	switch (cmd) 
-	{
-		case Nt_None:
-			break;
-		case Nt_EarlyInit:
-			err = NtEarlyInit(argp);
-			break;
-		case Nt_WineService:
-			err = NtWineService(argp);
-			break;
-		case Nt_KillThread:
-			err = NtKillThread(argp);
-			break;
-		case Nt_KillProcess:
-			err = NtKillProcess(argp);
-			break;
-		default:
-			break;
-	}
+    switch (cmd) 
+    {
+        case Nt_None:
+            break;
+        case Nt_EarlyInit:
+            err = NtEarlyInit(argp);
+            break;
+        case Nt_WineService:
+            err = NtWineService(argp);
+            break;
+        case Nt_KillThread:
+            err = NtKillThread(argp);
+            break;
+        case Nt_KillProcess:
+            err = NtKillProcess(argp);
+            break;
+        default:
+            break;
+    }
     uk_unlock();
 
-	return err;
+    return err;
 }
 
 static const struct file_operations syscall_chardev_fops =
 {
-	.open		= syscall_chardev_open,
-	.release 	= syscall_chardev_release,
-	.read       = syscall_chardev_read,
-	.write      = syscall_chardev_write,
-	.unlocked_ioctl = syscall_chardev_unlocked_ioctl,
+    .open		= syscall_chardev_open,
+    .release 	= syscall_chardev_release,
+    .read       = syscall_chardev_read,
+    .write      = syscall_chardev_write,
+    .unlocked_ioctl = syscall_chardev_unlocked_ioctl,
 };
 
 int create_syscall_chardev(void)
 {
-	const char filename[]="syscall";
-	int ret;
+    const char filename[]="syscall";
+    int ret;
 
-	chardev = cdev_alloc();
-	if(chardev == NULL)
-	{
-	    klog(0,"cdev_alloc error: no memory \n");
-		return -ENOMEM;
-	}
+    chardev = cdev_alloc();
+    if(chardev == NULL)
+    {
+        klog(0,"cdev_alloc error: no memory \n");
+        return -ENOMEM;
+    }
 
-	ret = alloc_chrdev_region(&devno, 0, 1, filename);
-	if(ret < 0)
-	{
+    ret = alloc_chrdev_region(&devno, 0, 1, filename);
+    if(ret < 0)
+    {
         klog(0,"alloc_chrdev_region error %d\n",ret);
         goto bad_alloc_chrdev_region;
-	}
+    }
 
-	class = class_create(NULL, filename);
-	if(IS_ERR(class))
+    class = class_create(NULL, filename);
+    if(IS_ERR(class))
     {
         ret = PTR_ERR(class);
         klog(0,"class_create error %d\n",ret);
         goto bad_class_create;
-	}
+    }
 
-	dev = device_create(class, NULL, devno, NULL, filename);/*create /dev/syscall*/
-	if (IS_ERR(dev))
+    dev = device_create(class, NULL, devno, NULL, filename);/*create /dev/syscall*/
+    if (IS_ERR(dev))
     {
         ret = PTR_ERR(dev);
         klog(0,"device_create error %d\n",ret);
         goto bad_device_create;
-	}
+    }
 
-	cdev_init(chardev, &syscall_chardev_fops);
-	ret = cdev_add(chardev, devno, 1);
-	if(ret < 0)
+    cdev_init(chardev, &syscall_chardev_fops);
+    ret = cdev_add(chardev, devno, 1);
+    if(ret < 0)
     {
         klog(0,"cdev_add error %d\n",ret);
         goto bad_cdev_add;
-	}
+    }
 
-	return 0;
+    return 0;
 
 bad_cdev_add:
     device_destroy(class, devno);
@@ -1231,9 +1231,9 @@ bad_alloc_chrdev_region:
 
 void destroy_syscall_chardev(void)
 {
-	device_destroy(class, devno); /* destroy device first */
-	class_destroy(class);
-	unregister_chrdev_region(devno, 1);
-	kfree(chardev);
+    device_destroy(class, devno); /* destroy device first */
+    class_destroy(class);
+    unregister_chrdev_region(devno, 1);
+    kfree(chardev);
 }
 #endif
