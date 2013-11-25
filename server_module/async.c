@@ -37,6 +37,8 @@
 extern void *async_alloc_apc(void);
 extern int async_queue_apc( void *async_apc, struct thread *thread,
         struct object *owner, const apc_call_t *call_data );
+
+static DEFINE_SPINLOCK(async_lock);
 #endif
 
 struct async
@@ -159,12 +161,16 @@ void async_terminate( struct async *async, unsigned int status )
 
     assert( status != STATUS_PENDING );
 
+    spin_lock_bh(&async_lock);
     if (async->status != STATUS_PENDING)
     {
         /* already terminated, just update status */
         async->status = status;
+        spin_unlock_bh(&async_lock);
         return;
     }
+    async->status = status;
+    spin_unlock_bh(&async_lock);
 
     memset( &data, 0, sizeof(data) );
     data.type            = APC_ASYNC_IO;
@@ -175,8 +181,9 @@ void async_terminate( struct async *async, unsigned int status )
 #ifdef CONFIG_UNIFIED_KERNEL
     async_queue_apc( async->apc, async->thread, &async->obj, &data );
     async->apc = NULL;
-#endif
+#else
     async->status = status;
+#endif
     async_reselect( async );
     release_object( async );  /* so that it gets destroyed when the async is done */
 }

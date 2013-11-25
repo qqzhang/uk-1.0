@@ -70,11 +70,15 @@ static const unsigned int supported_cpus = CPU_FLAG(CPU_ARM64);
 #ifdef CONFIG_UNIFIED_KERNEL
 #include <linux/completion.h>
 #include <linux/spinlock.h>
+#include <linux/hardirq.h>
 #include <linux/sched.h>
 #include "klog.h"
 
+static DEFINE_SPINLOCK(thread_lock);
+
 int uk_sched_setaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask);
 int uk_sched_getaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask);
+static int wake_thread_softirq( struct thread *thread );
 
 /* for find_thread_by_pid() */
 static DEFINE_RWLOCK(thread_hash_lock);
@@ -853,7 +857,7 @@ int wake_thread( struct thread *thread )
     client_ptr_t cookie;
 
 #ifdef CONFIG_UNIFIED_KERNEL
-    local_bh_disable();
+    spin_lock_bh(&thread_lock);
 #endif
     for (count = 0; thread->wait; count++)
     {
@@ -866,7 +870,7 @@ int wake_thread( struct thread *thread )
 	    break;
     }
 #ifdef CONFIG_UNIFIED_KERNEL
-    local_bh_enable();
+    spin_unlock_bh(&thread_lock);
 #endif
     return count;
 }
@@ -879,7 +883,7 @@ static void thread_timeout( void *ptr )
     struct thread *thread;
     client_ptr_t cookie;
 
-    local_bh_disable();
+    spin_lock_bh(&thread_lock);
 
     thread = wait->thread;
     cookie = wait->cookie;
@@ -891,7 +895,7 @@ static void thread_timeout( void *ptr )
     if (debug_level) fprintf( stderr, "%04x: *wakeup* signaled=TIMEOUT\n", thread->id );
     end_wait( thread );
 
-    local_bh_enable();
+    spin_unlock_bh(&thread_lock);
 
     if (send_thread_wakeup( thread, cookie, STATUS_TIMEOUT ) == -1) return;
     /* check if other objects have become signaled in the meantime */
@@ -899,7 +903,7 @@ static void thread_timeout( void *ptr )
     return;
 
 out:
-    local_bh_enable();
+    spin_unlock_bh(&thread_lock);
     return;
 }
 #else
@@ -989,7 +993,7 @@ static timeout_t select_on( unsigned int count, client_ptr_t cookie, const obj_h
         need_free = 1;
     }
 
-    local_bh_disable();
+    spin_lock_bh(&thread_lock);
 
     wait->next    = current_thread->wait;
     wait->thread  = current_thread;
@@ -1049,7 +1053,7 @@ static timeout_t select_on( unsigned int count, client_ptr_t cookie, const obj_h
     need_free = 0;
 
 done:
-    local_bh_enable();
+    spin_unlock_bh(&thread_lock);
     if (need_free) free(user);
 done_1:
     while (i > 0) release_object( objects[--i] );
@@ -1129,7 +1133,14 @@ void uk_wake_up( struct object *obj, int max )
     LIST_FOR_EACH( ptr, &obj->wait_queue )
     {
         struct wait_queue_entry *entry = LIST_ENTRY( ptr, struct wait_queue_entry, entry );
-        if (!wake_thread( entry->thread )) continue;
+        if (in_softirq())
+        {
+            if (!wake_thread_softirq( entry->thread )) continue;
+        }
+        else
+        {
+            if (!wake_thread( entry->thread )) continue;
+        }
         if (max && !--max) break;
         /* restart at the head of the list since a wake up can change the object wait queue */
         ptr = &obj->wait_queue;
@@ -1205,7 +1216,9 @@ static int queue_apc( struct process *process, struct thread *thread, struct thr
     }
 
     grab_object( apc );
+    spin_lock_bh(&thread_lock);
     wine_list_add_tail( queue, &apc->entry );
+    spin_unlock_bh(&thread_lock);
     if (!list_prev( queue, &apc->entry ))  /* first one */
         wake_thread( thread );
 
@@ -1213,6 +1226,79 @@ static int queue_apc( struct process *process, struct thread *thread, struct thr
 }
 
 #ifdef CONFIG_UNIFIED_KERNEL
+static int wake_thread_softirq( struct thread *thread )
+{
+    int signaled, count;
+    client_ptr_t cookie;
+
+    for (count = 0; thread->wait; count++)
+    {
+        if ((signaled = check_wait( thread )) == -1) break;
+
+        cookie = thread->wait->cookie;
+        if (debug_level) fprintf( stderr, "%04x: *wakeup* signaled=%d\n", thread->id, signaled );
+        end_wait( thread );
+        if (send_thread_wakeup( thread, cookie, signaled ) == -1) /* error */
+	    break;
+    }
+    return count;
+}
+
+static int queue_apc_softirq( struct process *process, struct thread *thread, struct thread_apc *apc )
+{
+    struct list_head *queue;
+
+    if (!thread)  /* find a suitable thread inside the process */
+    {
+        struct thread *candidate;
+
+        /* first try to find a waiting thread */
+        LIST_FOR_EACH_ENTRY( candidate, &process->thread_list, struct thread, proc_entry )
+        {
+            if (candidate->state == TERMINATED) continue;
+            if (is_in_apc_wait( candidate ))
+            {
+                thread = candidate;
+                break;
+            }
+        }
+        if (!thread)
+        {
+            /* then use the first one that accepts a signal */
+            LIST_FOR_EACH_ENTRY( candidate, &process->thread_list, struct thread, proc_entry )
+            {
+                if (send_thread_signal( candidate, SIGUSR1 ))
+                {
+                    thread = candidate;
+                    break;
+                }
+            }
+        }
+        if (!thread) return 0;  /* nothing found */
+        queue = get_apc_queue( thread, apc->call.type );
+    }
+    else
+    {
+        if (thread->state == TERMINATED) return 0;
+        queue = get_apc_queue( thread, apc->call.type );
+        /* send signal for system APCs if needed */
+        if (queue == &thread->system_apc && list_empty( queue ) && !is_in_apc_wait( thread ))
+        {
+            if (!send_thread_signal( thread, SIGUSR1 )) return 0;
+        }
+        /* cancel a possible previous APC with the same owner */
+        if (apc->owner) thread_cancel_apc( thread, apc->owner, apc->call.type );
+    }
+
+    grab_object( apc );
+    spin_lock(&thread_lock);
+    wine_list_add_tail( queue, &apc->entry );
+    if (!list_prev( queue, &apc->entry ))  /* first one */
+        wake_thread_softirq( thread );
+    spin_unlock(&thread_lock);
+
+    return 1;
+}
 void *async_alloc_apc(void)
 {
     return alloc_object( &thread_apc_ops);
@@ -1232,7 +1318,10 @@ int async_queue_apc( void *async_apc, struct thread *thread, struct object *owne
         apc->result.type = APC_NONE;
         if (owner) grab_object( owner );
 
-        ret = queue_apc( NULL, thread, apc );
+        if (in_softirq())
+            ret = queue_apc_softirq( NULL, thread, apc );
+        else
+            ret = queue_apc( NULL, thread, apc );
         release_object( apc );
     }
     return ret;
@@ -1264,7 +1353,7 @@ void thread_cancel_apc( struct thread *thread, struct object *owner, enum apc_ty
         if (apc->owner != owner) continue;
         list_remove( &apc->entry );
         apc->executed = 1;
-	uk_wake_up( &apc->obj, 0 );
+        uk_wake_up( &apc->obj, 0 );
         release_object( apc );
         return;
     }
@@ -1293,9 +1382,11 @@ static void clear_apc_queue( struct list_head *queue )
     while ((ptr = list_head( queue )))
     {
         struct thread_apc *apc = LIST_ENTRY( ptr, struct thread_apc, entry );
+        spin_lock_bh(&thread_lock);
         list_remove( &apc->entry );
+        spin_unlock_bh(&thread_lock);
         apc->executed = 1;
-	uk_wake_up( &apc->obj, 0 );
+        uk_wake_up( &apc->obj, 0 );
         release_object( apc );
     }
 }
@@ -1742,7 +1833,7 @@ DECL_HANDLER(select)
                 async_set_result( apc->owner, apc->result.async_io.status,
                                   apc->result.async_io.total, apc->result.async_io.apc );
         }
-	uk_wake_up( &apc->obj, 0 );
+        uk_wake_up( &apc->obj, 0 );
         close_handle( current_thread->process, req->prev_apc );
         release_object( apc );
     }
@@ -1753,8 +1844,13 @@ DECL_HANDLER(select)
     {
         for (;;)
         {
+            spin_lock_bh(&thread_lock);
             if (!(apc = thread_dequeue_apc( current_thread, !(req->flags & SELECT_ALERTABLE) )))
+            {
+                spin_unlock_bh(&thread_lock);
                 break;
+            }
+            spin_unlock_bh(&thread_lock);
             /* Optimization: ignore APC_NONE calls, they are only used to
              * wake up a thread, but since we got here the thread woke up already.
              */
@@ -1766,7 +1862,7 @@ DECL_HANDLER(select)
                 break;
             }
             apc->executed = 1;
-	    uk_wake_up( &apc->obj, 0 );
+            uk_wake_up( &apc->obj, 0 );
             release_object( apc );
         }
     }
