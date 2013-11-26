@@ -2637,7 +2637,7 @@ int close_fd_by_pid(int fd, pid_t pid)
     task = uk_find_task_by_pid(pid);
     if (!task)
     {
-        klog(0,"target task %d is exit \n", pid);
+    //    klog(0,"target task %d is exit \n", pid);
         return -ESRCH;
     }
 
@@ -2646,7 +2646,7 @@ int close_fd_by_pid(int fd, pid_t pid)
     tfiles = get_files(task);
     if (!tfiles)
     {
-        klog(0,"target files is NULL \n");
+     //   klog(0,"target files is NULL \n");
         ret = -EBADF;
         goto out;
     }

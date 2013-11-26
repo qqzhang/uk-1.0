@@ -694,16 +694,20 @@ int uk_add_fd_events(struct uk_poll_wqueues *uk_pwq, struct uk_fd *fd, struct fi
         uk_poll_initwait(uk_pwq);
         pt = &uk_pwq->table.pt;
         uk_pwq->fd = fd;
-        mask = uk_do_poll_file(file,events,pt);
-        if(uk_pwq->fd != NULL && mask)
+        atomic_set(&fd->state, FD_ADDED);
+        fd->events = events;
+        mask = uk_do_poll_file(file, events, pt);
+        if(uk_pwq->fd != NULL && (mask & events))
         {
-            fd_poll_event(uk_pwq->fd, mask );
+            fd_poll_event(uk_pwq->fd, mask);
         }
     }
     else
     {
         /* have inited. */
-        uk_modify_fd_events(uk_pwq,events);
+        atomic_set(&fd->state, FD_ADDED);
+        fd->events = events;
+        uk_modify_fd_events(uk_pwq, events);
     }
     return 0;
 }
@@ -735,14 +739,19 @@ int uk_modify_fd_events(struct uk_poll_wqueues *uk_pwq,int events)
 
     entry = uk_poll_get_entry(uk_pwq);
     if(entry)
-        entry->key = events|POLLERR | POLLHUP;
+        entry->key = events | POLLERR | POLLHUP;
 
     if(uk_pwq->fd != NULL)
     {
-        mask = uk_do_poll_file(get_unix_file(uk_pwq->fd),events,NULL);
-        if(mask)
+        if (atomic_read(&uk_pwq->fd->state)==FD_ADDED || !uk_pwq->fd->events)
         {
-            fd_poll_event(uk_pwq->fd, mask );
+            uk_pwq->fd->events = events;
+        }
+
+        mask = uk_do_poll_file(get_unix_file(uk_pwq->fd), events, NULL);
+        if(mask & events)
+        {
+            fd_poll_event(uk_pwq->fd, mask);
         }
     }
     return 0;
@@ -1916,22 +1925,20 @@ void set_fd_events( struct uk_fd *fd, int events )
     if (events == -1)  /* stop waiting on this fd completely */
     {
         if (atomic_read(&fd->state)==FD_REMOVED) goto done;  /* already removed */
-        //ctl = EPOLL_CTL_DEL;
         uk_remove_fd_events(&fd->uk_pwq);
         atomic_set(&fd->state,FD_REMOVED);
     }
     else if (atomic_read(&fd->state) != FD_ADDED)
     {
         if (fd->events) goto done;  /* stopped waiting on it, don't restart */
-        //ctl = EPOLL_CTL_ADD;
         uk_add_fd_events(&fd->uk_pwq,fd,get_unix_file(fd),events);
-        atomic_set(&fd->state, FD_ADDED);
+        return;
     }
     else
     {
         if (fd->events == events) goto done;  /* nothing to do */
-        //ctl = EPOLL_CTL_MOD;
         uk_modify_fd_events(&fd->uk_pwq,events);
+        return;
     }
 
 done:
