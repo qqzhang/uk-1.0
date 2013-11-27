@@ -298,6 +298,9 @@ void async_set_result( struct object *obj, unsigned int status, unsigned int tot
         status = async->status;
         async->status = STATUS_PENDING;
         grab_object( async );
+#ifdef CONFIG_UNIFIED_KERNEL
+        async->apc = async_alloc_apc(); /* prealloc thread apc for reuse the async. */
+#endif
 
         if (status != STATUS_ALERTED)  /* it was terminated in the meantime */
             async_terminate( async, status );
