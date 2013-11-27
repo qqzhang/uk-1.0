@@ -179,7 +179,7 @@ extern struct task_struct* timer_kernel_task;
 
 struct uk_poll_wqueues
 {
-    struct poll_wqueues table;
+    poll_table pt;
     struct poll_table_entry uk_pt_entry;/* only need one. */
     struct uk_fd *fd;
     int have_inited_flag;/* have run __uk_pollwait to init waitqueue. */
@@ -553,8 +553,8 @@ static int epoll_fd = -1;
 #ifdef CONFIG_UNIFIED_KERNEL
 void uk_poll_initwait(struct uk_poll_wqueues *uk_pwq);
 void uk_poll_freewait(struct uk_poll_wqueues *uk_pwq);
-int uk_add_fd_events(struct uk_poll_wqueues *uk_pwq,struct uk_fd *fd,struct file *file,int events);
-int uk_modify_fd_events(struct uk_poll_wqueues *uk_pwq,int events);
+int uk_add_fd_events(struct uk_fd *fd,struct file *file,int events);
+int uk_modify_fd_events(struct uk_fd *fd,struct file *file,int events);
 int uk_remove_fd_events(struct uk_poll_wqueues *uk_pwq);
 static struct poll_table_entry *uk_poll_get_entry(struct uk_poll_wqueues *uk_pwq);
 struct file *get_unix_file( struct uk_fd *fd );
@@ -582,72 +582,32 @@ static inline unsigned int uk_do_poll_file(struct file *file, int events, poll_t
     unsigned int mask;
 
     mask = DEFAULT_POLLMASK;
-    if (file && file->f_op && file->f_op->poll)
-    {
-        if (pwait)
-            set_pt_key(pwait, events | POLLERR | POLLHUP);
 
-        mask = file->f_op->poll(file, pwait);
-    }
+    if (pwait)
+        set_pt_key(pwait, events | POLLERR | POLLHUP);
+
+    mask = file->f_op->poll(file, pwait);
+
     /* Mask out unneeded events. */
     mask &= events | POLLERR | POLLHUP;
     return mask;
 }
 
-static inline unsigned int uk_do_pollfd(struct pollfd *pollfd, poll_table *pwait)
-{
-    unsigned int mask;
-    int fd;
-
-    mask = 0;
-    fd = pollfd->fd;
-    if (fd >= 0)
-    {
-        struct file * file;
-
-        file = fget(fd);
-        mask = POLLNVAL;
-        if (file)
-        {
-            uk_do_poll_file(file,pollfd->events,pwait);
-            fput(file);
-        }
-    }
-    pollfd->revents = mask;
-
-    return mask;
-}
-
 /* old __pollwake use default */
-static int __uk_pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key,int mask)
+static int __uk_pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key, int mask)
 {
-    struct poll_wqueues *pwq = wait->private;
-    struct uk_poll_wqueues *uk_pwq;
     struct file *file;
     int poll_events;
-    struct poll_table_entry *entry;
-
-    /*
-     * Although this function is called under waitqueue lock, LOCK
-     * doesn't imply write barrier and the users expect write
-     * barrier semantics on wakeup functions.  The following
-     * smp_wmb() is equivalent to smp_wmb() in try_to_wake_up()
-     * and is paired with set_mb() in poll_schedule_timeout.
-     */
-    smp_wmb();
-    pwq->triggered = 1;
-
-    uk_pwq = (struct uk_poll_wqueues *)pwq;
-    entry = uk_poll_get_entry(uk_pwq);
+    struct uk_poll_wqueues *uk_pwq = (struct uk_poll_wqueues *)(wait->private);
 
     /*need to filter the key.*/
     file = get_unix_file(uk_pwq->fd);
-    poll_events = file->f_op->poll(file,NULL) & mask;
+    poll_events = file->f_op->poll(file, NULL) & mask;
 
     /* use fd_poll_event to deal with events.*/
-    if(uk_pwq->fd && poll_events != 0)
+    if(uk_pwq->fd && poll_events)
     {
-        fd_poll_event(uk_pwq->fd, poll_events );
+        fd_poll_event(uk_pwq->fd, poll_events);
     }
 
     return 1;
@@ -666,7 +626,7 @@ static int uk_pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key)
     spin_unlock(&entry->wait_address->lock);
     local_irq_enable();
 
-    ret = __uk_pollwake(wait, mode, sync, key,entry->key);
+    ret = __uk_pollwake(wait, mode, sync, key, entry->key);
 
     local_irq_disable();
     spin_lock(&entry->wait_address->lock);
@@ -675,7 +635,7 @@ static int uk_pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key)
 }
 
 /* only one poll_table_entry */
-static struct poll_table_entry *uk_poll_get_entry(struct uk_poll_wqueues *uk_pwq)
+static inline struct poll_table_entry *uk_poll_get_entry(struct uk_poll_wqueues *uk_pwq)
 {
     return &uk_pwq->uk_pt_entry;
 }
@@ -684,22 +644,24 @@ static struct poll_table_entry *uk_poll_get_entry(struct uk_poll_wqueues *uk_pwq
  * if struct file have data,must deal with it.
  * private_data is struct uk_fd
  */
-int uk_add_fd_events(struct uk_poll_wqueues *uk_pwq, struct uk_fd *fd, struct file *file, int events)
+int uk_add_fd_events(struct uk_fd *fd,struct file *file,int events)
 {
+    struct uk_poll_wqueues *uk_pwq = &fd->uk_pwq;
+
     if(uk_pwq->have_inited_flag == false)
     {
         poll_table* pt;
         unsigned int mask;
 
         uk_poll_initwait(uk_pwq);
-        pt = &uk_pwq->table.pt;
         uk_pwq->fd = fd;
         atomic_set(&fd->state, FD_ADDED);
         fd->events = events;
+        pt = &uk_pwq->pt;
         mask = uk_do_poll_file(file, events, pt);
-        if(uk_pwq->fd != NULL && (mask & events))
+        if(mask & events)
         {
-            fd_poll_event(uk_pwq->fd, mask);
+            fd_poll_event(fd, mask);
         }
     }
     else
@@ -707,7 +669,7 @@ int uk_add_fd_events(struct uk_poll_wqueues *uk_pwq, struct uk_fd *fd, struct fi
         /* have inited. */
         atomic_set(&fd->state, FD_ADDED);
         fd->events = events;
-        uk_modify_fd_events(uk_pwq, events);
+        uk_modify_fd_events(fd, file, events);
     }
     return 0;
 }
@@ -728,10 +690,11 @@ int uk_remove_fd_events(struct uk_poll_wqueues *uk_pwq)
 }
 
 /* change poll fd's events. */
-int uk_modify_fd_events(struct uk_poll_wqueues *uk_pwq,int events)
+int uk_modify_fd_events(struct uk_fd *fd,struct file *file,int events)
 {
-    struct poll_table_entry *entry;
     unsigned int mask;
+    struct poll_table_entry *entry;
+    struct uk_poll_wqueues *uk_pwq = &fd->uk_pwq;
 
     /* think this carefully,is it necceary?. */
     if(uk_pwq->have_inited_flag == false)
@@ -741,19 +704,17 @@ int uk_modify_fd_events(struct uk_poll_wqueues *uk_pwq,int events)
     if(entry)
         entry->key = events | POLLERR | POLLHUP;
 
-    if(uk_pwq->fd != NULL)
+    if (atomic_read(&fd->state)==FD_ADDED || !fd->events)
     {
-        if (atomic_read(&uk_pwq->fd->state)==FD_ADDED || !uk_pwq->fd->events)
-        {
-            uk_pwq->fd->events = events;
-        }
-
-        mask = uk_do_poll_file(get_unix_file(uk_pwq->fd), events, NULL);
-        if(mask & events)
-        {
-            fd_poll_event(uk_pwq->fd, mask);
-        }
+        fd->events = events;
     }
+
+    mask = uk_do_poll_file(file, events, NULL);
+    if(mask & events)
+    {
+        fd_poll_event(fd, mask);
+    }
+
     return 0;
 }
 
@@ -763,10 +724,8 @@ static void __uk_pollwait(struct file *filp, wait_queue_head_t *wait_address,
 {
     struct uk_poll_wqueues *uk_pwq;
     struct poll_table_entry *entry;
-    struct poll_wqueues *pwq;
 
-    pwq = container_of(p, struct poll_wqueues, pt);
-    uk_pwq = (struct uk_poll_wqueues *)pwq;
+    uk_pwq = container_of(p, struct uk_poll_wqueues, pt);
     entry = uk_poll_get_entry(uk_pwq);
     if (entry)
     {
@@ -775,7 +734,7 @@ static void __uk_pollwait(struct file *filp, wait_queue_head_t *wait_address,
         entry->wait_address = wait_address;
         entry->key = get_pt_key(p);
         init_waitqueue_func_entry(&entry->wait, uk_pollwake);
-        entry->wait.private = pwq;
+        entry->wait.private = uk_pwq;
         add_wait_queue(wait_address, &entry->wait);
         uk_pwq->have_inited_flag = true;
     }
@@ -783,15 +742,7 @@ static void __uk_pollwait(struct file *filp, wait_queue_head_t *wait_address,
 
 void uk_poll_initwait(struct uk_poll_wqueues *uk_pwq)
 {
-    struct poll_wqueues *pwq;
-
-    pwq = (struct poll_wqueues *)uk_pwq;
-    init_poll_funcptr(&pwq->pt, __uk_pollwait);
-    pwq->polling_task = current;
-    pwq->triggered = 0;
-    pwq->error = 0;
-    pwq->table = NULL;
-    pwq->inline_index = 0;
+    init_poll_funcptr(&uk_pwq->pt, __uk_pollwait);
 }
 
 /* need to check whether pwd have been initd. */
@@ -1922,6 +1873,10 @@ static unsigned int check_sharing( struct uk_fd *fd, unsigned int access, unsign
 #ifdef CONFIG_UNIFIED_KERNEL
 void set_fd_events( struct uk_fd *fd, int events )
 {
+    struct file *filp = get_unix_file( fd );
+
+    if (!filp) goto done;
+
     if (events == -1)  /* stop waiting on this fd completely */
     {
         if (atomic_read(&fd->state)==FD_REMOVED) goto done;  /* already removed */
@@ -1931,13 +1886,13 @@ void set_fd_events( struct uk_fd *fd, int events )
     else if (atomic_read(&fd->state) != FD_ADDED)
     {
         if (fd->events) goto done;  /* stopped waiting on it, don't restart */
-        uk_add_fd_events(&fd->uk_pwq,fd,get_unix_file(fd),events);
+        uk_add_fd_events(fd, filp, events);
         return;
     }
     else
     {
         if (fd->events == events) goto done;  /* nothing to do */
-        uk_modify_fd_events(&fd->uk_pwq,events);
+        uk_modify_fd_events(fd, filp, events);
         return;
     }
 
