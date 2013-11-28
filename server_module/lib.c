@@ -29,7 +29,9 @@
 #include <linux/fdtable.h>
 #include <linux/pid.h>
 #include <linux/net.h>
+#include <linux/tcp.h>
 #include <net/sock.h>
+#include <net/tcp.h>
 #include <asm/uaccess.h>
 #if 0
 #include <linux/fs.h>
@@ -3861,3 +3863,39 @@ int uk_sock_error( struct uk_fd *fd )
     return optval;
 }
 
+int check_fin( struct uk_fd *fd )
+{
+    struct file *file;
+    struct socket *sock;
+    struct sock *sk;
+    struct sk_buff *skb;
+
+    file = get_unix_file(fd);
+    if (!file) return 0;
+
+    sock = file->private_data;
+    if (!sock) return 0;
+
+    sk = sock->sk;
+    if (!sk) return 0;
+
+    if (sk->sk_shutdown & RCV_SHUTDOWN)
+    {
+        struct tcp_sock *tp = tcp_sk(sk);
+        u32 *seq;
+        u32 offset;
+
+        seq = &tp->copied_seq;
+        skb_queue_walk(&sk->sk_receive_queue, skb)
+        {
+            offset = *seq - TCP_SKB_CB(skb)->seq;
+            if (tcp_hdr(skb)->syn)
+                offset--;
+            if (offset < skb->len)
+                return 0;
+            if (tcp_hdr(skb)->fin)
+                return 1;
+        }
+    }
+    return 0;
+}

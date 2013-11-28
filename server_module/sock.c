@@ -59,6 +59,7 @@
 
 #ifdef CONFIG_UNIFIED_KERNEL
 #include <linux/hardirq.h>
+#include "klog.h"
 #endif
 
 /* From winsock.h */
@@ -427,8 +428,15 @@ static void sock_poll_event( struct uk_fd *fd, int event )
     }
     else
     {
-#ifndef CONFIG_UNIFIED_KERNEL
         /* normal data flow */
+#ifdef CONFIG_UNIFIED_KERNEL
+        extern int check_fin( struct uk_fd *fd );
+        if ( sock->type == SOCK_STREAM && ( event & POLLIN ) && check_fin( fd ))
+        {
+            hangup_seen = 1;
+            event &= ~POLLIN;
+        }
+#else
         if ( sock->type == SOCK_STREAM && ( event & POLLIN ) )
         {
             char dummy;
