@@ -179,6 +179,7 @@ void async_terminate( struct async *async, unsigned int status )
     data.async_io.sb     = async->data.iosb;
     data.async_io.status = status;
 #ifdef CONFIG_UNIFIED_KERNEL
+    assert( async->apc );
     async_queue_apc( async->apc, async->thread, &async->obj, &data );
     async->apc = NULL;
 #else
