@@ -33,6 +33,7 @@
 #include <net/sock.h>
 #include <net/tcp.h>
 #include <asm/uaccess.h>
+#include <asm-generic/ioctls.h> /* for tcgetattr */
 #if 0
 #include <linux/fs.h>
 #include <linux/vmalloc.h>
@@ -3755,12 +3756,21 @@ int uk_sched_getaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask)
 
 int tcgetattr(int fd, struct termios *termios_p)
 {
-    /* in glibc tcgetattr.c */
-    //struct __kernel_termios k_termios;
-    //INLINE_SYSCALL (ioctl, 3, fd, TCGETS, &k_termios);
-    klog(0,"NOT IMPLEMENT!\n");
-    return 0;
+    int ret=0;
+    asmlinkage long (*sys_ioctl)(unsigned int fd, unsigned int cmd, unsigned long arg)
+        = get_syscall(UK_ioctl);
+
+    /* in glibc tcgetattr.c
+       struct __kernel_termios k_termios;
+       INLINE_SYSCALL (ioctl, 3, fd, TCGETS, &k_termios);
+    */
+    PREPARE_KERNEL_CALL;
+    ret = sys_ioctl(fd, TCGETS, termios_p);
+    END_KERNEL_CALL;
+
+    SYSCALL_RETURN(ret);
 }
+
 int tcflush(int fd, int queue_selector)
 {
     //return __ioctl (fd, TCFLSH, queue_selector);
