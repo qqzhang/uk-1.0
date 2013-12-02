@@ -108,7 +108,6 @@ static const enum cpu_type client_cpu = CPU_ARM64;
 
 #ifdef CONFIG_UNIFIED_KERNEL
 #include <sys/ioctl.h>
-static struct init_data init_data;
 #endif
 unsigned int server_cpus = 0;
 int is_wow64 = FALSE;
@@ -960,7 +959,7 @@ static int server_connect(void)
     server_connect_error( serverdir );
 }
 #else
-static int server_connect(void)
+static int server_connect(struct init_data *init_data)
 {
     int fd_cwd;
 
@@ -970,8 +969,8 @@ static int server_connect(void)
 
 	/* create .wine */
     setup_config_dir();
-    init_data.config_dir =  wine_get_config_dir();
-    init_data.config_dir_len = strlen(init_data.config_dir);
+    init_data->config_dir =  wine_get_config_dir();
+    init_data->config_dir_len = strlen(init_data->config_dir);
 
     /* switch back to the starting directory */
     if (fd_cwd != -1)
@@ -1123,6 +1122,7 @@ void server_init_process(void)
     const char *env_socket = getenv( "WINESERVERSOCKET" );
     int thread_id;
     int fd, socketfd[2];
+    struct init_data init_data;
     int ret;
 
     fd = open( SYSCALL_FILE, O_WRONLY);
@@ -1144,7 +1144,7 @@ void server_init_process(void)
     }
     else 
     {
-        fd_socket = server_connect();
+        fd_socket = server_connect(&init_data);
 
         init_data.init_type = FIRST_PROCESS;
         init_data.thread_id = 0;
