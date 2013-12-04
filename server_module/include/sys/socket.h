@@ -1,7 +1,6 @@
 #ifndef _SYS_SOCKET_H_
 #define _SYS_SOCKET_H_
 
-#include <linux/uio.h>
 #include <linux/net.h>
 
 #if 0
@@ -303,12 +302,5 @@ enum
 #define SHUT_RDWR	SHUT_RDWR
 };
 #endif
-
-#define UNIX_PATH_MAX	108
-
-struct sockaddr_un {
-	sa_family_t sun_family;	/* AF_UNIX */
-	char sun_path[UNIX_PATH_MAX];	/* pathname */
-};
 
 #endif
