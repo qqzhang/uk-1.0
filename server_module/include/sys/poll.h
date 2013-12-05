@@ -3,6 +3,9 @@
 
 #include <linux/poll.h>
 
+#ifndef DEFAULT_POLLMASK
+#define DEFAULT_POLLMASK (POLLIN | POLLOUT | POLLRDNORM | POLLWRNORM)
+#endif
 #if 0
 #define POLLIN		0x0001
 #define POLLPRI		0x0002

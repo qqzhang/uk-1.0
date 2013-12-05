@@ -177,10 +177,18 @@ struct closed_fd
 
 extern struct task_struct* timer_kernel_task;
 
+struct uk_poll_table_entry {
+	struct file *filp;
+	unsigned long key;
+	wait_queue_t wait;
+	wait_queue_head_t *wait_address;
+};
+
 struct uk_poll_wqueues
 {
     poll_table pt;
-    struct poll_table_entry uk_pt_entry;/* only need one. */
+    struct uk_poll_table_entry uk_pt_entry;/* only need one. */
+    unsigned long _key;
     struct uk_fd *fd;
     int have_inited_flag;/* have run __uk_pollwait to init waitqueue. */
     int	pending_event;
@@ -556,35 +564,14 @@ void uk_poll_freewait(struct uk_poll_wqueues *uk_pwq);
 int uk_add_fd_events(struct uk_fd *fd,struct file *file,int events);
 int uk_modify_fd_events(struct uk_fd *fd,struct file *file,int events);
 int uk_remove_fd_events(struct uk_poll_wqueues *uk_pwq);
-static struct poll_table_entry *uk_poll_get_entry(struct uk_poll_wqueues *uk_pwq);
+static struct uk_poll_table_entry *uk_poll_get_entry(struct uk_poll_wqueues *uk_pwq);
 struct file *get_unix_file( struct uk_fd *fd );
-
-static inline unsigned long get_pt_key(poll_table *t)
-{
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 4, 0))
-    return t->key;
-#else
-    return t->_key;
-#endif
-}
-
-static inline void set_pt_key(poll_table *t, unsigned long key)
-{
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 4, 0))
-    t->key = key;
-#else
-    t->_key = key;
-#endif
-}
 
 static inline unsigned int uk_do_poll_file(struct file *file, int events, poll_table *pwait)
 {
     unsigned int mask;
 
     mask = DEFAULT_POLLMASK;
-
-    if (pwait)
-        set_pt_key(pwait, events | POLLERR | POLLHUP);
 
     mask = file->f_op->poll(file, pwait);
 
@@ -615,10 +602,10 @@ static int __uk_pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key,
 
 static int uk_pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key)
 {
-    struct poll_table_entry *entry;
+    struct uk_poll_table_entry *entry;
     int ret;
 
-    entry = container_of(wait, struct poll_table_entry, wait);
+    entry = container_of(wait, struct uk_poll_table_entry, wait);
 
     if (key && !((unsigned long)key & entry->key))
         return 0;
@@ -635,7 +622,7 @@ static int uk_pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key)
 }
 
 /* only one poll_table_entry */
-static inline struct poll_table_entry *uk_poll_get_entry(struct uk_poll_wqueues *uk_pwq)
+static inline struct uk_poll_table_entry *uk_poll_get_entry(struct uk_poll_wqueues *uk_pwq)
 {
     return &uk_pwq->uk_pt_entry;
 }
@@ -655,8 +642,11 @@ int uk_add_fd_events(struct uk_fd *fd,struct file *file,int events)
 
         uk_poll_initwait(uk_pwq);
         uk_pwq->fd = fd;
+        uk_pwq->_key = events | POLLERR | POLLHUP;
+
         atomic_set(&fd->state, FD_ADDED);
         fd->events = events;
+
         pt = &uk_pwq->pt;
         mask = uk_do_poll_file(file, events, pt);
         if(mask & events)
@@ -676,7 +666,7 @@ int uk_add_fd_events(struct uk_fd *fd,struct file *file,int events)
 
 int uk_remove_fd_events(struct uk_poll_wqueues *uk_pwq)
 {
-    struct poll_table_entry *entry;
+    struct uk_poll_table_entry *entry;
 
     /* think this carefully,is it necceary?. */
     if(uk_pwq->have_inited_flag == false)
@@ -693,7 +683,7 @@ int uk_remove_fd_events(struct uk_poll_wqueues *uk_pwq)
 int uk_modify_fd_events(struct uk_fd *fd,struct file *file,int events)
 {
     unsigned int mask;
-    struct poll_table_entry *entry;
+    struct uk_poll_table_entry *entry;
     struct uk_poll_wqueues *uk_pwq = &fd->uk_pwq;
 
     /* think this carefully,is it necceary?. */
@@ -723,7 +713,7 @@ static void __uk_pollwait(struct file *filp, wait_queue_head_t *wait_address,
         poll_table *p)
 {
     struct uk_poll_wqueues *uk_pwq;
-    struct poll_table_entry *entry;
+    struct uk_poll_table_entry *entry;
 
     uk_pwq = container_of(p, struct uk_poll_wqueues, pt);
     entry = uk_poll_get_entry(uk_pwq);
@@ -732,7 +722,7 @@ static void __uk_pollwait(struct file *filp, wait_queue_head_t *wait_address,
         get_file(filp);
         entry->filp = filp;
         entry->wait_address = wait_address;
-        entry->key = get_pt_key(p);
+        entry->key = uk_pwq->_key;
         init_waitqueue_func_entry(&entry->wait, uk_pollwake);
         entry->wait.private = uk_pwq;
         add_wait_queue(wait_address, &entry->wait);
@@ -750,7 +740,7 @@ void uk_poll_freewait(struct uk_poll_wqueues *uk_pwq)
 {
     if(uk_pwq && uk_pwq->have_inited_flag)
     {
-        struct poll_table_entry *entry = uk_poll_get_entry(uk_pwq);
+        struct uk_poll_table_entry *entry = uk_poll_get_entry(uk_pwq);
 
         /*maybe have error,can not remove wait in callback.*/
         remove_wait_queue(entry->wait_address, &entry->wait);
