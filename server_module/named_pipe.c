@@ -507,6 +507,24 @@ void create_named_pipe_device( struct directory *root, const struct unicode_str 
     if (dev) make_object_static( &dev->obj );
 }
 
+#if CONFIG_UNIFIED_KERNEL
+extern struct file *get_unix_file( struct uk_fd *fd );
+static int pipe_data_remaining( struct pipe_server *server )
+{
+    struct file *filp;
+    unsigned long revents = 0;
+
+    assert( server->client );
+
+    filp = get_unix_file( server->client->fd );
+    if (filp && filp->f_op && filp->f_op->poll)
+    {
+        revents = filp->f_op->poll(filp, NULL);
+    }
+
+    return revents&POLLIN;
+}
+#else
 static int pipe_data_remaining( struct pipe_server *server )
 {
     struct pollfd pfd;
@@ -526,6 +544,7 @@ static int pipe_data_remaining( struct pipe_server *server )
  
     return pfd.revents&POLLIN;
 }
+#endif
 
 static void check_flushed( void *arg )
 {
