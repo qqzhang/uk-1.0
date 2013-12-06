@@ -103,9 +103,53 @@
 #include <linux/kthread.h>
 #include <linux/poll.h>
 #include <linux/version.h>
+#include <linux/hardirq.h>
 #include <linux/file.h>
 #include <asm/div64.h>
 #include "klog.h"
+
+#define FD_UNINIT 0x1
+#define FD_ADDED  0x2
+#define FD_REMOVED 0x4
+
+#define DEFAULT_MAP_NUM 16
+
+struct uk_poll_table_entry
+{
+	struct file *filp;
+	unsigned long key;
+	wait_queue_t wait;
+	wait_queue_head_t *wait_address;
+};
+
+struct uk_poll_wqueues
+{
+    poll_table pt;
+    struct uk_poll_table_entry uk_pt_entry;/* only need one. */
+    unsigned long _key;
+    struct uk_fd *fd;
+    int have_inited_flag;/* have run __uk_pollwait to init waitqueue. */
+    int	pending_event;
+};
+
+struct pid_fd_map
+{
+    pid_t pid;
+    int   unix_fd;
+};
+
+extern struct task_struct* timer_kernel_task;
+extern void destroy_map_tbl(struct uk_fd *fd);
+extern int get_unix_fd_by_pid(struct uk_fd *fd, pid_t pid);
+extern int find_unix_fd_by_pid(struct uk_fd* fd, pid_t pid);
+extern struct file *get_unix_file( struct uk_fd *fd );
+
+void uk_poll_initwait(struct uk_poll_wqueues *uk_pwq);
+void uk_poll_freewait(struct uk_poll_wqueues *uk_pwq);
+int uk_add_fd_events(struct uk_fd *fd, struct file *file, int events);
+int uk_modify_fd_events(struct uk_fd *fd, struct file *file, int events);
+int uk_remove_fd_events(struct uk_poll_wqueues *uk_pwq);
+static struct uk_poll_table_entry *uk_poll_get_entry(struct uk_poll_wqueues *uk_pwq);
 #endif
 
 #if defined(HAVE_SYS_EPOLL_H) && defined(HAVE_EPOLL_CREATE)
@@ -171,43 +215,6 @@ struct closed_fd
     int         unix_fd;     /* the unix file descriptor */
     char        unlink[1];   /* name to unlink on close (if any) */
 };
-
-#ifdef CONFIG_UNIFIED_KERNEL
-#include <linux/hardirq.h>
-
-extern struct task_struct* timer_kernel_task;
-
-struct uk_poll_table_entry {
-	struct file *filp;
-	unsigned long key;
-	wait_queue_t wait;
-	wait_queue_head_t *wait_address;
-};
-
-struct uk_poll_wqueues
-{
-    poll_table pt;
-    struct uk_poll_table_entry uk_pt_entry;/* only need one. */
-    unsigned long _key;
-    struct uk_fd *fd;
-    int have_inited_flag;/* have run __uk_pollwait to init waitqueue. */
-    int	pending_event;
-};
-
-#define FD_UNINIT 0x1
-#define FD_ADDED  0x2
-#define FD_REMOVED 0x4
-
-#define DEFAULT_MAP_NUM 16
-struct pid_fd_map
-{
-    pid_t pid;
-    int   unix_fd;
-};
-void destroy_map_tbl(struct uk_fd *fd);
-int get_unix_fd_by_pid(struct uk_fd *fd, pid_t pid);
-int find_unix_fd_by_pid(struct uk_fd* fd, pid_t pid);
-#endif
 
 struct uk_fd
 {
@@ -559,13 +566,6 @@ static inline void fd_poll_event( struct uk_fd *fd, int event )
 static int epoll_fd = -1;
 
 #ifdef CONFIG_UNIFIED_KERNEL
-void uk_poll_initwait(struct uk_poll_wqueues *uk_pwq);
-void uk_poll_freewait(struct uk_poll_wqueues *uk_pwq);
-int uk_add_fd_events(struct uk_fd *fd,struct file *file,int events);
-int uk_modify_fd_events(struct uk_fd *fd,struct file *file,int events);
-int uk_remove_fd_events(struct uk_poll_wqueues *uk_pwq);
-static struct uk_poll_table_entry *uk_poll_get_entry(struct uk_poll_wqueues *uk_pwq);
-struct file *get_unix_file( struct uk_fd *fd );
 
 static inline unsigned int uk_do_poll_file(struct file *file, int events, poll_table *pwait)
 {

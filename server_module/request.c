@@ -950,7 +950,6 @@ NTSTATUS NtEarlyInit(int __user* init_data_ptr)
     }
 }
 
-extern char *req_names[];
 NTSTATUS NtWineService(int __user *user_req_info)
 {
     struct thread *thread;
@@ -1006,7 +1005,6 @@ NTSTATUS NtWineService(int __user *user_req_info)
 
     if (req < REQ_NB_REQUESTS)
     {
-        //	klog (0, "req=%d : %s \n",req, req_names[req]);
         req_handlers[req]( &thread->req, &reply ); /* call handle */
     }
     else
@@ -1015,18 +1013,6 @@ NTSTATUS NtWineService(int __user *user_req_info)
     }
 
     status = get_error();
-#if 0
-    if (status)
-    {
-        if(req==90 || req==91 ||req==94 || req==96 || req==97 || req==203)
-        {
-        }
-        else
-        {
-            klog (0, "[%d]:%s ret=%08x\n",req, req_names[req],status);
-        }
-    }
-#endif
 
     //if (thread->reply_fd)
     if (thread)
@@ -1041,7 +1027,6 @@ NTSTATUS NtWineService(int __user *user_req_info)
         kill_thread( thread, 1 );  /* no way to continue without reply fd */
     }
 
-    /* FIXME */
     /* make sure : &user_req_info == &user_req_info.u.reply */
     if (copy_to_user(user_req_info, &reply, sizeof(reply))) 
     {

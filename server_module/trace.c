@@ -4484,11 +4484,7 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     NULL,
 };
 
-#ifdef CONFIG_UNIFIED_KERNEL
-char * req_names[REQ_NB_REQUESTS] = {
-#else
 static const char * const req_names[REQ_NB_REQUESTS] = {
-#endif
     "new_process",
     "get_new_process_info",
     "new_thread",

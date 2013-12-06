@@ -51,6 +51,7 @@
 #include "wine/library.h"
 
 #ifdef CONFIG_UNIFIED_KERNEL
+#include <linux/uaccess.h>
 #include <asm/div64.h>
 #include "klog.h"
 #endif
@@ -1732,7 +1733,6 @@ unsigned int get_prefix_cpu_mask(void)
 }
 
 #ifdef CONFIG_UNIFIED_KERNEL
-#include <linux/uaccess.h>
 
 char *build_reg_name( const char *config_dir , int config_dir_len, const char *regname )
 {
@@ -1743,16 +1743,20 @@ char *build_reg_name( const char *config_dir , int config_dir_len, const char *r
     ret = malloc(total_len);
     if (!ret)
     {
-        printk("%s No Memory \n", __func__);
+        klog(0,"No Memory \n");
         return NULL;
     }
+
     memset(ret, 0, total_len);
+
     if (copy_from_user(ret, config_dir, config_dir_len))
     {
-        printk("%s copy_from_user error\n", __func__);
+        klog(0,"copy_from_user error \n");
         return NULL;
     }
+
     memcpy(ret+config_dir_len, regname, strlen(regname)); 
+
     return ret;
 }
 
@@ -1783,7 +1787,7 @@ void uk_init_registry(const char __user *config_dir, int len)
 
     if (!config_dir || !len)
 	{
-		printk("%s config_dir is NULL \n",__func__);
+		klog(0,"config_dir is NULL \n");
 		return;
 	}
 	else

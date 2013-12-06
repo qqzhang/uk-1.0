@@ -19,6 +19,7 @@
  * Revision History:
  *   Dec 2008 - Created.
  */
+
 #include <linux/kernel.h>
 #include <linux/version.h>
 #include <linux/syscalls.h>
@@ -34,14 +35,7 @@
 #include <net/tcp.h>
 #include <asm/uaccess.h>
 #include <asm-generic/ioctls.h> /* for tcgetattr */
-#if 0
-#include <linux/fs.h>
-#include <linux/vmalloc.h>
-#include <linux/ctype.h>
-#include <linux/mm.h>
-#include <linux/string.h>
-#include <linux/statfs.h>
-#endif
+
 #undef PARITY_NONE
 
 #include "ntstatus.h"
@@ -172,7 +166,7 @@ unsigned long read_kallsyms(char *symbol_name)
             break;
         if (( p = strstr(line, new_symbol_name)) != NULL)
         {
-            /*
+/*
 NOTES: ' ' & '\t'
 c0123456 T sys_read
 e0654321 T cdrom_open    [cdrom]
@@ -233,10 +227,6 @@ void* get_kernel_proc_address(char *funcname)
     {
         printk("%s : %s=NULL\n",__func__,funcname);
         dump_stack();
-    }
-    else
-    {
-        //printk("%s=%08x\n",funcname,addr);
     }
 
     return addr;
@@ -2464,6 +2454,7 @@ int vsprintfW( WCHAR *str, const WCHAR *format, va_list valist )
 {
     return vsnprintfW( str, INT_MAX, format, valist );
 }
+
 int snprintfW( WCHAR *str, size_t len, const WCHAR *format, ...)
 {
     int retval;
@@ -2473,6 +2464,7 @@ int snprintfW( WCHAR *str, size_t len, const WCHAR *format, ...)
     va_end(valist);
     return retval;
 }
+
 int sprintfW( WCHAR *str, const WCHAR *format, ...)
 {
     int retval;
@@ -2554,7 +2546,6 @@ unsigned long long int gnu_dev_makedev (unsigned int major, unsigned int minor)
 
 /*unistd.h*/
 
-/* need PREPARE_KERNEL_CALL ? */
 long close(unsigned int fd)
 {
     long ret;
@@ -2640,7 +2631,6 @@ int close_fd_by_pid(int fd, pid_t pid)
     task = uk_find_task_by_pid(pid);
     if (!task)
     {
-    //    klog(0,"target task %d is exit \n", pid);
         return -ESRCH;
     }
 
@@ -2649,7 +2639,6 @@ int close_fd_by_pid(int fd, pid_t pid)
     tfiles = get_files(task);
     if (!tfiles)
     {
-     //   klog(0,"target files is NULL \n");
         ret = -EBADF;
         goto out;
     }
@@ -2841,6 +2830,7 @@ int symlink(const char *oldpath, const char *newpath)
     klog(0,"NOT IMPLEMENT!\n");
     return 0;
 }
+
 int unlink(const char *pathname)
 {
     int ret;
@@ -2864,11 +2854,13 @@ int rename(const char *oldpath, const char *newpath)
 
     SYSCALL_RETURN(ret);
 }
+
 int truncate(const char *path, off_t length)
 {
     klog(0,"NOT IMPLEMENT!\n");
     return 0;
 }
+
 int ftruncate(int fd, off_t length)
 {
     int ret=0;
@@ -2879,6 +2871,7 @@ int ftruncate(int fd, off_t length)
 
     SYSCALL_RETURN(ret);
 }
+
 int statfs(const char *path, struct statfs *buf)
 {
     klog(0,"NOT IMPLEMENT!\n");
@@ -2922,7 +2915,6 @@ int mkdir(const char *pathname, mode_t mode)
     SYSCALL_RETURN(ret);
 }
 
-//asmlinkage long sys_getcwd(char __user *buf, unsigned long size);
 int chdir(const char *path)
 {
     int ret;
@@ -2942,6 +2934,7 @@ int fchdir(int fd)
 
     SYSCALL_RETURN(ret);
 }
+
 int fsync(int fd)
 {
     int ret;
@@ -2951,11 +2944,13 @@ int fsync(int fd)
 
     SYSCALL_RETURN(ret);
 }
+
 int chmod(const char *path, mode_t mode)
 {
     klog(0,"NOT IMPLEMENT!\n");
     return 0;
 }
+
 int fchmod(int fd, mode_t mode)
 {
     long ret;
@@ -2995,16 +2990,19 @@ int gettimeofday(void *tv, void *tz)
     klog(0,"NOT IMPLEMENT!\n");
     return 0;
 }
+
 int settimeofday(const void *tv, const void *tz)
 {
     klog(0,"NOT IMPLEMENT!\n");
     return 0;
 }
+
 int usleep(unsigned int usec)
 {
     klog(0,"NOT IMPLEMENT!\n");
     return 0;
 }
+
 int clock_settime(clockid_t clk_id, const void *tp)
 {
     klog(0,"NOT IMPLEMENT!\n");
@@ -3074,32 +3072,6 @@ int kill(pid_t pid, int sig)
 
     SYSCALL_RETURN(ret);
 }
-
-#if 0
-long tgkill(int tgid, int pid, int sig);
-{
-    long ret;
-    asmlinkage long (*sys_tgkill)(int tgid, int pid, int sig) = get_syscall(UK_tgkill);
-
-    PREPARE_KERNEL_CALL;
-    ret = sys_tgkill(tgid, pid, sig);
-    END_KERNEL_CALL;
-
-    SYSCALL_RETURN(ret);
-}
-
-long tkill(int pid, int sig);
-{
-    long ret;
-    asmlinkage long (*sys_tkill)(int pid, int sig) =  get_syscall(UK_tkill);
-
-    PREPARE_KERNEL_CALL;
-    ret = sys_tkill(pid, sig);
-    END_KERNEL_CALL;
-
-    SYSCALL_RETURN(ret);
-}
-#endif
 
 ssize_t filp_pread(struct file *filp, char *buf, size_t count, off_t pos)
 {
@@ -3379,12 +3351,6 @@ int getpeername(int sockfd, struct sockaddr *addr, int* addrlen )
     SYSCALL_RETURN(ret);
 }
 
-/* 
- * inotify.h
- * inotify_init,
- * inotify_add_watch,
- * inotify_rm_watch
- */
 int inotify_init(void)
 {
     int ret;
@@ -3422,7 +3388,7 @@ int inotify_rm_watch(int fd,int wd)
     SYSCALL_RETURN(ret);
 }
 
-/*mma.h*/
+/*mman.h*/
 int mmap(unsigned long addr, size_t len, int prot, int flags, int fd, off_t off)
 {
     int ret;
@@ -3765,7 +3731,7 @@ int tcgetattr(int fd, struct termios *termios_p)
        INLINE_SYSCALL (ioctl, 3, fd, TCGETS, &k_termios);
     */
     PREPARE_KERNEL_CALL;
-    ret = sys_ioctl(fd, TCGETS, termios_p);
+    ret = sys_ioctl(fd, TCGETS, (unsigned long)termios_p);
     END_KERNEL_CALL;
 
     SYSCALL_RETURN(ret);
