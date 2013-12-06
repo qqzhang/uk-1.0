@@ -2629,11 +2629,11 @@ int check_fd_events( struct uk_fd *fd, int events )
     struct file *filp;
     int mask = 0;
 
-    if (get_unix_fd(fd) == -1) return POLLERR;
     if (fd->inode) return events;  /* regular files are always signaled */
 
     filp = get_unix_file(fd);
-    if (filp && filp->f_op && filp->f_op->poll)
+    if (!filp) return POLLERR;
+    if (filp->f_op->poll)
     {
         mask = filp->f_op->poll(filp, NULL);
     }
