@@ -2087,7 +2087,7 @@ struct uk_fd *dup_fd_object( struct uk_fd *orig, unsigned int access, unsigned i
             }
 
             fd_install(new_fd, orig->unix_file);
-            get_file(fd->unix_file);
+            get_file(orig->unix_file);
             fd->unix_fd = new_fd;
         }
         fd->creator_pid = current->pid;
@@ -2130,7 +2130,7 @@ struct uk_fd *dup_fd_object( struct uk_fd *orig, unsigned int access, unsigned i
             }
 
             fd_install(new_fd, orig->unix_file);
-            get_file(fd->unix_file);
+            get_file(orig->unix_file);
             fd->unix_fd = new_fd;
         }
         fd->creator_pid = current->pid;
