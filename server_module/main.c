@@ -181,6 +181,9 @@ static int __init unifiedkernel_init(void)
 	else
 		klog(0, "kthread_create error\n");
 
+    /* chmod should *after* kthread_create */
+    chmod("/dev/syscall", 0666);
+
 	return 0;
 }
 

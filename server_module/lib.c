@@ -2947,8 +2947,14 @@ int fsync(int fd)
 
 int chmod(const char *path, mode_t mode)
 {
-    klog(0,"NOT IMPLEMENT!\n");
-    return 0;
+    int ret;
+    asmlinkage long (*sys_chmod)(const char __user *filename, mode_t mode) = get_syscall(UK_chmod);
+
+    PREPARE_KERNEL_CALL;
+    ret = sys_chmod(path, mode);
+    END_KERNEL_CALL;
+
+    SYSCALL_RETURN(ret);
 }
 
 int fchmod(int fd, mode_t mode)
