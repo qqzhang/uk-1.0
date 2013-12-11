@@ -1,0 +1,61 @@
+Quick start
+===========
+Install Longene, you have only 2 steps to go:
+1. Build Wine-1.6-uk, without wineserver
+2. Build Longene module
+
+
+Build Wine
+==========
+To build Wine, cd to the top-level directory of the Wine for Longene
+source (wine-1.6-uk), then configure and build it:
+
+  ./configure
+  make
+  make install
+
+
+Build Longene module
+=================================
+To build the module, cd to the "server_module" directory and run 
+the command:
+
+  make
+
+After building, install the module to get the Longene running:
+
+  insmod unifiedkernel.ko
+
+All done, Longene is running!
+
+
+Run programs
+================
+
+First, execute under cmdlind:
+
+echo ':DOSWin:M::MZ::/usr/local/bin/wine:' > /proc/sys/fs/binfmt_misc/register
+
+Now you can run some Win32 programs in X terminal windows just like what 
+you do on Linux, such as:
+
+  ./Hellworld.exe
+
+Note that Longene is not completed yet, so some applications may crash the
+system or not work properly as on Microsoft Windows. You can report these
+bugs on :
+
+  http://www.longene.org/bugzilla
+
+
+UNINSTALL
+=========
+If you don't want to use Longene any more, you can uninstall it:
+
+1. Uninstall module:
+  
+  rmmod unifiedkernel.ko
+
+cd to the directory "module" and run command:
+  
+  make clean 
