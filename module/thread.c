@@ -74,7 +74,7 @@ static const unsigned int supported_cpus = CPU_FLAG(CPU_ARM64);
 #include <linux/sched.h>
 #include "klog.h"
 
-static DEFINE_SPINLOCK(thread_lock);
+static DEFINE_RECURSIVE_SPINLOCK(thread_lock);
 
 int uk_sched_setaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask);
 int uk_sched_getaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask);
@@ -857,7 +857,7 @@ int wake_thread( struct thread *thread )
     client_ptr_t cookie;
 
 #ifdef CONFIG_UNIFIED_KERNEL
-    spin_lock_bh(&thread_lock);
+    recursive_spin_lock_bh(&thread_lock);
 #endif
     for (count = 0; thread->wait; count++)
     {
@@ -870,7 +870,7 @@ int wake_thread( struct thread *thread )
 	    break;
     }
 #ifdef CONFIG_UNIFIED_KERNEL
-    spin_unlock_bh(&thread_lock);
+    recursive_spin_unlock_bh(&thread_lock);
 #endif
     return count;
 }
@@ -883,7 +883,7 @@ static void thread_timeout( void *ptr )
     struct thread *thread;
     client_ptr_t cookie;
 
-    spin_lock_bh(&thread_lock);
+    recursive_spin_lock_bh(&thread_lock);
 
     thread = wait->thread;
     cookie = wait->cookie;
@@ -895,7 +895,7 @@ static void thread_timeout( void *ptr )
     if (debug_level) fprintf( stderr, "%04x: *wakeup* signaled=TIMEOUT\n", thread->id );
     end_wait( thread );
 
-    spin_unlock_bh(&thread_lock);
+    recursive_spin_unlock_bh(&thread_lock);
 
     if (send_thread_wakeup( thread, cookie, STATUS_TIMEOUT ) == -1) return;
     /* check if other objects have become signaled in the meantime */
@@ -903,7 +903,7 @@ static void thread_timeout( void *ptr )
     return;
 
 out:
-    spin_unlock_bh(&thread_lock);
+    recursive_spin_unlock_bh(&thread_lock);
     return;
 }
 #else
@@ -993,7 +993,7 @@ static timeout_t select_on( unsigned int count, client_ptr_t cookie, const obj_h
         need_free = 1;
     }
 
-    spin_lock_bh(&thread_lock);
+    recursive_spin_lock_bh(&thread_lock);
 
     wait->next    = current_thread->wait;
     wait->thread  = current_thread;
@@ -1053,7 +1053,7 @@ static timeout_t select_on( unsigned int count, client_ptr_t cookie, const obj_h
     need_free = 0;
 
 done:
-    spin_unlock_bh(&thread_lock);
+    recursive_spin_unlock_bh(&thread_lock);
     if (need_free) free(user);
 done_1:
     while (i > 0) release_object( objects[--i] );
@@ -1216,9 +1216,9 @@ static int queue_apc( struct process *process, struct thread *thread, struct thr
     }
 
     grab_object( apc );
-    spin_lock_bh(&thread_lock);
+    recursive_spin_lock_bh(&thread_lock);
     wine_list_add_tail( queue, &apc->entry );
-    spin_unlock_bh(&thread_lock);
+    recursive_spin_unlock_bh(&thread_lock);
     if (!list_prev( queue, &apc->entry ))  /* first one */
         wake_thread( thread );
 
@@ -1291,11 +1291,11 @@ static int queue_apc_softirq( struct process *process, struct thread *thread, st
     }
 
     grab_object( apc );
-    spin_lock(&thread_lock);
+    recursive_spin_lock(&thread_lock);
     wine_list_add_tail( queue, &apc->entry );
     if (!list_prev( queue, &apc->entry ))  /* first one */
         wake_thread_softirq( thread );
-    spin_unlock(&thread_lock);
+    recursive_spin_unlock(&thread_lock);
 
     return 1;
 }
@@ -1382,9 +1382,9 @@ static void clear_apc_queue( struct list_head *queue )
     while ((ptr = list_head( queue )))
     {
         struct thread_apc *apc = LIST_ENTRY( ptr, struct thread_apc, entry );
-        spin_lock_bh(&thread_lock);
+        recursive_spin_lock_bh(&thread_lock);
         list_remove( &apc->entry );
-        spin_unlock_bh(&thread_lock);
+        recursive_spin_unlock_bh(&thread_lock);
         apc->executed = 1;
         uk_wake_up( &apc->obj, 0 );
         release_object( apc );
@@ -1844,13 +1844,13 @@ DECL_HANDLER(select)
     {
         for (;;)
         {
-            spin_lock_bh(&thread_lock);
+            recursive_spin_lock_bh(&thread_lock);
             if (!(apc = thread_dequeue_apc( current_thread, !(req->flags & SELECT_ALERTABLE) )))
             {
-                spin_unlock_bh(&thread_lock);
+                recursive_spin_unlock_bh(&thread_lock);
                 break;
             }
-            spin_unlock_bh(&thread_lock);
+            recursive_spin_unlock_bh(&thread_lock);
             /* Optimization: ignore APC_NONE calls, they are only used to
              * wake up a thread, but since we got here the thread woke up already.
              */

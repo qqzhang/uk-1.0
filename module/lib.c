@@ -25,6 +25,7 @@
 #include <linux/syscalls.h>
 #include <linux/slab.h>
 #include <linux/module.h>
+#include <linux/spinlock.h>
 #include <linux/cred.h> /* for getuid() */
 #include <linux/file.h>
 #include <linux/fdtable.h>
@@ -3880,4 +3881,63 @@ int check_fin( struct uk_fd *fd )
         }
     }
     return 0;
+}
+
+int recursive_spin_trylock(recursive_spinlock_t *lock)
+{
+    spin_lock(&lock->lock);
+    if (lock->count <= 0)
+    {
+        lock->pid = current->pid;
+        lock->count = 1;
+        spin_unlock(&lock->lock);
+        return 1;
+    }
+    // somebody has the lock
+    if (lock->pid == current->pid)
+    {
+        // it was us! return ok
+        lock->count++;
+        spin_unlock(&lock->lock);
+        return 1;
+    }
+    spin_unlock(&lock->lock);
+
+    // somebody has the lock and it's not us! return fail
+    return 0;
+}
+
+void recursive_spin_lock(recursive_spinlock_t *lock)
+{
+    while (recursive_spin_trylock(lock) == 0)
+        /* nothing */;
+}
+
+void recursive_spin_unlock(recursive_spinlock_t *lock)
+{
+    spin_lock(&lock->lock);
+    if (--lock->count <= 0)
+        lock->count = 0;
+    spin_unlock(&lock->lock);
+}
+
+void recursive_spin_lock_bh(recursive_spinlock_t *lock)
+{
+    local_bh_disable();
+    preempt_disable();
+    recursive_spin_lock(lock);
+}
+
+void recursive_spin_unlock_bh(recursive_spinlock_t *lock)
+{
+    recursive_spin_unlock(lock);
+    preempt_enable();
+    local_bh_enable();
+}
+
+void recursive_spinlock_init(recursive_spinlock_t *lock)
+{
+    spin_lock_init(&lock->lock);
+    lock->pid = -1;
+    lock->count = 0;
 }

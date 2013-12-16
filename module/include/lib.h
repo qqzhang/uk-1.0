@@ -3,6 +3,7 @@
 
 #include <linux/types.h>
 #include <linux/major.h>
+#include <linux/spinlock.h>
 #include "stdarg.h"
 #include "sys/poll.h"
 #include "sys/epoll.h"
@@ -298,5 +299,21 @@ extern void *syscall_array[UK_NR_SYSCALLS];
 extern void init_uk_lock(void);
 extern void uk_lock(void);
 extern void uk_unlock(void);
+
+typedef struct recursive_spinlock
+{
+    spinlock_t lock;
+    int pid;
+    int count;
+} recursive_spinlock_t;
+
+#define DEFINE_RECURSIVE_SPINLOCK(name) \
+    recursive_spinlock_t name = {.lock=__SPIN_LOCK_UNLOCKED((name).lock), .pid=-1, .count=0,}
+
+void recursive_spinlock_init(recursive_spinlock_t *lock);
+void recursive_spin_lock(recursive_spinlock_t *lock);
+void recursive_spin_unlock(recursive_spinlock_t *lock);
+void recursive_spin_lock_bh(recursive_spinlock_t *lock);
+void recursive_spin_unlock_bh(recursive_spinlock_t *lock);
 
 #endif
