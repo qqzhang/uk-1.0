@@ -827,16 +827,38 @@ static void inotify_notify_all( struct inotify_event *ie )
 static void inotify_poll_event( struct uk_fd *fd, int event )
 {
     int r, ofs, unix_fd;
+#ifndef CONFIG_UNIFIED_KERNEL
     char buffer[0x1000];
     struct inotify_event *ie;
+#else
+    char *buffer;
+    struct inotify_event *ie;
+
+    buffer = malloc_atomic( 0x1000 * sizeof(char) );
+    if (!buffer)
+    {
+        klog(0,"No memory ! \n");
+        return;
+    }
+#endif
 
     unix_fd = get_unix_fd( fd );
+#ifdef CONFIG_UNIFIED_KERNEL
+    r = read( unix_fd, buffer, 0x1000 );
+    if (r < 0)
+    {
+        fprintf(stderr,"inotify_poll_event(): inotify read failed!\n");
+        free( buffer );
+        return;
+    }
+#else
     r = read( unix_fd, buffer, sizeof buffer );
     if (r < 0)
     {
         fprintf(stderr,"inotify_poll_event(): inotify read failed!\n");
         return;
     }
+#endif
 
     for( ofs = 0; ofs < r - offsetof(struct inotify_event, name); )
     {
@@ -847,6 +869,9 @@ static void inotify_poll_event( struct uk_fd *fd, int event )
         if (ofs > r) break;
         inotify_notify_all( ie );
     }
+#ifdef CONFIG_UNIFIED_KERNEL
+    free( buffer );
+#endif
 }
 
 static inline struct uk_fd *create_inotify_fd( void )

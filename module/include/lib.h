@@ -5,6 +5,7 @@
 #include <linux/major.h>
 #include <linux/spinlock.h>
 #include "stdarg.h"
+#include "klog.h"
 #include "sys/poll.h"
 #include "sys/epoll.h"
 #include "sys/socket.h"
