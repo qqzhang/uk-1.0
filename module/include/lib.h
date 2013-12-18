@@ -304,7 +304,7 @@ extern void uk_unlock(void);
 typedef struct recursive_spinlock
 {
     spinlock_t lock;
-    int pid;
+    pid_t pid;
     int count;
 } recursive_spinlock_t;
 
