@@ -1610,8 +1610,8 @@ static void STDMETHODCALLTYPE d3d10_device_CheckCounterInfo(ID3D10Device *iface,
 }
 
 static HRESULT STDMETHODCALLTYPE d3d10_device_CheckCounter(ID3D10Device *iface,
-        const D3D10_COUNTER_DESC *desc, D3D10_COUNTER_TYPE *type, UINT *active_counters, LPSTR name,
-        UINT *name_length, LPSTR units, UINT *units_length, LPSTR description, UINT *description_length)
+        const D3D10_COUNTER_DESC *desc, D3D10_COUNTER_TYPE *type, UINT *active_counters, char *name,
+        UINT *name_length, char *units, UINT *units_length, char *description, UINT *description_length)
 {
     FIXME("iface %p, desc %p, type %p, active_counters %p, name %p, name_length %p,\n"
             "\tunits %p, units_length %p, description %p, description_length %p stub!\n",
@@ -1830,18 +1830,30 @@ static void CDECL device_parent_mode_changed(struct wined3d_device_parent *devic
     TRACE("device_parent %p.\n", device_parent);
 }
 
-static HRESULT CDECL device_parent_create_texture_surface(struct wined3d_device_parent *device_parent,
-        void *container_parent, const struct wined3d_resource_desc *desc, UINT sub_resource_idx,
-        DWORD flags, struct wined3d_surface **surface)
+static HRESULT CDECL device_parent_surface_created(struct wined3d_device_parent *device_parent,
+        void *container_parent, struct wined3d_surface *surface, void **parent,
+        const struct wined3d_parent_ops **parent_ops)
 {
-    struct d3d10_device *device = device_from_wined3d_device_parent(device_parent);
+    TRACE("device_parent %p, container_parent %p, surface %p, parent %p, parent_ops %p.\n",
+            device_parent, container_parent, surface, parent, parent_ops);
 
-    TRACE("device_parent %p, container_parent %p, desc %p, sub_resource_idx %u, flags %#x, surface %p.\n",
-            device_parent, container_parent, desc, sub_resource_idx, flags, surface);
+    *parent = container_parent;
+    *parent_ops = &d3d10_null_wined3d_parent_ops;
 
-    return wined3d_surface_create(device->wined3d_device, desc->width, desc->height, desc->format,
-            desc->usage, desc->pool, desc->multisample_type, desc->multisample_quality, flags,
-            container_parent, &d3d10_null_wined3d_parent_ops, surface);
+    return S_OK;
+}
+
+static HRESULT CDECL device_parent_volume_created(struct wined3d_device_parent *device_parent,
+        void *container_parent, struct wined3d_volume *volume, void **parent,
+        const struct wined3d_parent_ops **parent_ops)
+{
+    TRACE("device_parent %p, container_parent %p, volume %p, parent %p, parent_ops %p.\n",
+            device_parent, container_parent, volume, parent, parent_ops);
+
+    *parent = container_parent;
+    *parent_ops = &d3d10_null_wined3d_parent_ops;
+
+    return S_OK;
 }
 
 static HRESULT CDECL device_parent_create_swapchain_surface(struct wined3d_device_parent *device_parent,
@@ -1886,28 +1898,6 @@ static HRESULT CDECL device_parent_create_swapchain_surface(struct wined3d_devic
     return S_OK;
 }
 
-static HRESULT CDECL device_parent_create_volume(struct wined3d_device_parent *device_parent,
-        void *container_parent, UINT width, UINT height, UINT depth, enum wined3d_format_id format,
-        enum wined3d_pool pool, DWORD usage, struct wined3d_volume **volume)
-{
-    HRESULT hr;
-
-    TRACE("device_parent %p, container_parent %p, width %u, height %u, depth %u, "
-            "format %#x, pool %#x, usage %#x, volume %p.\n",
-            device_parent, container_parent, width, height, depth,
-            format, pool, usage, volume);
-
-    hr = wined3d_volume_create(device_from_wined3d_device_parent(device_parent)->wined3d_device,
-            width, height, depth, usage, format, pool, NULL, &d3d10_subresource_parent_ops, volume);
-    if (FAILED(hr))
-    {
-        WARN("Failed to create wined3d volume, hr %#x.\n", hr);
-        return hr;
-    }
-
-    return S_OK;
-}
-
 static HRESULT CDECL device_parent_create_swapchain(struct wined3d_device_parent *device_parent,
         struct wined3d_swapchain_desc *desc, struct wined3d_swapchain **swapchain)
 {
@@ -1940,9 +1930,9 @@ static const struct wined3d_device_parent_ops d3d10_wined3d_device_parent_ops =
 {
     device_parent_wined3d_device_created,
     device_parent_mode_changed,
+    device_parent_surface_created,
+    device_parent_volume_created,
     device_parent_create_swapchain_surface,
-    device_parent_create_texture_surface,
-    device_parent_create_volume,
     device_parent_create_swapchain,
 };
 

@@ -8,9 +8,8 @@ C_SRCS = \
 	main.c
 
 RC_SRCS = winemine.rc
-PO_SRCS = winemine.rc
 
-MANPAGE = winemine.man
+MANPAGES = winemine.man.in
 
 SVG_SRCS = winemine.svg
 

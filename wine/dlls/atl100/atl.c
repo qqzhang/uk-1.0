@@ -24,7 +24,7 @@
 #include "wine/debug.h"
 #include "wine/unicode.h"
 
-WINE_DEFAULT_DEBUG_CHANNEL(atl100);
+WINE_DEFAULT_DEBUG_CHANNEL(atl);
 
 typedef unsigned char cpp_bool;
 
@@ -299,7 +299,7 @@ HRESULT WINAPI AtlModuleAddTermFunc(_ATL_MODULE *pM, _ATL_TERMFUNC *pFunc, DWORD
 {
     _ATL_TERMFUNC_ELEM *termfunc_elem;
 
-    TRACE("(%p %p %ld)\n", pM, pFunc, dw);
+    TRACE("version %04x (%p %p %ld)\n", _ATL_VER, pM, pFunc, dw);
 
     termfunc_elem = HeapAlloc(GetProcessHeap(), 0, sizeof(_ATL_TERMFUNC_ELEM));
     termfunc_elem->pFunc = pFunc;
@@ -502,7 +502,28 @@ HRESULT WINAPI AtlComModuleRegisterClassObjects(_ATL_COM_MODULE *module, DWORD c
     }
 
    return S_OK;
+}
 
+/***********************************************************************
+ *           AtlComModuleRevokeClassObjects   [atl100.20]
+ */
+HRESULT WINAPI AtlComModuleRevokeClassObjects(_ATL_COM_MODULE *module)
+{
+    _ATL_OBJMAP_ENTRY **iter;
+    HRESULT hres;
+
+    TRACE("(%p)\n", module);
+
+    if(!module)
+        return E_INVALIDARG;
+
+    for(iter = module->m_ppAutoObjMapFirst; iter < module->m_ppAutoObjMapLast; iter++) {
+        hres = CoRevokeClassObject((*iter)->dwRegister);
+        if(FAILED(hres))
+            return hres;
+    }
+
+    return S_OK;
 }
 
 /***********************************************************************
@@ -784,7 +805,8 @@ HRESULT WINAPI AtlGetPerUserRegistration(cpp_bool *pbEnabled)
  */
 DWORD WINAPI AtlGetVersion(void *pReserved)
 {
-   return _ATL_VER;
+    TRACE("version %04x (%p)\n", _ATL_VER, pReserved);
+    return _ATL_VER;
 }
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)

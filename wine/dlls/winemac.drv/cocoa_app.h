@@ -67,12 +67,16 @@ enum {
     NSUInteger unmatchedMouseDowns;
 
     NSMutableDictionary* originalDisplayModes;
+    NSMutableDictionary* latentDisplayModes;
     BOOL displaysCapturedForFullscreen;
 
     NSArray*    cursorFrames;
     int         cursorFrame;
     NSTimer*    cursorTimer;
+    NSCursor*   cursor;
+    BOOL        cursorIsCurrent;
     BOOL        cursorHidden;
+    BOOL        clientWantsCursorHidden;
 
     BOOL clippingCursor;
     CGRect cursorClipRect;
@@ -85,6 +89,8 @@ enum {
     NSImage* applicationIcon;
 
     BOOL beenActive;
+
+    NSMutableSet* windowsBeingDragged;
 }
 
 @property (nonatomic) CGEventSourceKeyboardType keyboardType;

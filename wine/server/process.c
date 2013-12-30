@@ -60,7 +60,7 @@ static int shutdown_stage;  /* current stage in the shutdown process */
 /* process operations */
 
 static void process_dump( struct object *obj, int verbose );
-static int process_signaled( struct object *obj, struct thread *thread );
+static int process_signaled( struct object *obj, struct wait_queue_entry *entry );
 static unsigned int process_map_access( struct object *obj, unsigned int access );
 static void process_poll_event( struct fd *fd, int event );
 static void process_destroy( struct object *obj );
@@ -110,7 +110,7 @@ struct startup_info
 };
 
 static void startup_info_dump( struct object *obj, int verbose );
-static int startup_info_signaled( struct object *obj, struct thread *thread );
+static int startup_info_signaled( struct object *obj, struct wait_queue_entry *entry );
 static void startup_info_destroy( struct object *obj );
 
 static const struct object_ops startup_info_ops =
@@ -342,7 +342,6 @@ struct thread *create_process( int fd, struct thread *parent_thread, int inherit
     list_init( &process->dlls );
     list_init( &process->rawinput_devices );
 
-    process->start_time = current_time;
     process->end_time = 0;
     list_add_tail( &process_list, &process->entry );
 
@@ -441,7 +440,7 @@ static void process_dump( struct object *obj, int verbose )
     fprintf( stderr, "Process id=%04x handles=%p\n", process->id, process->handles );
 }
 
-static int process_signaled( struct object *obj, struct thread *thread )
+static int process_signaled( struct object *obj, struct wait_queue_entry *entry )
 {
     struct process *process = (struct process *)obj;
     return !process->running_threads;
@@ -483,7 +482,7 @@ static void startup_info_dump( struct object *obj, int verbose )
              info->data->hstdin, info->data->hstdout, info->data->hstderr );
 }
 
-static int startup_info_signaled( struct object *obj, struct thread *thread )
+static int startup_info_signaled( struct object *obj, struct wait_queue_entry *entry )
 {
     struct startup_info *info = (struct startup_info *)obj;
     return info->process && info->process->startup_state != STARTUP_IN_PROGRESS;
@@ -898,6 +897,11 @@ DECL_HANDLER(new_process)
         close( socket_fd );
         return;
     }
+    if (!is_cpu_supported( req->cpu ))
+    {
+        close( socket_fd );
+        return;
+    }
 
     if (!req->info_size)  /* create an orphaned process */
     {
@@ -1059,6 +1063,7 @@ DECL_HANDLER(init_process_done)
     list_add_head( &process->dlls, &dll->entry );
 
     process->ldt_copy = req->ldt_copy;
+    process->start_time = current_time;
 
     generate_startup_debug_events( process, req->entry );
     set_process_startup_state( process, STARTUP_DONE );

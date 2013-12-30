@@ -38,7 +38,7 @@
 WINE_DEFAULT_DEBUG_CHANNEL(dbghelp);
 WINE_DECLARE_DEBUG_CHANNEL(dbghelp_symt);
 
-static WCHAR    starW[] = {'*','\0'};
+static const WCHAR starW[] = {'*','\0'};
 
 static inline int cmp_addr(ULONG64 a1, ULONG64 a2)
 {
@@ -1229,7 +1229,8 @@ BOOL WINAPI SymFromAddr(HANDLE hProcess, DWORD64 Address,
     if ((sym = symt_find_nearest(pair.effective, Address)) == NULL) return FALSE;
 
     symt_fill_sym_info(&pair, NULL, &sym->symt, Symbol);
-    *Displacement = Address - Symbol->Address;
+    if (Displacement)
+        *Displacement = Address - Symbol->Address;
     return TRUE;
 }
 
@@ -1759,6 +1760,7 @@ DWORD WINAPI UnDecorateSymbolName(PCSTR DecoratedName, PSTR UnDecoratedName,
                                   DWORD UndecoratedLength, DWORD Flags)
 {
     /* undocumented from msvcrt */
+    static HANDLE hMsvcrt;
     static char* (CDECL *p_undname)(char*, const char*, int, void* (CDECL*)(size_t), void (CDECL*)(void*), unsigned short);
     static const WCHAR szMsvcrt[] = {'m','s','v','c','r','t','.','d','l','l',0};
 

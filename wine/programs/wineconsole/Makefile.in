@@ -11,8 +11,7 @@ C_SRCS = \
 	wineconsole.c
 
 RC_SRCS = wineconsole.rc
-PO_SRCS = wineconsole.rc
 
-MANPAGE = wineconsole.man
+MANPAGES = wineconsole.man.in
 
 @MAKE_PROG_RULES@

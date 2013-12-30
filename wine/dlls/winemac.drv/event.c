@@ -35,6 +35,7 @@ static const char *dbgstr_event(int type)
         "APP_DEACTIVATED",
         "APP_QUIT_REQUESTED",
         "DISPLAYS_CHANGED",
+        "HOTKEY_PRESS",
         "IM_SET_TEXT",
         "KEY_PRESS",
         "KEY_RELEASE",
@@ -45,13 +46,18 @@ static const char *dbgstr_event(int type)
         "MOUSE_SCROLL",
         "QUERY_EVENT",
         "RELEASE_CAPTURE",
-        "STATUS_ITEM_CLICKED",
+        "STATUS_ITEM_MOUSE_BUTTON",
+        "STATUS_ITEM_MOUSE_MOVE",
+        "WINDOW_BROUGHT_FORWARD",
         "WINDOW_CLOSE_REQUESTED",
-        "WINDOW_DID_MINIMIZE",
         "WINDOW_DID_UNMINIMIZE",
+        "WINDOW_DRAG_BEGIN",
+        "WINDOW_DRAG_END",
         "WINDOW_FRAME_CHANGED",
         "WINDOW_GOT_FOCUS",
         "WINDOW_LOST_FOCUS",
+        "WINDOW_MINIMIZE_REQUESTED",
+        "WINDOW_RESIZE_ENDED",
     };
 
     if (0 <= type && type < NUM_EVENT_TYPES) return event_names[type];
@@ -67,6 +73,9 @@ static macdrv_event_mask get_event_mask(DWORD mask)
     macdrv_event_mask event_mask = 0;
 
     if ((mask & QS_ALLINPUT) == QS_ALLINPUT) return -1;
+
+    if (mask & QS_HOTKEY)
+        event_mask |= event_mask_for_type(HOTKEY_PRESS);
 
     if (mask & QS_KEY)
     {
@@ -93,9 +102,9 @@ static macdrv_event_mask get_event_mask(DWORD mask)
         event_mask |= event_mask_for_type(APP_QUIT_REQUESTED);
         event_mask |= event_mask_for_type(DISPLAYS_CHANGED);
         event_mask |= event_mask_for_type(IM_SET_TEXT);
-        event_mask |= event_mask_for_type(STATUS_ITEM_CLICKED);
+        event_mask |= event_mask_for_type(STATUS_ITEM_MOUSE_BUTTON);
+        event_mask |= event_mask_for_type(STATUS_ITEM_MOUSE_MOVE);
         event_mask |= event_mask_for_type(WINDOW_CLOSE_REQUESTED);
-        event_mask |= event_mask_for_type(WINDOW_DID_MINIMIZE);
         event_mask |= event_mask_for_type(WINDOW_DID_UNMINIMIZE);
         event_mask |= event_mask_for_type(WINDOW_FRAME_CHANGED);
         event_mask |= event_mask_for_type(WINDOW_GOT_FOCUS);
@@ -106,6 +115,11 @@ static macdrv_event_mask get_event_mask(DWORD mask)
     {
         event_mask |= event_mask_for_type(QUERY_EVENT);
         event_mask |= event_mask_for_type(RELEASE_CAPTURE);
+        event_mask |= event_mask_for_type(WINDOW_BROUGHT_FORWARD);
+        event_mask |= event_mask_for_type(WINDOW_DRAG_BEGIN);
+        event_mask |= event_mask_for_type(WINDOW_DRAG_END);
+        event_mask |= event_mask_for_type(WINDOW_MINIMIZE_REQUESTED);
+        event_mask |= event_mask_for_type(WINDOW_RESIZE_ENDED);
     }
 
     return event_mask;
@@ -144,6 +158,14 @@ static void macdrv_query_event(HWND hwnd, const macdrv_event *event)
             TRACE("QUERY_PASTEBOARD_DATA\n");
             success = query_pasteboard_data(hwnd, query->pasteboard_data.type);
             break;
+        case QUERY_RESIZE_START:
+            TRACE("QUERY_RESIZE_START\n");
+            success = query_resize_start(hwnd);
+            break;
+        case QUERY_MIN_MAX_INFO:
+            TRACE("QUERY_MIN_MAX_INFO\n");
+            success = query_min_max_info(hwnd);
+            break;
         default:
             FIXME("unrecognized query type %d\n", query->type);
             break;
@@ -181,6 +203,9 @@ void macdrv_handle_event(const macdrv_event *event)
     case DISPLAYS_CHANGED:
         macdrv_displays_changed(event);
         break;
+    case HOTKEY_PRESS:
+        macdrv_hotkey_press(event);
+        break;
     case IM_SET_TEXT:
         macdrv_im_set_text(event);
         break;
@@ -207,26 +232,41 @@ void macdrv_handle_event(const macdrv_event *event)
     case RELEASE_CAPTURE:
         macdrv_release_capture(hwnd, event);
         break;
-    case STATUS_ITEM_CLICKED:
-        macdrv_status_item_clicked(event);
+    case STATUS_ITEM_MOUSE_BUTTON:
+        macdrv_status_item_mouse_button(event);
+        break;
+    case STATUS_ITEM_MOUSE_MOVE:
+        macdrv_status_item_mouse_move(event);
+        break;
+    case WINDOW_BROUGHT_FORWARD:
+        macdrv_window_brought_forward(hwnd);
         break;
     case WINDOW_CLOSE_REQUESTED:
         macdrv_window_close_requested(hwnd);
         break;
-    case WINDOW_DID_MINIMIZE:
-        macdrv_window_did_minimize(hwnd);
-        break;
     case WINDOW_DID_UNMINIMIZE:
         macdrv_window_did_unminimize(hwnd);
         break;
+    case WINDOW_DRAG_BEGIN:
+        macdrv_window_drag_begin(hwnd);
+        break;
+    case WINDOW_DRAG_END:
+        macdrv_window_drag_end(hwnd);
+        break;
     case WINDOW_FRAME_CHANGED:
-        macdrv_window_frame_changed(hwnd, event->window_frame_changed.frame);
+        macdrv_window_frame_changed(hwnd, event);
         break;
     case WINDOW_GOT_FOCUS:
         macdrv_window_got_focus(hwnd, event);
         break;
     case WINDOW_LOST_FOCUS:
         macdrv_window_lost_focus(hwnd, event);
+        break;
+    case WINDOW_MINIMIZE_REQUESTED:
+        macdrv_window_minimize_requested(hwnd);
+        break;
+    case WINDOW_RESIZE_ENDED:
+        macdrv_window_resize_ended(hwnd);
         break;
     default:
         TRACE("    ignoring\n");
@@ -277,7 +317,8 @@ DWORD CDECL macdrv_MsgWaitForMultipleObjectsEx(DWORD count, const HANDLE *handle
     }
 
     if (data->current_event && data->current_event->type != QUERY_EVENT &&
-        data->current_event->type != APP_QUIT_REQUESTED)
+        data->current_event->type != APP_QUIT_REQUESTED &&
+        data->current_event->type != WINDOW_DRAG_BEGIN)
         event_mask = 0;  /* don't process nested events */
 
     if (process_events(data->queue, event_mask)) ret = count - 1;

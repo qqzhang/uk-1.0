@@ -16,9 +16,8 @@ C_SRCS = \
 	x11drvdlg.c
 
 RC_SRCS = winecfg.rc
-PO_SRCS = winecfg.rc
 
-MANPAGE = winecfg.man
+MANPAGES = winecfg.man.in
 
 SVG_SRCS = \
 	logo.svg \

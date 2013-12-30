@@ -35,8 +35,6 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(d3dx);
 
-static const ID3DXMatrixStackVtbl ID3DXMatrixStack_Vtbl;
-
 struct ID3DXMatrixStackImpl
 {
   ID3DXMatrixStack ID3DXMatrixStack_iface;
@@ -47,6 +45,7 @@ struct ID3DXMatrixStackImpl
   D3DXMATRIX *stack;
 };
 
+static const unsigned int INITIAL_STACK_SIZE = 32;
 
 /*_________________D3DXColor____________________*/
 
@@ -930,40 +929,6 @@ D3DXMATRIX* WINAPI D3DXMatrixTranspose(D3DXMATRIX *pout, const D3DXMATRIX *pm)
 
 /*_________________D3DXMatrixStack____________________*/
 
-static const unsigned int INITIAL_STACK_SIZE = 32;
-
-HRESULT WINAPI D3DXCreateMatrixStack(DWORD flags, ID3DXMatrixStack **ppstack)
-{
-    struct ID3DXMatrixStackImpl *object;
-
-    TRACE("flags %#x, ppstack %p\n", flags, ppstack);
-
-    object = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*object));
-    if (object == NULL)
-    {
-        *ppstack = NULL;
-        return E_OUTOFMEMORY;
-    }
-    object->ID3DXMatrixStack_iface.lpVtbl = &ID3DXMatrixStack_Vtbl;
-    object->ref = 1;
-
-    object->stack = HeapAlloc(GetProcessHeap(), 0, INITIAL_STACK_SIZE * sizeof(*object->stack));
-    if (!object->stack)
-    {
-        HeapFree(GetProcessHeap(), 0, object);
-        *ppstack = NULL;
-        return E_OUTOFMEMORY;
-    }
-
-    object->current = 0;
-    object->stack_size = INITIAL_STACK_SIZE;
-    D3DXMatrixIdentity(&object->stack[0]);
-
-    TRACE("Created matrix stack %p\n", object);
-
-    *ppstack = &object->ID3DXMatrixStack_iface;
-    return D3D_OK;
-}
 
 static inline struct ID3DXMatrixStackImpl *impl_from_ID3DXMatrixStack(ID3DXMatrixStack *iface)
 {
@@ -1242,6 +1207,37 @@ static const ID3DXMatrixStackVtbl ID3DXMatrixStack_Vtbl =
     ID3DXMatrixStackImpl_TranslateLocal,
     ID3DXMatrixStackImpl_GetTop
 };
+
+HRESULT WINAPI D3DXCreateMatrixStack(DWORD flags, ID3DXMatrixStack **stack)
+{
+    struct ID3DXMatrixStackImpl *object;
+
+    TRACE("flags %#x, stack %p.\n", flags, stack);
+
+    if (!(object = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*object))))
+    {
+        *stack = NULL;
+        return E_OUTOFMEMORY;
+    }
+    object->ID3DXMatrixStack_iface.lpVtbl = &ID3DXMatrixStack_Vtbl;
+    object->ref = 1;
+
+    if (!(object->stack = HeapAlloc(GetProcessHeap(), 0, INITIAL_STACK_SIZE * sizeof(*object->stack))))
+    {
+        HeapFree(GetProcessHeap(), 0, object);
+        *stack = NULL;
+        return E_OUTOFMEMORY;
+    }
+
+    object->current = 0;
+    object->stack_size = INITIAL_STACK_SIZE;
+    D3DXMatrixIdentity(&object->stack[0]);
+
+    TRACE("Created matrix stack %p.\n", object);
+
+    *stack = &object->ID3DXMatrixStack_iface;
+    return D3D_OK;
+}
 
 /*_________________D3DXPLANE________________*/
 
@@ -2398,9 +2394,9 @@ FLOAT* WINAPI D3DXSHEvalDirection(FLOAT *out, UINT order, const D3DXVECTOR3 *dir
 
     out[9] = -sqrtf(70.0f / D3DX_PI) / 8.0f * dir->y * (3.0f * dirxx - diryy);
     out[10] = sqrtf(105.0f / D3DX_PI) / 2.0f * dirxy * dir->z;
-    out[11] = -sqrtf(42.0 / D3DX_PI) / 8.0f * dir->y * (-1.0f + 5.0f * dirzz);
+    out[11] = -sqrtf(42.0f / D3DX_PI) / 8.0f * dir->y * (-1.0f + 5.0f * dirzz);
     out[12] = sqrtf(7.0f / D3DX_PI) / 4.0f * dir->z * (5.0f * dirzz - 3.0f);
-    out[13] = sqrtf(42.0 / D3DX_PI) / 8.0f * dir->x * (1.0f - 5.0f * dirzz);
+    out[13] = sqrtf(42.0f / D3DX_PI) / 8.0f * dir->x * (1.0f - 5.0f * dirzz);
     out[14] = sqrtf(105.0f / D3DX_PI) / 4.0f * dir->z * (dirxx - diryy);
     out[15] = -sqrtf(70.0f / D3DX_PI) / 8.0f * dir->x * (dirxx - 3.0f * diryy);
     if (order == 4)
@@ -2413,7 +2409,7 @@ FLOAT* WINAPI D3DXSHEvalDirection(FLOAT *out, UINT order, const D3DXVECTOR3 *dir
     out[20] = 3.0f / (16.0f * sqrtf(D3DX_PI)) * (35.0f * dirzzzz - 30.f * dirzz + 3.0f);
     out[21] = 0.375f * sqrtf(10.0f / D3DX_PI) * dirxz * (3.0f - 7.0f * dirzz);
     out[22] = 0.375f * sqrtf(5.0f / D3DX_PI) * (dirxx - diryy) * (7.0f * dirzz - 1.0f);
-    out[23] = 3.0 * dir->z * out[15];
+    out[23] = 3.0f * dir->z * out[15];
     out[24] = 3.0f / 16.0f * sqrtf(35.0f / D3DX_PI) * (dirxxxx - 6.0f * dirxyxy + diryyyy);
     if (order == 5)
         return out;

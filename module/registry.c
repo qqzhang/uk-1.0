@@ -18,6 +18,10 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+/* To do:
+ * - symbolic links
+ */
+
 /*
  * Copyright (C) 2006  Insigma Co., Ltd
  *
@@ -28,10 +32,6 @@
  * The project is sponsored by Insigma Co., Ltd.
  *
  * The authors can be reached at linux@insigma.com.cn.
- */
-
-/* To do:
- * - symbolic links
  */
 
 #include "config.h"
@@ -912,6 +912,7 @@ static void enum_key( const struct reg_key *key, int index, int info_class,
     switch(info_class)
     {
     case KeyBasicInformation:
+    case KeyNameInformation:
         classlen = 0; /* only return the name */
         /* fall through */
     case KeyNodeInformation:

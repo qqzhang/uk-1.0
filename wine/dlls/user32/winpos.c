@@ -2625,6 +2625,7 @@ void WINPOS_SysCommandSizeMove( HWND hwnd, WPARAM wParam )
     BOOL    moved = FALSE;
     DWORD     dwPoint = GetMessagePos ();
     BOOL DragFullWindows = TRUE;
+    HMONITOR mon = 0;
 
     if (IsZoomed(hwnd) || !IsWindowVisible(hwnd)) return;
 
@@ -2673,27 +2674,28 @@ void WINPOS_SysCommandSizeMove( HWND hwnd, WPARAM wParam )
     {
         parent = 0;
         mouseRect = get_virtual_screen_rect();
+        mon = MonitorFromPoint( pt, MONITOR_DEFAULTTONEAREST );
     }
 
     if (ON_LEFT_BORDER(hittest))
     {
-        mouseRect.left  = max( mouseRect.left, sizingRect.right-maxTrack.x );
-        mouseRect.right = min( mouseRect.right, sizingRect.right-minTrack.x );
+        mouseRect.left  = max( mouseRect.left, sizingRect.right-maxTrack.x+capturePoint.x-sizingRect.left );
+        mouseRect.right = min( mouseRect.right, sizingRect.right-minTrack.x+capturePoint.x-sizingRect.left );
     }
     else if (ON_RIGHT_BORDER(hittest))
     {
-        mouseRect.left  = max( mouseRect.left, sizingRect.left+minTrack.x );
-        mouseRect.right = min( mouseRect.right, sizingRect.left+maxTrack.x );
+        mouseRect.left  = max( mouseRect.left, sizingRect.left+minTrack.x+capturePoint.x-sizingRect.right );
+        mouseRect.right = min( mouseRect.right, sizingRect.left+maxTrack.x+capturePoint.x-sizingRect.right );
     }
     if (ON_TOP_BORDER(hittest))
     {
-        mouseRect.top    = max( mouseRect.top, sizingRect.bottom-maxTrack.y );
-        mouseRect.bottom = min( mouseRect.bottom,sizingRect.bottom-minTrack.y);
+        mouseRect.top    = max( mouseRect.top, sizingRect.bottom-maxTrack.y+capturePoint.y-sizingRect.top );
+        mouseRect.bottom = min( mouseRect.bottom,sizingRect.bottom-minTrack.y+capturePoint.y-sizingRect.top);
     }
     else if (ON_BOTTOM_BORDER(hittest))
     {
-        mouseRect.top    = max( mouseRect.top, sizingRect.top+minTrack.y );
-        mouseRect.bottom = min( mouseRect.bottom, sizingRect.top+maxTrack.y );
+        mouseRect.top    = max( mouseRect.top, sizingRect.top+minTrack.y+capturePoint.y-sizingRect.bottom );
+        mouseRect.bottom = min( mouseRect.bottom, sizingRect.top+maxTrack.y+capturePoint.y-sizingRect.bottom );
     }
 
     /* Retrieve a default cache DC (without using the window style) */
@@ -2745,9 +2747,27 @@ void WINPOS_SysCommandSizeMove( HWND hwnd, WPARAM wParam )
         }
 
         pt.x = max( pt.x, mouseRect.left );
-        pt.x = min( pt.x, mouseRect.right );
+        pt.x = min( pt.x, mouseRect.right - 1 );
         pt.y = max( pt.y, mouseRect.top );
-        pt.y = min( pt.y, mouseRect.bottom );
+        pt.y = min( pt.y, mouseRect.bottom - 1 );
+
+        if (!parent)
+        {
+            HMONITOR newmon;
+            MONITORINFO info;
+
+            if ((newmon = MonitorFromPoint( pt, MONITOR_DEFAULTTONULL )))
+                mon = newmon;
+
+            info.cbSize = sizeof(info);
+            if (mon && GetMonitorInfoW( mon, &info ))
+            {
+                pt.x = max( pt.x, info.rcWork.left );
+                pt.x = min( pt.x, info.rcWork.right - 1 );
+                pt.y = max( pt.y, info.rcWork.top );
+                pt.y = min( pt.y, info.rcWork.bottom - 1 );
+            }
+        }
 
         dx = pt.x - capturePoint.x;
         dy = pt.y - capturePoint.y;

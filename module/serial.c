@@ -74,7 +74,6 @@ static struct uk_fd *serial_get_fd( struct object *obj );
 static void serial_destroy(struct object *obj);
 
 static enum server_fd_type serial_get_fd_type( struct uk_fd *fd );
-static void serial_flush( struct uk_fd *fd, struct event **event );
 static void serial_queue_async( struct uk_fd *fd, const async_data_t *data, int type, int count );
 
 struct serial
@@ -90,6 +89,9 @@ struct serial
     unsigned int        writemult;
 
     unsigned int        eventmask;
+    unsigned int        generation; /* event mask change counter */
+    unsigned int        pending_write : 1;
+    unsigned int        pending_wait  : 1;
 
     struct termios      original;
 
@@ -120,7 +122,7 @@ static const struct fd_ops serial_fd_ops =
 {
     default_fd_get_poll_events,   /* get_poll_events */
     default_poll_event,           /* poll_event */
-    serial_flush,                 /* flush */
+    no_flush,                     /* flush */
     serial_get_fd_type,           /* get_fd_type */
     default_fd_ioctl,             /* ioctl */
     serial_queue_async,           /* queue_async */
@@ -149,6 +151,9 @@ struct object *create_serial( struct uk_fd *fd )
     serial->writemult    = 0;
     serial->writeconst   = 0;
     serial->eventmask    = 0;
+    serial->generation   = 0;
+    serial->pending_write = 0;
+    serial->pending_wait = 0;
     serial->fd = (struct uk_fd *)grab_object( fd );
     set_fd_user( fd, &serial_fd_ops, &serial->obj );
     return &serial->obj;
@@ -209,20 +214,23 @@ static void serial_queue_async( struct uk_fd *fd, const async_data_t *data, int 
     }
 }
 
-static void serial_flush( struct uk_fd *fd, struct event **event )
-{
-    /* MSDN says: If hFile is a handle to a communications device,
-     * the function only flushes the transmit buffer.
-     */
-    if (tcflush( get_unix_fd(fd), TCOFLUSH ) == -1) file_set_error();
-}
-
 DECL_HANDLER(get_serial_info)
 {
     struct serial *serial;
 
     if ((serial = get_serial_obj( current_thread->process, req->handle, 0 )))
     {
+        if (req->flags & SERIALINFO_PENDING_WAIT)
+        {
+            if (serial->pending_wait)
+            {
+                release_object( serial );
+                set_error( STATUS_INVALID_PARAMETER );
+                return;
+            }
+            serial->pending_wait = 1;
+        }
+
         /* timeouts */
         reply->readinterval = serial->readinterval;
         reply->readconst    = serial->readconst;
@@ -232,6 +240,12 @@ DECL_HANDLER(get_serial_info)
 
         /* event mask */
         reply->eventmask    = serial->eventmask;
+        reply->cookie       = serial->generation;
+
+        /* pending write */
+        reply->pending_write = serial->pending_write;
+        if (req->flags & SERIALINFO_PENDING_WRITE)
+            serial->pending_write = 0;
 
         release_object( serial );
     }
@@ -243,6 +257,17 @@ DECL_HANDLER(set_serial_info)
 
     if ((serial = get_serial_obj( current_thread->process, req->handle, 0 )))
     {
+        if (req->flags & SERIALINFO_PENDING_WAIT)
+        {
+            if (!serial->pending_wait)
+            {
+                release_object( serial );
+                set_error( STATUS_INVALID_PARAMETER );
+                return;
+            }
+            serial->pending_wait = 0;
+        }
+
         /* timeouts */
         if (req->flags & SERIALINFO_SET_TIMEOUTS)
         {
@@ -253,14 +278,16 @@ DECL_HANDLER(set_serial_info)
             serial->writemult    = req->writemult;
         }
 
+        /* pending write */
+        if (req->flags & SERIALINFO_PENDING_WRITE)
+            serial->pending_write = 1;
+
         /* event mask */
         if (req->flags & SERIALINFO_SET_MASK)
         {
             serial->eventmask = req->eventmask;
-            if (!serial->eventmask)
-            {
-                fd_async_wake_up( serial->fd, ASYNC_TYPE_WAIT, STATUS_SUCCESS );
-            }
+            serial->generation++;
+            fd_async_wake_up( serial->fd, ASYNC_TYPE_WAIT, STATUS_SUCCESS );
         }
 
         release_object( serial );

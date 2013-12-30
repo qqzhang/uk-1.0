@@ -327,6 +327,8 @@ static const TEST_URL_COMBINE TEST_COMBINE[] = {
     {"http://www.winehq.org/test12", "#", 0, S_OK, "http://www.winehq.org/test12#"},
     {"http://www.winehq.org/test13#aaa", "#bbb", 0, S_OK, "http://www.winehq.org/test13#bbb"},
     {"http://www.winehq.org/test14#aaa/bbb#ccc", "#", 0, S_OK, "http://www.winehq.org/test14#"},
+    {"http://www.winehq.org/tests/?query=x/y/z", "tests15", 0, S_OK, "http://www.winehq.org/tests/tests15"},
+    {"http://www.winehq.org/tests/?query=x/y/z#example", "tests16", 0, S_OK, "http://www.winehq.org/tests/tests16"},
     {"file:///C:\\dir\\file.txt", "test.txt", 0, S_OK, "file:///C:/dir/test.txt"},
     {"file:///C:\\dir\\file.txt#hash\\hash", "test.txt", 0, S_OK, "file:///C:/dir/file.txt#hash/test.txt"},
     {"file:///C:\\dir\\file.html#hash\\hash", "test.html", 0, S_OK, "file:///C:/dir/test.html"},
@@ -1080,18 +1082,19 @@ static void test_url_combine(const char *szUrl1, const char *szUrl2, DWORD dwFla
     HRESULT hr;
     CHAR szReturnUrl[INTERNET_MAX_URL_LENGTH];
     WCHAR wszReturnUrl[INTERNET_MAX_URL_LENGTH];
-    LPWSTR wszUrl1 = GetWideString(szUrl1);
-    LPWSTR wszUrl2 = GetWideString(szUrl2);
-    LPWSTR wszExpectUrl = GetWideString(szExpectUrl);
-    LPWSTR wszConvertedUrl;
+    LPWSTR wszUrl1, wszUrl2, wszExpectUrl, wszConvertedUrl;
 
     DWORD dwSize;
-    DWORD dwExpectLen = lstrlen(szExpectUrl);
+    DWORD dwExpectLen = lstrlenA(szExpectUrl);
 
     if (!pUrlCombineA) {
         win_skip("UrlCombineA not found\n");
         return;
     }
+
+    wszUrl1 = GetWideString(szUrl1);
+    wszUrl2 = GetWideString(szUrl2);
+    wszExpectUrl = GetWideString(szExpectUrl);
 
     hr = pUrlCombineA(szUrl1, szUrl2, NULL, NULL, dwFlags);
     ok(hr == E_INVALIDARG, "UrlCombineA returned 0x%08x, expected 0x%08x\n", hr, E_INVALIDARG);
@@ -1169,7 +1172,7 @@ static void test_UrlCreateFromPath(void)
         len = INTERNET_MAX_URL_LENGTH;
         ret = pUrlCreateFromPathA(TEST_URLFROMPATH[i].path, ret_url, &len, 0);
         ok(ret == TEST_URLFROMPATH[i].ret, "ret %08x from path %s\n", ret, TEST_URLFROMPATH[i].path);
-        ok(!lstrcmpi(ret_url, TEST_URLFROMPATH[i].url), "url %s from path %s\n", ret_url, TEST_URLFROMPATH[i].path);
+        ok(!lstrcmpiA(ret_url, TEST_URLFROMPATH[i].url), "url %s from path %s\n", ret_url, TEST_URLFROMPATH[i].path);
         ok(len == strlen(ret_url), "ret len %d from path %s\n", len, TEST_URLFROMPATH[i].path);
 
         if (pUrlCreateFromPathW) {

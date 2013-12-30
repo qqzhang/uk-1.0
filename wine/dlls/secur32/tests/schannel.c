@@ -49,7 +49,7 @@ static PCCERT_CONTEXT (WINAPI *pCertEnumCertificatesInStore)(HCERTSTORE,PCCERT_C
 
 static BOOL (WINAPI *pCryptAcquireContextW)(HCRYPTPROV*, LPCWSTR, LPCWSTR, DWORD, DWORD);
 static BOOL (WINAPI *pCryptDestroyKey)(HCRYPTKEY);
-static BOOL (WINAPI *pCryptImportKey)(HCRYPTPROV,CONST BYTE*,DWORD,HCRYPTKEY,DWORD,HCRYPTKEY*);
+static BOOL (WINAPI *pCryptImportKey)(HCRYPTPROV,const BYTE*,DWORD,HCRYPTKEY,DWORD,HCRYPTKEY*);
 static BOOL (WINAPI *pCryptReleaseContext)(HCRYPTPROV,ULONG_PTR);
 
 static const BYTE bigCert[] = { 0x30, 0x7a, 0x02, 0x01, 0x01, 0x30, 0x02, 0x06,
@@ -123,7 +123,7 @@ static void InitFunctionPtrs(void)
     secdll = LoadLibraryA("secur32.dll");
     if(!secdll)
         secdll = LoadLibraryA("security.dll");
-    advapi32dll = GetModuleHandleA("advapi32.dll");
+    advapi32dll = LoadLibraryA("advapi32.dll");
 
 #define GET_PROC(h, func)  p ## func = (void*)GetProcAddress(h, #func)
 
@@ -198,6 +198,7 @@ static void testAcquireSecurityContext(void)
     ULONG i;
     SECURITY_STATUS st;
     CredHandle cred;
+    SecPkgCredentials_NamesA names;
     TimeStamp exp;
     SCHANNEL_CRED schanCred;
     PCCERT_CONTEXT certs[2];
@@ -299,6 +300,10 @@ static void testAcquireSecurityContext(void)
     ok(st == SEC_E_OK, "AcquireCredentialsHandleA failed: %08x\n", st);
     /* expriy is indeterminate in win2k3 */
     trace("expiry: %08x%08x\n", exp.HighPart, exp.LowPart);
+
+    st = pQueryCredentialsAttributesA(&cred, SECPKG_CRED_ATTR_NAMES, &names);
+    ok(st == SEC_E_NO_CREDENTIALS || st == SEC_E_UNSUPPORTED_FUNCTION /* before Vista */, "expected SEC_E_NO_CREDENTIALS, got %08x\n", st);
+
     pFreeCredentialsHandle(&cred);
 
     /* Bad version in SCHANNEL_CRED */
@@ -513,11 +518,11 @@ static void test_remote_cert(PCCERT_CONTEXT remote_cert)
         cert_cnt++;
     }
 
-    ok(cert_cnt == 2, "cert_cnt = %u\n", cert_cnt);
+    ok(cert_cnt == 3, "cert_cnt = %u\n", cert_cnt);
     ok(incl_remote, "context does not contain cert itself\n");
 }
 
-static const char http_request[] = "HEAD /test.html HTTP/1.1\r\nHost: www.codeweavers.com\r\nConnection: close\r\n\r\n";
+static const char http_request[] = "HEAD /test.html HTTP/1.1\r\nHost: www.winehq.org\r\nConnection: close\r\n\r\n";
 
 static void init_cred(SCHANNEL_CRED *cred)
 {
@@ -621,6 +626,7 @@ static void test_communication(void)
     SCHANNEL_CRED cred;
     CredHandle cred_handle;
     CtxtHandle context;
+    SecPkgCredentials_NamesA names;
     SecPkgContext_StreamSizes sizes;
     SecPkgContext_ConnectionInfo conn_info;
     CERT_CONTEXT *cert;
@@ -639,7 +645,7 @@ static void test_communication(void)
         return;
     }
 
-    /* Create a socket and connect to www.codeweavers.com */
+    /* Create a socket and connect to www.winehq.org */
     ret = WSAStartup(0x0202, &wsa_data);
     if (ret)
     {
@@ -647,10 +653,10 @@ static void test_communication(void)
         return;
     }
 
-    host = gethostbyname("www.codeweavers.com");
+    host = gethostbyname("www.winehq.org");
     if (!host)
     {
-        skip("Can't resolve www.codeweavers.com\n");
+        skip("Can't resolve www.winehq.org\n");
         return;
     }
 
@@ -667,7 +673,7 @@ static void test_communication(void)
     ret = connect(sock, (struct sockaddr *)&addr, sizeof(addr));
     if (ret == SOCKET_ERROR)
     {
-        skip("Can't connect to www.codeweavers.com\n");
+        skip("Can't connect to www.winehq.org\n");
         return;
     }
 
@@ -675,7 +681,7 @@ static void test_communication(void)
     init_cred(&cred);
     cred.dwFlags = SCH_CRED_NO_DEFAULT_CREDS|SCH_CRED_MANUAL_CRED_VALIDATION;
 
-    status = pAcquireCredentialsHandleA(NULL, (SEC_CHAR *)UNISP_NAME, SECPKG_CRED_OUTBOUND, NULL,
+    status = pAcquireCredentialsHandleA(NULL, (SEC_CHAR *)UNISP_NAME_A, SECPKG_CRED_OUTBOUND, NULL,
         &cred, NULL, NULL, &cred_handle, NULL);
     ok(status == SEC_E_OK, "AcquireCredentialsHandleA failed: %08x\n", status);
     if (status != SEC_E_OK) return;
@@ -694,10 +700,20 @@ static void test_communication(void)
 
     buffers[1].cBuffers = 1;
     buffers[1].pBuffers[0].BufferType = SECBUFFER_TOKEN;
+    buffers[0].pBuffers[0].cbBuffer = 1;
     status = pInitializeSecurityContextA(&cred_handle, &context, (SEC_CHAR *)"localhost",
             ISC_REQ_CONFIDENTIALITY|ISC_REQ_STREAM,
             0, 0, &buffers[1], 0, NULL, &buffers[0], &attrs, NULL);
     ok(status == SEC_E_INVALID_TOKEN, "Expected SEC_E_INVALID_TOKEN, got %08x\n", status);
+todo_wine
+    ok(buffers[0].pBuffers[0].cbBuffer == 0, "Output buffer size was not set to 0.\n");
+
+    status = pInitializeSecurityContextA(&cred_handle, &context, (SEC_CHAR *)"localhost",
+            ISC_REQ_CONFIDENTIALITY|ISC_REQ_STREAM,
+            0, 0, &buffers[1], 0, NULL, &buffers[0], &attrs, NULL);
+todo_wine
+    ok(status == SEC_E_INSUFFICIENT_MEMORY || status == SEC_E_INVALID_TOKEN,
+       "Expected SEC_E_INSUFFICIENT_MEMORY or SEC_E_INVALID_TOKEN, got %08x\n", status);
 
     buffers[0].pBuffers[0].cbBuffer = buf_size;
 
@@ -780,6 +796,9 @@ static void test_communication(void)
         return;
     }
 
+    status = pQueryCredentialsAttributesA(&cred_handle, SECPKG_CRED_ATTR_NAMES, &names);
+    ok(status == SEC_E_NO_CREDENTIALS || status == SEC_E_UNSUPPORTED_FUNCTION /* before Vista */, "expected SEC_E_NO_CREDENTIALS, got %08x\n", status);
+
     status = pQueryContextAttributesA(&context, SECPKG_ATTR_REMOTE_CERT_CONTEXT, (void*)&cert);
     ok(status == SEC_E_OK, "QueryContextAttributesW(SECPKG_ATTR_REMOTE_CERT_CONTEXT) failed: %08x\n", status);
     if(status == SEC_E_OK) {
@@ -794,7 +813,8 @@ static void test_communication(void)
         ok(conn_info.dwHashStrength >= 128, "conn_info.dwHashStrength = %d\n", conn_info.dwHashStrength);
     }
 
-    pQueryContextAttributesA(&context, SECPKG_ATTR_STREAM_SIZES, &sizes);
+    status = pQueryContextAttributesA(&context, SECPKG_ATTR_STREAM_SIZES, &sizes);
+    ok(status == SEC_E_OK, "QueryContextAttributesW(SECPKG_ATTR_STREAM_SIZES) failed: %08x\n", status);
 
     reset_buffers(&buffers[0]);
 

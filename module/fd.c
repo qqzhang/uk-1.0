@@ -99,6 +99,9 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
+#ifdef HAVE_SYS_SYSCALL_H
+#include <sys/syscall.h>
+#endif
 
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
@@ -376,7 +379,7 @@ struct uk_file_lock
 };
 
 static void file_lock_dump( struct object *obj, int verbose );
-static int file_lock_signaled( struct object *obj, struct thread *thread );
+static int file_lock_signaled( struct object *obj, struct wait_queue_entry *entry );
 
 static const struct object_ops file_lock_ops =
 {
@@ -1477,7 +1480,7 @@ static void file_lock_dump( struct object *obj, int verbose )
     fprintf( stderr, "\n" );
 }
 
-static int file_lock_signaled( struct object *obj, struct thread *thread )
+static int file_lock_signaled( struct object *obj, struct wait_queue_entry *entry )
 {
     struct uk_file_lock *lock = (struct uk_file_lock *)obj;
     /* lock is signaled if it has lost its owner */
@@ -2277,7 +2280,7 @@ struct uk_fd *open_fd( struct uk_fd *root, const char *name, int flags, mode_t *
     /* create the directory if needed */
     if ((options & FILE_DIRECTORY_FILE) && (flags & O_CREAT))
     {
-        if (mkdir( name, 0777 ) == -1)
+        if (mkdir( name, *mode ) == -1)
         {
             if (errno != EEXIST || (flags & O_EXCL))
             {
@@ -2669,7 +2672,7 @@ int check_fd_events( struct uk_fd *fd, int events )
 #endif
 
 /* default signaled() routine for objects that poll() on an fd */
-int default_fd_signaled( struct object *obj, struct thread *thread )
+int default_fd_signaled( struct object *obj, struct wait_queue_entry *entry )
 {
     struct uk_fd *fd = get_obj_fd( obj );
     int ret = fd->signaled;

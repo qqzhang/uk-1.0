@@ -230,6 +230,8 @@ static struct object *create_file( struct uk_fd *root, const char *nameptr, data
             owner = token_get_user( current_thread->process->token );
         mode = sd_to_mode( sd, owner );
     }
+    else if (options & FILE_DIRECTORY_FILE)
+        mode = (attrs & FILE_ATTRIBUTE_READONLY) ? 0555 : 0777;
     else
         mode = (attrs & FILE_ATTRIBUTE_READONLY) ? 0444 : 0666;
 
@@ -254,7 +256,6 @@ static struct object *create_file( struct uk_fd *root, const char *nameptr, data
         obj = create_dir_obj( fd, access, mode );
     else if (S_ISCHR(mode) && is_serial_fd( fd ))
         obj = create_serial( fd );
-
     else
         obj = create_file_obj( fd, access, mode );
 
@@ -472,7 +473,7 @@ static mode_t file_access_to_mode( unsigned int access )
 
     access = generic_file_map_access( access );
     if (access & FILE_READ_DATA)  mode |= 4;
-    if (access & FILE_WRITE_DATA) mode |= 2;
+    if (access & (FILE_WRITE_DATA|FILE_APPEND_DATA)) mode |= 2;
     if (access & FILE_EXECUTE)    mode |= 1;
     return mode;
 }

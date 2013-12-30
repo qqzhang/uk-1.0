@@ -141,6 +141,8 @@ static const WCHAR szVia[] = { 'V','i','a',0 };
 static const WCHAR szWarning[] = { 'W','a','r','n','i','n','g',0 };
 static const WCHAR szWWW_Authenticate[] = { 'W','W','W','-','A','u','t','h','e','n','t','i','c','a','t','e',0 };
 
+static const WCHAR emptyW[] = {0};
+
 #define HTTP_REFERER    szReferer
 #define HTTP_ACCEPT     szAccept
 #define HTTP_USERAGENT  szUser_Agent
@@ -398,6 +400,7 @@ typedef struct {
     DWORD buf_size;
     DWORD buf_pos;
     DWORD chunk_size;
+    BOOL end_of_data;
 } chunked_stream_t;
 
 static inline void destroy_data_stream(data_stream_t *stream)
@@ -1448,7 +1451,7 @@ HINTERNET WINAPI HttpOpenRequestA(HINTERNET hHttpSession,
 {
     LPWSTR szVerb = NULL, szObjectName = NULL;
     LPWSTR szVersion = NULL, szReferrer = NULL, *szAcceptTypes = NULL;
-    HINTERNET rc = FALSE;
+    HINTERNET rc = NULL;
 
     TRACE("(%p, %s, %s, %s, %s, %p, %08x, %08lx)\n", hHttpSession,
           debugstr_a(lpszVerb), debugstr_a(lpszObjectName),
@@ -1909,11 +1912,10 @@ static void HTTPREQ_Destroy(object_header_t *hdr)
 
     TRACE("\n");
 
-    if(request->hCacheFile) {
+    if(request->hCacheFile)
         CloseHandle(request->hCacheFile);
-        DeleteFileW(request->cacheFile);
-    }
-    heap_free(request->cacheFile);
+    if(request->req_file)
+        req_file_release(request->req_file);
 
     request->read_section.DebugInfo->Spare[0] = 0;
     DeleteCriticalSection( &request->read_section );
@@ -1945,7 +1947,7 @@ static void http_release_netconn(http_request_t *req, BOOL reuse)
 {
     TRACE("%p %p\n",req, req->netconn);
 
-    if(!req->netconn)
+    if(!is_valid_netconn(req->netconn))
         return;
 
     if(reuse && req->netconn->keep_alive) {
@@ -1986,8 +1988,7 @@ static void http_release_netconn(http_request_t *req, BOOL reuse)
     INTERNET_SendCallback(&req->hdr, req->hdr.dwContext,
                           INTERNET_STATUS_CLOSING_CONNECTION, 0, 0);
 
-    free_netconn(req->netconn);
-    req->netconn = NULL;
+    close_netconn(req->netconn);
 
     INTERNET_SendCallback(&req->hdr, req->hdr.dwContext,
                           INTERNET_STATUS_CONNECTION_CLOSED, 0, 0);
@@ -2030,24 +2031,35 @@ static DWORD str_to_buffer(const WCHAR *str, void *buffer, DWORD *size, BOOL uni
     int len;
     if (unicode)
     {
-        len = strlenW(str);
+        WCHAR *buf = buffer;
+
+        if (str) len = strlenW(str);
+        else len = 0;
         if (*size < (len + 1) * sizeof(WCHAR))
         {
             *size = (len + 1) * sizeof(WCHAR);
             return ERROR_INSUFFICIENT_BUFFER;
         }
-        strcpyW(buffer, str);
+        if (str) strcpyW(buf, str);
+        else buf[0] = 0;
+
         *size = len;
         return ERROR_SUCCESS;
     }
     else
     {
-        len = WideCharToMultiByte(CP_ACP, 0, str, -1, buffer, *size, NULL, NULL);
+        char *buf = buffer;
+
+        if (str) len = WideCharToMultiByte(CP_ACP, 0, str, -1, NULL, 0, NULL, NULL);
+        else len = 1;
         if (*size < len)
         {
             *size = len;
             return ERROR_INSUFFICIENT_BUFFER;
         }
+        if (str) WideCharToMultiByte(CP_ACP, 0, str, -1, buf, *size, NULL, NULL);
+        else buf[0] = 0;
+
         *size = len - 1;
         return ERROR_SUCCESS;
     }
@@ -2079,7 +2091,7 @@ static DWORD HTTPREQ_QueryOption(object_header_t *hdr, DWORD option, void *buffe
             info->Flags |= IDSI_FLAG_KEEP_ALIVE;
         if (req->proxy)
             info->Flags |= IDSI_FLAG_PROXY;
-        if (req->netconn && req->netconn->secure)
+        if (is_valid_netconn(req->netconn) && req->netconn->secure)
             info->Flags |= IDSI_FLAG_SECURE;
 
         return ERROR_SUCCESS;
@@ -2096,7 +2108,7 @@ static DWORD HTTPREQ_QueryOption(object_header_t *hdr, DWORD option, void *buffe
             return ERROR_INSUFFICIENT_BUFFER;
 
         *size = sizeof(DWORD);
-        flags = req->netconn ? req->netconn->security_flags : req->security_flags | req->server->security_flags;
+        flags = is_valid_netconn(req->netconn) ? req->netconn->security_flags : req->security_flags | req->server->security_flags;
         *(DWORD *)buffer = flags;
 
         TRACE("INTERNET_OPTION_SECURITY_FLAGS %x\n", flags);
@@ -2180,25 +2192,25 @@ static DWORD HTTPREQ_QueryOption(object_header_t *hdr, DWORD option, void *buffe
 
         TRACE("INTERNET_OPTION_DATAFILE_NAME\n");
 
-        if(!req->cacheFile) {
+        if(!req->req_file) {
             *size = 0;
             return ERROR_INTERNET_ITEM_NOT_FOUND;
         }
 
         if(unicode) {
-            req_size = (lstrlenW(req->cacheFile)+1) * sizeof(WCHAR);
+            req_size = (lstrlenW(req->req_file->file_name)+1) * sizeof(WCHAR);
             if(*size < req_size)
                 return ERROR_INSUFFICIENT_BUFFER;
 
             *size = req_size;
-            memcpy(buffer, req->cacheFile, *size);
+            memcpy(buffer, req->req_file->file_name, *size);
             return ERROR_SUCCESS;
         }else {
-            req_size = WideCharToMultiByte(CP_ACP, 0, req->cacheFile, -1, NULL, 0, NULL, NULL);
+            req_size = WideCharToMultiByte(CP_ACP, 0, req->req_file->file_name, -1, NULL, 0, NULL, NULL);
             if (req_size > *size)
                 return ERROR_INSUFFICIENT_BUFFER;
 
-            *size = WideCharToMultiByte(CP_ACP, 0, req->cacheFile,
+            *size = WideCharToMultiByte(CP_ACP, 0, req->req_file->file_name,
                     -1, buffer, *size, NULL, NULL);
             return ERROR_SUCCESS;
         }
@@ -2301,7 +2313,7 @@ static DWORD HTTPREQ_SetOption(object_header_t *hdr, DWORD option, void *buffer,
         TRACE("INTERNET_OPTION_SECURITY_FLAGS %08x\n", flags);
         flags &= SECURITY_SET_MASK;
         req->security_flags |= flags;
-        if(req->netconn)
+        if(is_valid_netconn(req->netconn))
             req->netconn->security_flags |= flags;
         return ERROR_SUCCESS;
     }
@@ -2362,12 +2374,17 @@ static void commit_cache_entry(http_request_t *req)
     if(HTTP_GetRequestURL(req, url)) {
         WCHAR *header;
         DWORD header_len;
+        BOOL res;
 
         header = build_response_header(req, TRUE);
         header_len = (header ? strlenW(header) : 0);
-        CommitUrlCacheEntryW(url, req->cacheFile, req->expires,
+        res = CommitUrlCacheEntryW(url, req->req_file->file_name, req->expires,
                 req->last_modified, NORMAL_CACHE_ENTRY,
                 header, header_len, NULL, 0);
+        if(res)
+            req->req_file->is_committed = TRUE;
+        else
+            WARN("CommitUrlCacheEntry failed: %u\n", GetLastError());
         heap_free(header);
     }
 }
@@ -2382,9 +2399,14 @@ static void create_cache_entry(http_request_t *req)
     BOOL b = TRUE;
 
     /* FIXME: We should free previous cache file earlier */
-    heap_free(req->cacheFile);
-    CloseHandle(req->hCacheFile);
-    req->hCacheFile = NULL;
+    if(req->req_file) {
+        req_file_release(req->req_file);
+        req->req_file = NULL;
+    }
+    if(req->hCacheFile) {
+        CloseHandle(req->hCacheFile);
+        req->hCacheFile = NULL;
+    }
 
     if(req->hdr.dwFlags & INTERNET_FLAG_NO_CACHE_WRITE)
         b = FALSE;
@@ -2436,8 +2458,9 @@ static void create_cache_entry(http_request_t *req)
         return;
     }
 
-    req->cacheFile = heap_strdupW(file_name);
-    req->hCacheFile = CreateFileW(req->cacheFile, GENERIC_WRITE, FILE_SHARE_READ|FILE_SHARE_WRITE,
+    create_req_file(file_name, &req->req_file);
+
+    req->hCacheFile = CreateFileW(file_name, GENERIC_WRITE, FILE_SHARE_READ|FILE_SHARE_WRITE,
               NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if(req->hCacheFile == INVALID_HANDLE_VALUE) {
         WARN("Could not create file: %u\n", GetLastError());
@@ -2602,7 +2625,7 @@ static DWORD netconn_get_avail_data(data_stream_t *stream, http_request_t *req)
     netconn_stream_t *netconn_stream = (netconn_stream_t*)stream;
     DWORD avail = 0;
 
-    if(req->netconn)
+    if(is_valid_netconn(req->netconn))
         NETCON_query_data_available(req->netconn, &avail);
     return netconn_stream->content_length == ~0u
         ? avail
@@ -2612,7 +2635,7 @@ static DWORD netconn_get_avail_data(data_stream_t *stream, http_request_t *req)
 static BOOL netconn_end_of_data(data_stream_t *stream, http_request_t *req)
 {
     netconn_stream_t *netconn_stream = (netconn_stream_t*)stream;
-    return netconn_stream->content_read == netconn_stream->content_length || !req->netconn;
+    return netconn_stream->content_read == netconn_stream->content_length || !is_valid_netconn(req->netconn);
 }
 
 static DWORD netconn_read(data_stream_t *stream, http_request_t *req, BYTE *buf, DWORD size,
@@ -2630,7 +2653,7 @@ static DWORD netconn_read(data_stream_t *stream, http_request_t *req, BYTE *buf,
             size = avail;
     }
 
-    if(size && req->netconn) {
+    if(size && is_valid_netconn(req->netconn)) {
         if((res = NETCON_recv(req->netconn, buf, size, read_mode == READMODE_SYNC ? MSG_WAITALL : 0, &len)))
             len = 0;
         if(!len)
@@ -2684,6 +2707,8 @@ static DWORD read_more_chunked_data(chunked_stream_t *stream, http_request_t *re
     DWORD res;
     int len;
 
+    assert(!stream->end_of_data);
+
     if (stream->buf_pos)
     {
         /* move existing data to the start of the buffer */
@@ -2731,10 +2756,14 @@ static DWORD discard_chunked_eol(chunked_stream_t *stream, http_request_t *req)
 /* read the size of the next chunk (the read section must be held) */
 static DWORD start_next_chunk(chunked_stream_t *stream, http_request_t *req)
 {
-    /* TODOO */
     DWORD chunk_size = 0, res;
 
-    if(stream->chunk_size != ~0u && (res = discard_chunked_eol(stream, req)) != ERROR_SUCCESS)
+    assert(!stream->chunk_size || stream->chunk_size == ~0u);
+
+    if (stream->end_of_data) return ERROR_SUCCESS;
+
+    /* read terminator for the previous chunk */
+    if(!stream->chunk_size && (res = discard_chunked_eol(stream, req)) != ERROR_SUCCESS)
         return res;
 
     for (;;)
@@ -2749,7 +2778,10 @@ static DWORD start_next_chunk(chunked_stream_t *stream, http_request_t *req)
             {
                 TRACE( "reading %u byte chunk\n", chunk_size );
                 stream->chunk_size = chunk_size;
-                req->contentLength += chunk_size;
+                if (req->contentLength == ~0u) req->contentLength = chunk_size;
+                else req->contentLength += chunk_size;
+
+                if (!chunk_size) stream->end_of_data = TRUE;
                 return discard_chunked_eol(stream, req);
             }
             remove_chunked_data(stream, 1);
@@ -2772,7 +2804,7 @@ static DWORD chunked_get_avail_data(data_stream_t *stream, http_request_t *req)
 static BOOL chunked_end_of_data(data_stream_t *stream, http_request_t *req)
 {
     chunked_stream_t *chunked_stream = (chunked_stream_t*)stream;
-    return !chunked_stream->chunk_size;
+    return chunked_stream->end_of_data;
 }
 
 static DWORD chunked_read(data_stream_t *stream, http_request_t *req, BYTE *buf, DWORD size,
@@ -2781,13 +2813,13 @@ static DWORD chunked_read(data_stream_t *stream, http_request_t *req, BYTE *buf,
     chunked_stream_t *chunked_stream = (chunked_stream_t*)stream;
     DWORD read_bytes = 0, ret_read = 0, res = ERROR_SUCCESS;
 
-    if(chunked_stream->chunk_size == ~0u) {
+    if(!chunked_stream->chunk_size || chunked_stream->chunk_size == ~0u) {
         res = start_next_chunk(chunked_stream, req);
         if(res != ERROR_SUCCESS)
             return res;
     }
 
-    while(size && chunked_stream->chunk_size) {
+    while(size && chunked_stream->chunk_size && !chunked_stream->end_of_data) {
         if(chunked_stream->buf_size) {
             read_bytes = min(size, min(chunked_stream->buf_size, chunked_stream->chunk_size));
 
@@ -2803,7 +2835,7 @@ static DWORD chunked_read(data_stream_t *stream, http_request_t *req, BYTE *buf,
             if(read_mode == READMODE_NOBLOCK) {
                 DWORD avail;
 
-                if(!req->netconn || !NETCON_query_data_available(req->netconn, &avail) || !avail)
+                if(!is_valid_netconn(req->netconn) || !NETCON_query_data_available(req->netconn, &avail) || !avail)
                     break;
                 if(read_bytes > avail)
                     read_bytes = avail;
@@ -2821,7 +2853,7 @@ static DWORD chunked_read(data_stream_t *stream, http_request_t *req, BYTE *buf,
         chunked_stream->chunk_size -= read_bytes;
         size -= read_bytes;
         ret_read += read_bytes;
-        if(!chunked_stream->chunk_size) {
+        if(size && !chunked_stream->chunk_size) {
             assert(read_mode != READMODE_NOBLOCK);
             res = start_next_chunk(chunked_stream, req);
             if(res != ERROR_SUCCESS)
@@ -2841,8 +2873,8 @@ static BOOL chunked_drain_content(data_stream_t *stream, http_request_t *req)
 {
     chunked_stream_t *chunked_stream = (chunked_stream_t*)stream;
 
-    /* FIXME: we can do better */
-    return !chunked_stream->chunk_size;
+    remove_chunked_data(chunked_stream, chunked_stream->buf_size);
+    return chunked_stream->end_of_data;
 }
 
 static void chunked_destroy(data_stream_t *stream)
@@ -2891,6 +2923,7 @@ static DWORD set_content_length(http_request_t *request)
         chunked_stream->data_stream.vtbl = &chunked_stream_vtbl;
         chunked_stream->buf_size = chunked_stream->buf_pos = 0;
         chunked_stream->chunk_size = ~0u;
+        chunked_stream->end_of_data = FALSE;
 
         if(request->read_size) {
             memcpy(chunked_stream->buf, request->read_buf+request->read_pos, request->read_size);
@@ -3003,7 +3036,7 @@ static BOOL drain_content(http_request_t *req, BOOL blocking)
 {
     BOOL ret;
 
-    if(!req->netconn || req->contentLength == -1)
+    if(!is_valid_netconn(req->netconn) || req->contentLength == -1)
         return FALSE;
 
     if(!strcmpW(req->verb, szHEAD))
@@ -3218,6 +3251,21 @@ done:
     return ERROR_SUCCESS;
 }
 
+static DWORD HTTPREQ_LockRequestFile(object_header_t *hdr, req_file_t **ret)
+{
+    http_request_t *req = (http_request_t*)hdr;
+
+    TRACE("(%p)\n", req);
+
+    if(!req->req_file) {
+        WARN("No cache file name available\n");
+        return ERROR_FILE_NOT_FOUND;
+    }
+
+    *ret = req_file_addref(req->req_file);
+    return ERROR_SUCCESS;
+}
+
 static const object_vtbl_t HTTPREQVtbl = {
     HTTPREQ_Destroy,
     HTTPREQ_CloseConnection,
@@ -3227,7 +3275,8 @@ static const object_vtbl_t HTTPREQVtbl = {
     HTTPREQ_ReadFileEx,
     HTTPREQ_WriteFile,
     HTTPREQ_QueryDataAvailable,
-    NULL
+    NULL,
+    HTTPREQ_LockRequestFile
 };
 
 /***********************************************************************
@@ -3874,6 +3923,8 @@ BOOL WINAPI HttpQueryInfoA(HINTERNET hHttpRequest, DWORD dwInfoLevel,
     DWORD len;
     WCHAR* bufferW;
 
+    TRACE("%p %x\n", hHttpRequest, dwInfoLevel);
+
     if((dwInfoLevel & HTTP_QUERY_FLAG_NUMBER) ||
        (dwInfoLevel & HTTP_QUERY_FLAG_SYSTEMTIME))
     {
@@ -4007,8 +4058,8 @@ static DWORD HTTP_HandleRedirect(http_request_t *request, LPCWSTR lpszUrl)
         WCHAR userName[INTERNET_MAX_USER_NAME_LENGTH];
         BOOL custom_port = FALSE;
 
-        static WCHAR httpW[] = {'h','t','t','p',0};
-        static WCHAR httpsW[] = {'h','t','t','p','s',0};
+        static const WCHAR httpW[] = {'h','t','t','p',0};
+        static const WCHAR httpsW[] = {'h','t','t','p','s',0};
 
         userName[0] = 0;
         hostName[0] = 0;
@@ -4734,8 +4785,21 @@ static DWORD open_http_connection(http_request_t *request, BOOL *reusing)
     netconn_t *netconn = NULL;
     DWORD res;
 
-    assert(!request->netconn);
     reset_data_stream(request);
+
+    if (request->netconn)
+    {
+        if (is_valid_netconn(request->netconn) && NETCON_is_alive(request->netconn))
+        {
+            *reusing = TRUE;
+            return ERROR_SUCCESS;
+        }
+        else
+        {
+            free_netconn(request->netconn);
+            request->netconn = NULL;
+        }
+    }
 
     res = HTTP_ResolveName(request);
     if(res != ERROR_SUCCESS)
@@ -4747,7 +4811,7 @@ static DWORD open_http_connection(http_request_t *request, BOOL *reusing)
         netconn = LIST_ENTRY(list_head(&request->server->conn_pool), netconn_t, pool_entry);
         list_remove(&netconn->pool_entry);
 
-        if(NETCON_is_alive(netconn))
+        if(is_valid_netconn(netconn) && NETCON_is_alive(netconn))
             break;
 
         TRACE("connection %p closed during idle\n", netconn);
@@ -4828,7 +4892,6 @@ static DWORD HTTP_HttpSendRequestW(http_request_t *request, LPCWSTR lpszHeaders,
     LPWSTR requestString = NULL;
     INT responseLen;
     BOOL loop_next;
-    static const WCHAR szPost[] = { 'P','O','S','T',0 };
     static const WCHAR szContentLength[] =
         { 'C','o','n','t','e','n','t','-','L','e','n','g','t','h',':',' ','%','l','i','\r','\n',0 };
     WCHAR contentLengthStr[sizeof szContentLength/2 /* includes \r\n */ + 20 /* int */ ];
@@ -4866,7 +4929,7 @@ static DWORD HTTP_HttpSendRequestW(http_request_t *request, LPCWSTR lpszHeaders,
         static const WCHAR pragma_nocache[] = {'P','r','a','g','m','a',':',' ','n','o','-','c','a','c','h','e','\r','\n',0};
         HTTP_HttpAddRequestHeadersW(request, pragma_nocache, strlenW(pragma_nocache), HTTP_ADDREQ_FLAG_ADD_IF_NEW);
     }
-    if ((request->hdr.dwFlags & INTERNET_FLAG_NO_CACHE_WRITE) && !strcmpW(request->verb, szPost))
+    if ((request->hdr.dwFlags & INTERNET_FLAG_NO_CACHE_WRITE) && strcmpW(request->verb, szGET))
     {
         static const WCHAR cache_control[] = {'C','a','c','h','e','-','C','o','n','t','r','o','l',':',
                                               ' ','n','o','-','c','a','c','h','e','\r','\n',0};
@@ -4884,7 +4947,6 @@ static DWORD HTTP_HttpSendRequestW(http_request_t *request, LPCWSTR lpszHeaders,
         char *ascii_req;
 
         loop_next = FALSE;
-        reusing_connection = request->netconn != NULL;
 
         if(redirected) {
             request->contentLength = ~0u;
@@ -4920,7 +4982,8 @@ static DWORD HTTP_HttpSendRequestW(http_request_t *request, LPCWSTR lpszHeaders,
  
         TRACE("Request header -> %s\n", debugstr_w(requestString) );
 
-        if (!reusing_connection && (res = open_http_connection(request, &reusing_connection)) != ERROR_SUCCESS)
+        res = open_http_connection(request, &reusing_connection);
+        if (res != ERROR_SUCCESS)
             break;
 
         /* send the request as ASCII, tack on the optional data */
@@ -5155,7 +5218,7 @@ static DWORD HTTP_HttpEndRequestW(http_request_t *request, DWORD dwFlags, DWORD_
     INT responseLen;
     DWORD res = ERROR_SUCCESS;
 
-    if(!request->netconn) {
+    if(!is_valid_netconn(request->netconn)) {
         WARN("Not connected\n");
         send_request_complete(request, 0, ERROR_INTERNET_OPERATION_CANCELLED);
         return ERROR_INTERNET_OPERATION_CANCELLED;
@@ -5827,7 +5890,7 @@ static DWORD HTTP_GetResponseHeaders(http_request_t *request, INT *len)
 
     TRACE("-->\n");
 
-    if(!request->netconn)
+    if(!is_valid_netconn(request->netconn))
         goto lend;
 
     /* clear old response headers (eg. from a redirect response) */
@@ -5857,9 +5920,8 @@ static DWORD HTTP_GetResponseHeaders(http_request_t *request, INT *len)
 
             /* split the status code from the status text */
             status_text = strchrW( status_code, ' ' );
-            if( !status_text )
-                goto lend;
-            *status_text++=0;
+            if( status_text )
+                *status_text++=0;
 
             request->status_code = atoiW(status_code);
 
@@ -5891,11 +5953,12 @@ static DWORD HTTP_GetResponseHeaders(http_request_t *request, INT *len)
     heap_free(request->statusText);
 
     request->version = heap_strdupW(buffer);
-    request->statusText = heap_strdupW(status_text);
+    request->statusText = heap_strdupW(status_text ? status_text : emptyW);
 
     /* Restore the spaces */
     *(status_code-1) = ' ';
-    *(status_text-1) = ' ';
+    if (status_text)
+        *(status_text-1) = ' ';
 
     /* Parse each response line */
     do
@@ -6048,7 +6111,7 @@ static DWORD HTTP_ProcessHeader(http_request_t *request, LPCWSTR field, LPCWSTR 
     {
         HTTP_DeleteCustomHeader( request, index );
 
-        if (value)
+        if (value && value[0])
         {
             HTTPHEADERW hdr;
 

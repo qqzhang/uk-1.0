@@ -1154,7 +1154,7 @@ static void dialog_viewproperties(void)
 static void HandleCommandLine(LPWSTR cmdline)
 {
     WCHAR delimiter;
-    int opt_print = 0;
+    BOOL opt_print = FALSE;
 
     /* skip white space */
     while (*cmdline == ' ') cmdline++;
@@ -1178,7 +1178,7 @@ static void HandleCommandLine(LPWSTR cmdline)
                 {
                 case 'P':
                 case 'p':
-                    opt_print = 1;
+                    opt_print = TRUE;
                     cmdline += 2;
                     continue;
                 }
@@ -2016,7 +2016,7 @@ static LRESULT OnNotify( HWND hWnd, LPARAM lParam)
                 on_fontlist_modified(endEdit->szText);
             } else if (pHdr->hwndFrom == hwndSizeList)
             {
-                on_sizelist_modified(hwndFontList,endEdit->szText);
+                on_sizelist_modified(hwndSizeList,endEdit->szText);
             }
         }
         return 0;

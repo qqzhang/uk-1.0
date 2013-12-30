@@ -65,7 +65,7 @@ struct uk_completion
 
 static void completion_dump( struct object*, int );
 static struct object_type *completion_get_type( struct object *obj );
-static int completion_signaled( struct object *obj, struct thread *thread );
+static int completion_signaled( struct object *obj, struct wait_queue_entry *entry );
 static unsigned int completion_map_access( struct object *obj, unsigned int access );
 static void completion_destroy( struct object * );
 
@@ -94,7 +94,7 @@ struct comp_msg
     struct   list_head queue_entry;
     apc_param_t   ckey;
     apc_param_t   cvalue;
-    unsigned int  information;
+    apc_param_t   information;
     unsigned int  status;
 };
 
@@ -126,7 +126,7 @@ static struct object_type *completion_get_type( struct object *obj )
     return get_object_type( &str );
 }
 
-static int completion_signaled( struct object *obj, struct thread *thread )
+static int completion_signaled( struct object *obj, struct wait_queue_entry *entry )
 {
     struct uk_completion *completion = (struct uk_completion *)obj;
 
@@ -164,7 +164,7 @@ struct uk_completion *get_completion_obj( struct process *process, obj_handle_t 
 }
 
 void add_completion( struct uk_completion *completion, apc_param_t ckey, apc_param_t cvalue,
-                     unsigned int status, unsigned int information )
+                     unsigned int status, apc_param_t information )
 {
     struct comp_msg *msg = mem_alloc( sizeof( *msg ) );
 

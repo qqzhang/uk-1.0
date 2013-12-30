@@ -157,10 +157,11 @@ union file_directory_info
     FILE_ID_FULL_DIRECTORY_INFORMATION id_full;
 };
 
-static int show_dot_files = -1;
+static BOOL show_dot_files;
+static RTL_RUN_ONCE init_once = RTL_RUN_ONCE_INIT;
 
 /* at some point we may want to allow Winelib apps to set this */
-static const int is_case_sensitive = FALSE;
+static const BOOL is_case_sensitive = FALSE;
 
 UNICODE_STRING system_dir = { 0, 0, NULL };  /* system directory */
 
@@ -186,7 +187,7 @@ static inline BOOL is_invalid_dos_char( WCHAR ch )
 }
 
 /* check if the device can be a mounted volume */
-static inline int is_valid_mounted_device( const struct stat *st )
+static inline BOOL is_valid_mounted_device( const struct stat *st )
 {
 #if defined(linux) || defined(__sun__)
     return S_ISBLK( st->st_mode );
@@ -586,13 +587,13 @@ static char *get_default_drive_device( const char *root )
     if ((f = fopen( "/etc/mtab", "r" )))
     {
         device = parse_mount_entries( f, st.st_dev, st.st_ino );
-        endmntent( f );
+        fclose( f );
     }
     /* look through fstab too in case it's not mounted (for instance if it's an audio CD) */
     if (!device && (f = fopen( "/etc/fstab", "r" )))
     {
         device = parse_mount_entries( f, st.st_dev, st.st_ino );
-        endmntent( f );
+        fclose( f );
     }
     if (device)
     {
@@ -764,7 +765,7 @@ static char *get_device_mount_point( dev_t dev )
                 break;
             }
         }
-        endmntent( f );
+        fclose( f );
     }
     RtlLeaveCriticalSection( &dir_section );
 #elif defined(__APPLE__)
@@ -780,8 +781,8 @@ static char *get_device_mount_point( dev_t dev )
         if (stat( entry[i].f_mntfromname, &st ) == -1) continue;
         if (S_ISBLK(st.st_mode) && st.st_rdev == dev)
         {
-            ret = RtlAllocateHeap( GetProcessHeap(), 0, strlen(entry[i].f_mntfromname) + 1 );
-            if (ret) strcpy( ret, entry[i].f_mntfromname );
+            ret = RtlAllocateHeap( GetProcessHeap(), 0, strlen(entry[i].f_mntonname) + 1 );
+            if (ret) strcpy( ret, entry[i].f_mntonname );
             break;
         }
     }
@@ -1036,7 +1037,7 @@ static BOOLEAN get_dir_case_sensitivity( const char *dir )
  *
  * Initialize the show_dot_files options.
  */
-static void init_options(void)
+static DWORD WINAPI init_options( RTL_RUN_ONCE *once, void *param, void **context )
 {
     static const WCHAR WineW[] = {'S','o','f','t','w','a','r','e','\\','W','i','n','e',0};
     static const WCHAR ShowDotFilesW[] = {'S','h','o','w','D','o','t','F','i','l','e','s',0};
@@ -1045,8 +1046,6 @@ static void init_options(void)
     DWORD dummy;
     OBJECT_ATTRIBUTES attr;
     UNICODE_STRING nameW;
-
-    show_dot_files = 0;
 
     RtlOpenCurrentUser( KEY_ALL_ACCESS, &root );
     attr.Length = sizeof(attr);
@@ -1077,6 +1076,7 @@ static void init_options(void)
 #ifdef linux
     ignore_file( "/sys" );
 #endif
+    return TRUE;
 }
 
 
@@ -1089,7 +1089,8 @@ BOOL DIR_is_hidden_file( const UNICODE_STRING *name )
 {
     WCHAR *p, *end;
 
-    if (show_dot_files == -1) init_options();
+    RtlRunOnceExecuteOnce( &init_once, init_options, NULL, NULL );
+
     if (show_dot_files) return FALSE;
 
     end = p = name->Buffer + name->Length/sizeof(WCHAR);
@@ -1183,7 +1184,7 @@ static ULONG hash_short_file_name( const UNICODE_STRING *name, LPWSTR buffer )
  */
 static BOOLEAN match_filename( const UNICODE_STRING *name_str, const UNICODE_STRING *mask_str )
 {
-    int mismatch;
+    BOOL mismatch;
     const WCHAR *name = name_str->Buffer;
     const WCHAR *mask = mask_str->Buffer;
     const WCHAR *name_end = name + name_str->Length / sizeof(WCHAR);
@@ -1848,9 +1849,6 @@ static int read_directory_getdirentries( int fd, IO_STATUS_BLOCK *io, void *buff
             continue;
         }
         if (size < initial_size) break;  /* already restarted once, give up now */
-        size = min( size, length - io->Information );
-        /* if size is too small don't bother to continue */
-        if (size < max_dir_info_size(class) && last_info) break;
         restart_last_info = last_info;
         restart_info_pos = io->Information;
     restart:
@@ -2053,9 +2051,9 @@ NTSTATUS WINAPI NtQueryDirectoryFile( HANDLE handle, HANDLE event,
 
     io->Information = 0;
 
-    RtlEnterCriticalSection( &dir_section );
+    RtlRunOnceExecuteOnce( &init_once, init_options, NULL, NULL );
 
-    if (show_dot_files == -1) init_options();
+    RtlEnterCriticalSection( &dir_section );
 
     cwd = open( ".", O_RDONLY );
     if (fchdir( fd ) != -1)
@@ -2102,15 +2100,15 @@ NTSTATUS WINAPI NtQueryDirectoryFile( HANDLE handle, HANDLE event,
  * There must be at least MAX_DIR_ENTRY_LEN+2 chars available at pos.
  */
 static NTSTATUS find_file_in_dir( char *unix_name, int pos, const WCHAR *name, int length,
-                                  int check_case, int *is_win_dir )
+                                  BOOLEAN check_case, BOOLEAN *is_win_dir )
 {
     WCHAR buffer[MAX_DIR_ENTRY_LEN];
     UNICODE_STRING str;
-    BOOLEAN spaces;
+    BOOLEAN spaces, is_name_8_dot_3;
     DIR *dir;
     struct dirent *de;
     struct stat st;
-    int ret, used_default, is_name_8_dot_3;
+    int ret, used_default;
 
     /* try a shortcut for this directory */
 
@@ -2376,7 +2374,7 @@ static void init_redirects(void)
  *
  * Check if path matches a redirect name. If yes, return matched length.
  */
-static int match_redirect( const WCHAR *path, int len, const WCHAR *redir, int check_case )
+static int match_redirect( const WCHAR *path, int len, const WCHAR *redir, BOOLEAN check_case )
 {
     int i = 0;
 
@@ -2411,7 +2409,7 @@ static int match_redirect( const WCHAR *path, int len, const WCHAR *redir, int c
  *
  * Retrieve the Unix path corresponding to a redirected path if any.
  */
-static int get_redirect_path( char *unix_name, int pos, const WCHAR *name, int length, int check_case )
+static int get_redirect_path( char *unix_name, int pos, const WCHAR *name, int length, BOOLEAN check_case )
 {
     unsigned int i;
     int len;
@@ -2435,7 +2433,7 @@ static int get_redirect_path( char *unix_name, int pos, const WCHAR *name, int l
 
 static const unsigned int nb_redirects = 0;
 
-static int get_redirect_path( char *unix_name, int pos, const WCHAR *name, int length, int check_case )
+static int get_redirect_path( char *unix_name, int pos, const WCHAR *name, int length, BOOLEAN check_case )
 {
     return 0;
 }
@@ -2747,7 +2745,7 @@ static NTSTATUS lookup_unix_name( const WCHAR *name, int name_len, char **buffer
     while (name_len)
     {
         const WCHAR *end, *next;
-        int is_win_dir = 0;
+        BOOLEAN is_win_dir = FALSE;
 
         end = name;
         while (end < name + name_len && !IS_SEPARATOR(*end)) end++;

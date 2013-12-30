@@ -46,6 +46,23 @@ LCID* __cdecl ___lc_handle_func(void);
 const locale_facet* __thiscall locale__Getfacet(const locale*, MSVCP_size_t);
 MSVCP_size_t __cdecl _Strftime(char*, MSVCP_size_t, const char*,
         const struct tm*, struct __lc_time_data*);
+const locale* __cdecl locale_classic(void);
+
+#if _MSVCP_VER < 100
+#define locale_string basic_string_char
+#define locale_string_char_ctor_cstr(this,str)  MSVCP_basic_string_char_ctor_cstr(this,str)
+#define locale_string_char_copy_ctor(this,copy) MSVCP_basic_string_char_copy_ctor(this,copy)
+#define locale_string_char_dtor(this)           MSVCP_basic_string_char_dtor(this)
+#define locale_string_char_c_str(this)          MSVCP_basic_string_char_c_str(this)
+#define locale_string_char_assign(this,assign)  MSVCP_basic_string_char_assign(this,assign)
+#else
+#define locale_string _Yarn_char
+#define locale_string_char_ctor_cstr(this,str)  _Yarn_char_ctor_cstr(this,str)
+#define locale_string_char_copy_ctor(this,copy) _Yarn_char_copy_ctor(this,copy)
+#define locale_string_char_dtor(this)           _Yarn_char_dtor(this)
+#define locale_string_char_c_str(this)          _Yarn_char_c_str(this)
+#define locale_string_char_assign(this,assign)  _Yarn_char_op_assign(this,assign)
+#endif
 
 typedef int category;
 
@@ -59,7 +76,7 @@ typedef struct _locale__Locimp {
     MSVCP_size_t facet_cnt;
     category catmask;
     MSVCP_bool transparent;
-    basic_string_char name;
+    locale_string name;
 } locale__Locimp;
 
 typedef struct {
@@ -68,10 +85,10 @@ typedef struct {
 
 typedef struct {
     _Lockit lock;
-    basic_string_char days;
-    basic_string_char months;
-    basic_string_char oldlocname;
-    basic_string_char newlocname;
+    locale_string days;
+    locale_string months;
+    locale_string oldlocname;
+    locale_string newlocname;
 } _Locinfo;
 
 typedef struct {
@@ -432,9 +449,9 @@ _Locinfo* __cdecl _Locinfo__Locinfo_ctor_cat_cstr(_Locinfo *locinfo, int categor
         throw_exception(EXCEPTION_RUNTIME_ERROR, "bad locale name");
 
     _Lockit_ctor_locktype(&locinfo->lock, _LOCK_LOCALE);
-    MSVCP_basic_string_char_ctor_cstr(&locinfo->days, "");
-    MSVCP_basic_string_char_ctor_cstr(&locinfo->months, "");
-    MSVCP_basic_string_char_ctor_cstr(&locinfo->oldlocname, setlocale(LC_ALL, NULL));
+    locale_string_char_ctor_cstr(&locinfo->days, "");
+    locale_string_char_ctor_cstr(&locinfo->months, "");
+    locale_string_char_ctor_cstr(&locinfo->oldlocname, setlocale(LC_ALL, NULL));
 
     if(category)
         locale = setlocale(LC_ALL, locstr);
@@ -442,9 +459,9 @@ _Locinfo* __cdecl _Locinfo__Locinfo_ctor_cat_cstr(_Locinfo *locinfo, int categor
         locale = setlocale(LC_ALL, NULL);
 
     if(locale)
-        MSVCP_basic_string_char_ctor_cstr(&locinfo->newlocname, locale);
+        locale_string_char_ctor_cstr(&locinfo->newlocname, locale);
     else
-        MSVCP_basic_string_char_ctor_cstr(&locinfo->newlocname, "*");
+        locale_string_char_ctor_cstr(&locinfo->newlocname, "*");
 
     return locinfo;
 }
@@ -493,11 +510,11 @@ void __cdecl _Locinfo__Locinfo_dtor(_Locinfo *locinfo)
 {
     TRACE("(%p)\n", locinfo);
 
-    setlocale(LC_ALL, MSVCP_basic_string_char_c_str(&locinfo->oldlocname));
-    MSVCP_basic_string_char_dtor(&locinfo->days);
-    MSVCP_basic_string_char_dtor(&locinfo->months);
-    MSVCP_basic_string_char_dtor(&locinfo->oldlocname);
-    MSVCP_basic_string_char_dtor(&locinfo->newlocname);
+    setlocale(LC_ALL, locale_string_char_c_str(&locinfo->oldlocname));
+    locale_string_char_dtor(&locinfo->days);
+    locale_string_char_dtor(&locinfo->months);
+    locale_string_char_dtor(&locinfo->oldlocname);
+    locale_string_char_dtor(&locinfo->newlocname);
     _Lockit_dtor(&locinfo->lock);
 }
 
@@ -528,7 +545,7 @@ _Locinfo* __cdecl _Locinfo__Locinfo_Addcats(_Locinfo *locinfo, int category, con
     if(!locstr)
         throw_exception(EXCEPTION_RUNTIME_ERROR, "bad locale name");
 
-    MSVCP_basic_string_char_dtor(&locinfo->newlocname);
+    locale_string_char_dtor(&locinfo->newlocname);
 
     if(category)
         locale = setlocale(LC_ALL, locstr);
@@ -536,9 +553,9 @@ _Locinfo* __cdecl _Locinfo__Locinfo_Addcats(_Locinfo *locinfo, int category, con
         locale = setlocale(LC_ALL, NULL);
 
     if(locale)
-        MSVCP_basic_string_char_ctor_cstr(&locinfo->newlocname, locale);
+        locale_string_char_ctor_cstr(&locinfo->newlocname, locale);
     else
-        MSVCP_basic_string_char_ctor_cstr(&locinfo->newlocname, "*");
+        locale_string_char_ctor_cstr(&locinfo->newlocname, "*");
 
     return locinfo;
 }
@@ -650,17 +667,19 @@ DEFINE_THISCALL_WRAPPER(_Locinfo__Getdays, 4)
 const char* __thiscall _Locinfo__Getdays(_Locinfo *this)
 {
     char *days = _Getdays();
+    const char *ret;
 
     TRACE("(%p)\n", this);
 
     if(days) {
-        MSVCP_basic_string_char_dtor(&this->days);
-        MSVCP_basic_string_char_ctor_cstr(&this->days, days);
+        locale_string_char_dtor(&this->days);
+        locale_string_char_ctor_cstr(&this->days, days);
         free(days);
     }
 
-    return this->days.size ? MSVCP_basic_string_char_c_str(&this->days) :
-        ":Sun:Sunday:Mon:Monday:Tue:Tuesday:Wed:Wednesday:Thu:Thursday:Fri:Friday:Sat:Saturday";
+    ret = locale_string_char_c_str(&this->days);
+    if (!ret[0]) ret = ":Sun:Sunday:Mon:Monday:Tue:Tuesday:Wed:Wednesday:Thu:Thursday:Fri:Friday:Sat:Saturday";
+    return ret;
 }
 
 /* ?_Getmonths@_Locinfo@std@@QBEPBDXZ */
@@ -669,18 +688,20 @@ DEFINE_THISCALL_WRAPPER(_Locinfo__Getmonths, 4)
 const char* __thiscall _Locinfo__Getmonths(_Locinfo *this)
 {
     char *months = _Getmonths();
+    const char *ret;
 
     TRACE("(%p)\n", this);
 
     if(months) {
-        MSVCP_basic_string_char_dtor(&this->months);
-        MSVCP_basic_string_char_ctor_cstr(&this->months, months);
+        locale_string_char_dtor(&this->months);
+        locale_string_char_ctor_cstr(&this->months, months);
         free(months);
     }
 
-    return this->months.size ? MSVCP_basic_string_char_c_str(&this->months) :
-        ":Jan:January:Feb:February:Mar:March:Apr:April:May:May:Jun:June:Jul:July"
-        ":Aug:August:Sep:September:Oct:October:Nov:November:Dec:December";
+    ret = locale_string_char_c_str(&this->months);
+    if (!ret[0]) ret = ":Jan:January:Feb:February:Mar:March:Apr:April:May:May:Jun:June:Jul:July"
+                       ":Aug:August:Sep:September:Oct:October:Nov:November:Dec:December";
+    return ret;
 }
 
 /* ?_Getfalse@_Locinfo@std@@QBEPBDXZ */
@@ -708,17 +729,6 @@ const struct lconv* __thiscall _Locinfo__Getlconv(const _Locinfo *this)
 {
     TRACE("(%p)\n", this);
     return localeconv();
-}
-
-/* ?_Getname@_Locinfo@std@@QBE?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@2@XZ */
-/* ?_Getname@_Locinfo@std@@QEBA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@2@XZ */
-DEFINE_THISCALL_WRAPPER(_Locinfo__Getname, 8)
-basic_string_char* __thiscall _Locinfo__Getname(const _Locinfo *this, basic_string_char *ret)
-{
-    TRACE("(%p)\n", this);
-
-    MSVCP_basic_string_char_copy_ctor(ret, &this->newlocname);
-    return ret;
 }
 
 /* ?_Gettnames@_Locinfo@std@@QBE?AV_Timevec@2@XZ */
@@ -836,10 +846,17 @@ MSVCP_size_t __cdecl collate_char__Getcat(const locale_facet **facet, const loca
             return 0;
         }
         collate_char_ctor_name((collate*)*facet,
-                MSVCP_basic_string_char_c_str(&loc->ptr->name), 0);
+                locale_string_char_c_str(&loc->ptr->name), 0);
     }
 
     return LC_COLLATE;
+}
+
+/* ?_Getcat@?$collate@D@std@@SAIPAPBVfacet@locale@2@@Z */
+/* ?_Getcat@?$collate@D@std@@SA_KPEAPEBVfacet@locale@2@@Z */
+MSVCP_size_t __cdecl collate_char__Getcat_old(const locale_facet **facet)
+{
+    return collate_char__Getcat(facet, locale_classic());
 }
 
 static collate* collate_char_use_facet(const locale *loc)
@@ -1107,10 +1124,17 @@ MSVCP_size_t __cdecl collate_wchar__Getcat(const locale_facet **facet, const loc
             return 0;
         }
         collate_wchar_ctor_name((collate*)*facet,
-                MSVCP_basic_string_char_c_str(&loc->ptr->name), 0);
+                locale_string_char_c_str(&loc->ptr->name), 0);
     }
 
     return LC_COLLATE;
+}
+
+/* ?_Getcat@?$collate@_W@std@@SAIPAPBVfacet@locale@2@@Z */
+/* ?_Getcat@?$collate@_W@std@@SA_KPEAPEBVfacet@locale@2@@Z */
+MSVCP_size_t __cdecl collate_wchar__Getcat_old(const locale_facet **facet)
+{
+    return collate_wchar__Getcat(facet, locale_classic());
 }
 
 static collate* collate_wchar_use_facet(const locale *loc)
@@ -1151,6 +1175,13 @@ MSVCP_size_t __cdecl collate_short__Getcat(const locale_facet **facet, const loc
     }
 
     return LC_COLLATE;
+}
+
+/* ?_Getcat@?$collate@G@std@@SAIPAPBVfacet@locale@2@@Z */
+/* ?_Getcat@?$collate@G@std@@SA_KPEAPEBVfacet@locale@2@@Z */
+MSVCP_size_t __cdecl collate_short__Getcat_old(const locale_facet **facet)
+{
+    return collate_short__Getcat(facet, locale_classic());
 }
 
 static collate* collate_short_use_facet(const locale *loc)
@@ -1460,8 +1491,13 @@ ctype_char* __thiscall ctype_char_vector_dtor(ctype_char *this, unsigned int fla
 /* ?do_narrow@?$ctype@D@std@@MBEDDD@Z */
 /* ?do_narrow@?$ctype@D@std@@MEBADDD@Z */
 DEFINE_THISCALL_WRAPPER(ctype_char_do_narrow_ch, 12)
+#if _MSVCP_VER >= 80 && _MSVCP_VER <= 90
 #define call_ctype_char_do_narrow_ch(this, ch, unused) CALL_VTBL_FUNC(this, 36, \
         char, (const ctype_char*, char, char), (this, ch, unused))
+#else
+#define call_ctype_char_do_narrow_ch(this, ch, unused) CALL_VTBL_FUNC(this, 32, \
+        char, (const ctype_char*, char, char), (this, ch, unused))
+#endif
 char __thiscall ctype_char_do_narrow_ch(const ctype_char *this, char ch, char unused)
 {
     TRACE("(%p %c %c)\n", this, ch, unused);
@@ -1471,9 +1507,15 @@ char __thiscall ctype_char_do_narrow_ch(const ctype_char *this, char ch, char un
 /* ?do_narrow@?$ctype@D@std@@MBEPBDPBD0DPAD@Z */
 /* ?do_narrow@?$ctype@D@std@@MEBAPEBDPEBD0DPEAD@Z */
 DEFINE_THISCALL_WRAPPER(ctype_char_do_narrow, 20)
+#if _MSVCP_VER >= 80 && _MSVCP_VER <= 90
 #define call_ctype_char_do_narrow(this, first, last, unused, dest) CALL_VTBL_FUNC(this, 32, \
         const char*, (const ctype_char*, const char*, const char*, char, char*), \
         (this, first, last, unused, dest))
+#else
+#define call_ctype_char_do_narrow(this, first, last, unused, dest) CALL_VTBL_FUNC(this, 28, \
+        const char*, (const ctype_char*, const char*, const char*, char, char*), \
+        (this, first, last, unused, dest))
+#endif
 const char* __thiscall ctype_char_do_narrow(const ctype_char *this,
         const char *first, const char *last, char unused, char *dest)
 {
@@ -1609,12 +1651,19 @@ MSVCP_size_t __cdecl ctype_char__Getcat(const locale_facet **facet, const locale
             return 0;
         }
 
-        _Locinfo_ctor_cstr(&locinfo, MSVCP_basic_string_char_c_str(&loc->ptr->name));
+        _Locinfo_ctor_cstr(&locinfo, locale_string_char_c_str(&loc->ptr->name));
         ctype_char_ctor_locinfo((ctype_char*)*facet, &locinfo, 0);
         _Locinfo_dtor(&locinfo);
     }
 
     return LC_CTYPE;
+}
+
+/* ?_Getcat@?$ctype@D@std@@SAIPAPBVfacet@locale@2@@Z */
+/* ?_Getcat@?$ctype@D@std@@SA_KPEAPEBVfacet@locale@2@@Z */
+MSVCP_size_t __cdecl ctype_char__Getcat_old(const locale_facet **facet)
+{
+    return ctype_char__Getcat(facet, locale_classic());
 }
 
 ctype_char* ctype_char_use_facet(const locale *loc)
@@ -2082,8 +2131,13 @@ char __thiscall ctype_wchar__Donarrow(const ctype_wchar *this, wchar_t ch, char 
 /* ?do_narrow@?$ctype@G@std@@MBEDGD@Z */
 /* ?do_narrow@?$ctype@G@std@@MEBADGD@Z */
 DEFINE_THISCALL_WRAPPER(ctype_wchar_do_narrow_ch, 12)
+#if _MSVCP_VER >= 80 && _MSVCP_VER <= 90
 #define call_ctype_wchar_do_narrow_ch(this, ch, dflt) CALL_VTBL_FUNC(this, 52, \
         char, (const ctype_wchar*, wchar_t, char), (this, ch, dflt))
+#else
+#define call_ctype_wchar_do_narrow_ch(this, ch, dflt) CALL_VTBL_FUNC(this, 48, \
+        char, (const ctype_wchar*, wchar_t, char), (this, ch, dflt))
+#endif
 char __thiscall ctype_wchar_do_narrow_ch(const ctype_wchar *this, wchar_t ch, char dflt)
 {
     return ctype_wchar__Donarrow(this, ch, dflt);
@@ -2094,9 +2148,15 @@ char __thiscall ctype_wchar_do_narrow_ch(const ctype_wchar *this, wchar_t ch, ch
 /* ?do_narrow@?$ctype@G@std@@MBEPBGPBG0DPAD@Z */
 /* ?do_narrow@?$ctype@G@std@@MEBAPEBGPEBG0DPEAD@Z */
 DEFINE_THISCALL_WRAPPER(ctype_wchar_do_narrow, 20)
+#if _MSVCP_VER >= 80 && _MSVCP_VER <= 90
 #define call_ctype_wchar_do_narrow(this, first, last, dflt, dest) CALL_VTBL_FUNC(this, 48, \
         const wchar_t*, (const ctype_wchar*, const wchar_t*, const wchar_t*, char, char*), \
         (this, first, last, dflt, dest))
+#else
+#define call_ctype_wchar_do_narrow(this, first, last, dflt, dest) CALL_VTBL_FUNC(this, 44, \
+        const wchar_t*, (const ctype_wchar*, const wchar_t*, const wchar_t*, char, char*), \
+        (this, first, last, dflt, dest))
+#endif
 const wchar_t* __thiscall ctype_wchar_do_narrow(const ctype_wchar *this,
         const wchar_t *first, const wchar_t *last, char dflt, char *dest)
 {
@@ -2341,12 +2401,19 @@ MSVCP_size_t __cdecl ctype_wchar__Getcat(const locale_facet **facet, const local
             return 0;
         }
 
-        _Locinfo_ctor_cstr(&locinfo, MSVCP_basic_string_char_c_str(&loc->ptr->name));
+        _Locinfo_ctor_cstr(&locinfo, locale_string_char_c_str(&loc->ptr->name));
         ctype_wchar_ctor_locinfo((ctype_wchar*)*facet, &locinfo, 0);
         _Locinfo_dtor(&locinfo);
     }
 
     return LC_CTYPE;
+}
+
+/* ?_Getcat@?$ctype@_W@std@@SAIPAPBVfacet@locale@2@@Z */
+/* ?_Getcat@?$ctype@_W@std@@SA_KPEAPEBVfacet@locale@2@@Z */
+MSVCP_size_t __cdecl ctype_wchar__Getcat_old(const locale_facet **facet)
+{
+    return ctype_wchar__Getcat(facet, locale_classic());
 }
 
 /* ?_Getcat@?$ctype@G@std@@SAIPAPBVfacet@locale@2@PBV42@@Z */
@@ -2359,6 +2426,13 @@ MSVCP_size_t __cdecl ctype_short__Getcat(const locale_facet **facet, const local
     }
 
     return LC_CTYPE;
+}
+
+/* ?_Getcat@?$ctype@G@std@@SAIPAPBVfacet@locale@2@@Z */
+/* ?_Getcat@?$ctype@G@std@@SA_KPEAPEBVfacet@locale@2@@Z */
+MSVCP_size_t __cdecl ctype_short__Getcat_old(const locale_facet **facet)
+{
+    return ctype_short__Getcat(facet, locale_classic());
 }
 
 /* _Towlower */
@@ -2863,6 +2937,13 @@ MSVCP_size_t __cdecl codecvt_char__Getcat(const locale_facet **facet, const loca
     return LC_CTYPE;
 }
 
+/* ?_Getcat@?$codecvt@DDH@std@@SAIPAPBVfacet@locale@2@@Z */
+/* ?_Getcat@?$codecvt@DDH@std@@SA_KPEAPEBVfacet@locale@2@@Z */
+MSVCP_size_t __cdecl codecvt_char__Getcat_old(const locale_facet **facet)
+{
+    return codecvt_char__Getcat(facet, locale_classic());
+}
+
 codecvt_char* codecvt_char_use_facet(const locale *loc)
 {
     static codecvt_char *obj = NULL;
@@ -3154,12 +3235,19 @@ MSVCP_size_t __cdecl codecvt_wchar__Getcat(const locale_facet **facet, const loc
             return 0;
         }
 
-        _Locinfo_ctor_cstr(&locinfo, MSVCP_basic_string_char_c_str(&loc->ptr->name));
+        _Locinfo_ctor_cstr(&locinfo, locale_string_char_c_str(&loc->ptr->name));
         codecvt_wchar_ctor_locinfo((codecvt_wchar*)*facet, &locinfo, 0);
         _Locinfo_dtor(&locinfo);
     }
 
     return LC_CTYPE;
+}
+
+/* ?_Getcat@?$codecvt@_WDH@std@@SAIPAPBVfacet@locale@2@@Z */
+/* ?_Getcat@?$codecvt@_WDH@std@@SA_KPEAPEBVfacet@locale@2@@Z */
+MSVCP_size_t __cdecl codecvt_wchar__Getcat_old(const locale_facet **facet)
+{
+    return codecvt_wchar__Getcat(facet, locale_classic());
 }
 
 codecvt_wchar* codecvt_wchar_use_facet(const locale *loc)
@@ -3206,12 +3294,19 @@ MSVCP_size_t __cdecl codecvt_short__Getcat(const locale_facet **facet, const loc
             return 0;
         }
 
-        _Locinfo_ctor_cstr(&locinfo, MSVCP_basic_string_char_c_str(&loc->ptr->name));
+        _Locinfo_ctor_cstr(&locinfo, locale_string_char_c_str(&loc->ptr->name));
         codecvt_short_ctor((codecvt_wchar*)*facet);
         _Locinfo_dtor(&locinfo);
     }
 
     return LC_CTYPE;
+}
+
+/* ?_Getcat@?$codecvt@GDH@std@@SAIPAPBVfacet@locale@2@@Z */
+/* ?_Getcat@?$codecvt@GDH@std@@SA_KPEAPEBVfacet@locale@2@@Z */
+MSVCP_size_t __cdecl codecvt_short__Getcat_old(const locale_facet **facet)
+{
+    return codecvt_short__Getcat(facet, locale_classic());
 }
 
 codecvt_wchar* codecvt_short_use_facet(const locale *loc)
@@ -3622,10 +3717,17 @@ MSVCP_size_t __cdecl numpunct_char__Getcat(const locale_facet **facet, const loc
             return 0;
         }
         numpunct_char_ctor_name((numpunct_char*)*facet,
-                MSVCP_basic_string_char_c_str(&loc->ptr->name), 0, TRUE);
+                locale_string_char_c_str(&loc->ptr->name), 0, TRUE);
     }
 
     return LC_NUMERIC;
+}
+
+/* ?_Getcat@?$numpunct@D@std@@SAIPAPBVfacet@locale@2@@Z */
+/* ?_Getcat@?$numpunct@D@std@@SA_KPEAPEBVfacet@locale@2@@Z */
+MSVCP_size_t __cdecl numpunct_char__Getcat_old(const locale_facet **facet)
+{
+    return numpunct_char__Getcat(facet, locale_classic());
 }
 
 static numpunct_char* numpunct_char_use_facet(const locale *loc)
@@ -3975,10 +4077,17 @@ MSVCP_size_t __cdecl numpunct_wchar__Getcat(const locale_facet **facet, const lo
             return 0;
         }
         numpunct_wchar_ctor_name((numpunct_wchar*)*facet,
-                MSVCP_basic_string_char_c_str(&loc->ptr->name), 0, TRUE);
+                locale_string_char_c_str(&loc->ptr->name), 0, TRUE);
     }
 
     return LC_NUMERIC;
+}
+
+/* ?_Getcat@?$numpunct@_W@std@@SAIPAPBVfacet@locale@2@@Z */
+/* ?_Getcat@?$numpunct@_W@std@@SA_KPEAPEBVfacet@locale@2@@Z */
+MSVCP_size_t __cdecl numpunct_wchar__Getcat_old(const locale_facet **facet)
+{
+    return numpunct_wchar__Getcat(facet, locale_classic());
 }
 
 static numpunct_wchar* numpunct_wchar_use_facet(const locale *loc)
@@ -4023,10 +4132,17 @@ MSVCP_size_t __cdecl numpunct_short__Getcat(const locale_facet **facet, const lo
             return 0;
         }
         numpunct_short_ctor_name((numpunct_wchar*)*facet,
-                MSVCP_basic_string_char_c_str(&loc->ptr->name), 0, TRUE);
+                locale_string_char_c_str(&loc->ptr->name), 0, TRUE);
     }
 
     return LC_NUMERIC;
+}
+
+/* ?_Getcat@?$numpunct@G@std@@SAIPAPBVfacet@locale@2@@Z */
+/* ?_Getcat@?$numpunct@G@std@@SA_KPEAPEBVfacet@locale@2@@Z */
+MSVCP_size_t __cdecl numpunct_short__Getcat_old(const locale_facet **facet)
+{
+    return numpunct_short__Getcat(facet, locale_classic());
 }
 
 static numpunct_wchar* numpunct_short_use_facet(const locale *loc)
@@ -4414,12 +4530,19 @@ MSVCP_size_t __cdecl num_get_wchar__Getcat(const locale_facet **facet, const loc
             return 0;
         }
 
-        _Locinfo_ctor_cstr(&locinfo, MSVCP_basic_string_char_c_str(&loc->ptr->name));
+        _Locinfo_ctor_cstr(&locinfo, locale_string_char_c_str(&loc->ptr->name));
         num_get_wchar_ctor_locinfo((num_get*)*facet, &locinfo, 0);
         _Locinfo_dtor(&locinfo);
     }
 
     return LC_NUMERIC;
+}
+
+/* ?_Getcat@?$num_get@_WV?$istreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@SAIPAPBVfacet@locale@2@@Z */
+/* ?_Getcat@?$num_get@_WV?$istreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@SA_KPEAPEBVfacet@locale@2@@Z */
+MSVCP_size_t __cdecl num_get_wchar__Getcat_old(const locale_facet **facet)
+{
+    return num_get_wchar__Getcat(facet, locale_classic());
 }
 
 num_get* num_get_wchar_use_facet(const locale *loc)
@@ -4460,6 +4583,13 @@ MSVCP_size_t __cdecl num_get_short__Getcat(const locale_facet **facet, const loc
     }
 
     return LC_NUMERIC;
+}
+
+/* ?_Getcat@?$num_get@GV?$istreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@SAIPAPBVfacet@locale@2@@Z */
+/* ?_Getcat@?$num_get@GV?$istreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@SA_KPEAPEBVfacet@locale@2@@Z */
+MSVCP_size_t __cdecl num_get_short__Getcat_old(const locale_facet **facet)
+{
+    return num_get_short__Getcat(facet, locale_classic());
 }
 
 num_get* num_get_short_use_facet(const locale *loc)
@@ -5571,12 +5701,19 @@ MSVCP_size_t __cdecl num_get_char__Getcat(const locale_facet **facet, const loca
             return 0;
         }
 
-        _Locinfo_ctor_cstr(&locinfo, MSVCP_basic_string_char_c_str(&loc->ptr->name));
+        _Locinfo_ctor_cstr(&locinfo, locale_string_char_c_str(&loc->ptr->name));
         num_get_char_ctor_locinfo((num_get*)*facet, &locinfo, 0);
         _Locinfo_dtor(&locinfo);
     }
 
     return LC_NUMERIC;
+}
+
+/* ?_Getcat@?$num_get@DV?$istreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@SAIPAPBVfacet@locale@2@@Z */
+/* ?_Getcat@?$num_get@DV?$istreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@SA_KPEAPEBVfacet@locale@2@@Z */
+MSVCP_size_t __cdecl num_get_char__Getcat_old(const locale_facet **facet)
+{
+    return num_get_char__Getcat(facet, locale_classic());
 }
 
 num_get* num_get_char_use_facet(const locale *loc)
@@ -6442,12 +6579,19 @@ MSVCP_size_t __cdecl num_put_char__Getcat(const locale_facet **facet, const loca
             return 0;
         }
 
-        _Locinfo_ctor_cstr(&locinfo, MSVCP_basic_string_char_c_str(&loc->ptr->name));
+        _Locinfo_ctor_cstr(&locinfo, locale_string_char_c_str(&loc->ptr->name));
         num_put_char_ctor_locinfo((num_put*)*facet, &locinfo, 0);
         _Locinfo_dtor(&locinfo);
     }
 
     return LC_NUMERIC;
+}
+
+/* ?_Getcat@?$num_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@SAIPAPBVfacet@locale@2@@Z */
+/* ?_Getcat@?$num_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@SA_KPEAPEBVfacet@locale@2@@Z */
+MSVCP_size_t __cdecl num_put_char__Getcat_old(const locale_facet **facet)
+{
+    return num_put_char__Getcat(facet, locale_classic());
 }
 
 num_put* num_put_char_use_facet(const locale *loc)
@@ -7096,12 +7240,19 @@ MSVCP_size_t __cdecl num_put_wchar__Getcat(const locale_facet **facet, const loc
             return 0;
         }
 
-        _Locinfo_ctor_cstr(&locinfo, MSVCP_basic_string_char_c_str(&loc->ptr->name));
+        _Locinfo_ctor_cstr(&locinfo, locale_string_char_c_str(&loc->ptr->name));
         num_put_wchar_ctor_locinfo((num_put*)*facet, &locinfo, 0);
         _Locinfo_dtor(&locinfo);
     }
 
     return LC_NUMERIC;
+}
+
+/* ?_Getcat@?$num_put@_WV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@SAIPAPBVfacet@locale@2@@Z */
+/* ?_Getcat@?$num_put@_WV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@SA_KPEAPEBVfacet@locale@2@@Z */
+MSVCP_size_t __cdecl num_put_wchar__Getcat_old(const locale_facet **facet)
+{
+    return num_put_wchar__Getcat(facet, locale_classic());
 }
 
 /* ?_Getcat@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@SAIPAPBVfacet@locale@2@PBV42@@Z */
@@ -7120,12 +7271,19 @@ MSVCP_size_t __cdecl num_put_short__Getcat(const locale_facet **facet, const loc
             return 0;
         }
 
-        _Locinfo_ctor_cstr(&locinfo, MSVCP_basic_string_char_c_str(&loc->ptr->name));
+        _Locinfo_ctor_cstr(&locinfo, locale_string_char_c_str(&loc->ptr->name));
         num_put_short_ctor_locinfo((num_put*)*facet, &locinfo, 0);
         _Locinfo_dtor(&locinfo);
     }
 
     return LC_NUMERIC;
+}
+
+/* ?_Getcat@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@SAIPAPBVfacet@locale@2@@Z */
+/* ?_Getcat@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@SA_KPEAPEBVfacet@locale@2@@Z */
+MSVCP_size_t __cdecl num_put_short__Getcat_old(const locale_facet **facet)
+{
+    return num_put_short__Getcat(facet, locale_classic());
 }
 
 num_put* num_put_wchar_use_facet(const locale *loc)
@@ -7974,12 +8132,19 @@ MSVCP_size_t __cdecl time_put_char__Getcat(const locale_facet **facet, const loc
             return 0;
         }
 
-        _Locinfo_ctor_cstr(&locinfo, MSVCP_basic_string_char_c_str(&loc->ptr->name));
+        _Locinfo_ctor_cstr(&locinfo, locale_string_char_c_str(&loc->ptr->name));
         time_put_char_ctor_locinfo((time_put*)*facet, &locinfo, 0);
         _Locinfo_dtor(&locinfo);
     }
 
     return LC_TIME;
+}
+
+/* ?_Getcat@?$time_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@SAIPAPBVfacet@locale@2@@Z */
+/* ?_Getcat@?$time_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@SA_KPEAPEBVfacet@locale@2@@Z */
+MSVCP_size_t __cdecl time_put_char__Getcat_old(const locale_facet **facet)
+{
+    return time_put_char__Getcat(facet, locale_classic());
 }
 
 static time_put* time_put_char_use_facet(const locale *loc)
@@ -8239,10 +8404,17 @@ MSVCP_size_t __cdecl time_put_wchar__Getcat(const locale_facet **facet, const lo
             return 0;
         }
         time_put_wchar_ctor_name((time_put*)*facet,
-                MSVCP_basic_string_char_c_str(&loc->ptr->name), 0);
+                locale_string_char_c_str(&loc->ptr->name), 0);
     }
 
     return LC_TIME;
+}
+
+/* ?_Getcat@?$time_put@_WV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@SAIPAPBVfacet@locale@2@@Z */
+/* ?_Getcat@?$time_put@_WV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@SA_KPEAPEBVfacet@locale@2@@Z */
+MSVCP_size_t __cdecl time_put_wchar__Getcat_old(const locale_facet **facet)
+{
+    return time_put_wchar__Getcat(facet, locale_classic());
 }
 
 static time_put* time_put_wchar_use_facet(const locale *loc)
@@ -8287,10 +8459,17 @@ MSVCP_size_t __cdecl time_put_short__Getcat(const locale_facet **facet, const lo
             return 0;
         }
         time_put_short_ctor_name((time_put*)*facet,
-                MSVCP_basic_string_char_c_str(&loc->ptr->name), 0);
+                locale_string_char_c_str(&loc->ptr->name), 0);
     }
 
     return LC_TIME;
+}
+
+/* ?_Getcat@?$time_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@SAIPAPBVfacet@locale@2@@Z */
+/* ?_Getcat@?$time_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@SA_KPEAPEBVfacet@locale@2@@Z */
+MSVCP_size_t __cdecl time_put_short__Getcat_old(const locale_facet **facet)
+{
+    return time_put_short__Getcat(facet, locale_classic());
 }
 
 static time_put* time_put_short_use_facet(const locale *loc)
@@ -8419,7 +8598,7 @@ locale__Locimp* __thiscall locale__Locimp_ctor_transparent(locale__Locimp *this,
     memset(this, 0, sizeof(locale__Locimp));
     locale_facet_ctor_refs(&this->facet, 1);
     this->transparent = transparent;
-    MSVCP_basic_string_char_ctor_cstr(&this->name, "*");
+    locale_string_char_ctor_cstr(&this->name, "*");
     return this;
 }
 
@@ -8459,7 +8638,7 @@ locale__Locimp* __thiscall locale__Locimp_copy_ctor(locale__Locimp *this, const 
                 locale_facet__Incref(this->facetvec[i]);
         }
     }
-    MSVCP_basic_string_char_copy_ctor(&this->name, &copy->name);
+    locale_string_char_copy_ctor(&this->name, &copy->name);
     _Lockit_dtor(&lock);
     return this;
 }
@@ -8486,7 +8665,7 @@ void __thiscall locale__Locimp_dtor(locale__Locimp *this)
             call_locale_facet_vector_dtor(this->facetvec[i], 1);
 
     MSVCRT_operator_delete(this->facetvec);
-    MSVCP_basic_string_char_dtor(&this->name);
+    locale_string_char_dtor(&this->name);
 }
 
 /* ?_Locimp_dtor@_Locimp@locale@std@@CAXPAV123@@Z */
@@ -8949,7 +9128,7 @@ locale__Locimp* __cdecl locale__Locimp__Makeloc(const _Locinfo *locinfo, categor
     locale__Locimp__Makeushloc(locinfo, cat, locimp, loc);
 
     locimp->catmask |= cat;
-    MSVCP_basic_string_char_copy_ctor(&locimp->name, &locinfo->newlocname);
+    locale_string_char_assign(&locimp->name, &locinfo->newlocname);
     return locimp;
 }
 
@@ -8993,8 +9172,8 @@ locale__Locimp* __cdecl locale__Init(void)
 
     locale__Locimp_ctor(global_locale);
     global_locale->catmask = (1<<(LC_MAX+1))-1;
-    MSVCP_basic_string_char_dtor(&global_locale->name);
-    MSVCP_basic_string_char_ctor_cstr(&global_locale->name, "C");
+    locale_string_char_dtor(&global_locale->name);
+    locale_string_char_ctor_cstr(&global_locale->name, "C");
 
     locale__Locimp__Clocptr = global_locale;
     global_locale->facet.refs++;
@@ -9020,8 +9199,8 @@ locale* __thiscall locale_ctor_locale_locale(locale *this, const locale *loc, co
     }
     locale__Locimp_copy_ctor(this->ptr, loc->ptr);
 
-    _Locinfo_ctor_cat_cstr(&locinfo, loc->ptr->catmask, MSVCP_basic_string_char_c_str(&loc->ptr->name));
-    _Locinfo__Addcats(&locinfo, cat & other->ptr->catmask, MSVCP_basic_string_char_c_str(&other->ptr->name));
+    _Locinfo_ctor_cat_cstr(&locinfo, loc->ptr->catmask, locale_string_char_c_str(&loc->ptr->name));
+    _Locinfo__Addcats(&locinfo, cat & other->ptr->catmask, locale_string_char_c_str(&other->ptr->name));
     locale__Locimp__Makeloc(&locinfo, cat, this->ptr, other);
     _Locinfo_dtor(&locinfo);
 
@@ -9067,7 +9246,7 @@ locale* __thiscall locale_ctor_cstr(locale *this, const char *locname, category 
     locale__Init();
 
     _Locinfo_ctor_cat_cstr(&locinfo, cat, locname);
-    if(!memcmp(MSVCP_basic_string_char_c_str(&locinfo.newlocname), "*", 2)) {
+    if(!memcmp(locale_string_char_c_str(&locinfo.newlocname), "*", 2)) {
         _Locinfo_dtor(&locinfo);
         MSVCRT_operator_delete(this->ptr);
         throw_exception(EXCEPTION_RUNTIME_ERROR, "bad locale name");
@@ -9162,8 +9341,8 @@ locale* __thiscall locale__Addfac(locale *this, locale_facet *facet, MSVCP_size_
     locale__Locimp__Addfac(this->ptr, facet, id);
 
     if(catmask) {
-        MSVCP_basic_string_char_dtor(&this->ptr->name);
-        MSVCP_basic_string_char_ctor_cstr(&this->ptr->name, "*");
+        locale_string_char_dtor(&this->ptr->name);
+        locale_string_char_ctor_cstr(&this->ptr->name, "*");
     }
     return this;
 }
@@ -9225,16 +9404,6 @@ locale* __cdecl locale_empty(locale *ret)
     return ret;
 }
 
-/* ?name@locale@std@@QBE?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@2@XZ */
-/* ?name@locale@std@@QEBA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@2@XZ */
-DEFINE_THISCALL_WRAPPER(locale_name, 8)
-basic_string_char* __thiscall locale_name(const locale *this, basic_string_char *ret)
-{
-    TRACE( "(%p)\n", this);
-    MSVCP_basic_string_char_copy_ctor(ret, &this->ptr->name);
-    return ret;
-}
-
 /* ?global@locale@std@@SA?AV12@ABV12@@Z */
 /* ?global@locale@std@@SA?AV12@AEBV12@@Z */
 locale* __cdecl locale_global(locale *ret, const locale *loc)
@@ -9255,12 +9424,37 @@ locale* __cdecl locale_global(locale *ret, const locale *loc)
         for(i=LC_ALL+1; i<=LC_MAX; i++) {
             if((global_locale->catmask & (1<<(i-1))) == 0)
                 continue;
-            setlocale(i, MSVCP_basic_string_char_c_str(&global_locale->name));
+            setlocale(i, locale_string_char_c_str(&global_locale->name));
         }
     }
     _Lockit_dtor(&lock);
     return ret;
 }
+
+#if _MSVCP_VER < 100
+
+/* ?_Getname@_Locinfo@std@@QBE?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@2@XZ */
+/* ?_Getname@_Locinfo@std@@QEBA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@2@XZ */
+DEFINE_THISCALL_WRAPPER(_Locinfo__Getname, 8)
+basic_string_char* __thiscall _Locinfo__Getname(const _Locinfo *this, basic_string_char *ret)
+{
+    TRACE("(%p)\n", this);
+
+    MSVCP_basic_string_char_copy_ctor(ret, &this->newlocname);
+    return ret;
+}
+
+/* ?name@locale@std@@QBE?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@2@XZ */
+/* ?name@locale@std@@QEBA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@2@XZ */
+DEFINE_THISCALL_WRAPPER(locale_name, 8)
+basic_string_char* __thiscall locale_name(const locale *this, basic_string_char *ret)
+{
+    TRACE( "(%p)\n", this);
+    MSVCP_basic_string_char_copy_ctor(ret, &this->ptr->name);
+    return ret;
+}
+
+#endif  /* _MSVCP_VER < 100 */
 
 /* wctrans */
 wctrans_t __cdecl wctrans(const char *property)
@@ -9338,10 +9532,15 @@ void __asm_dummy_vtables(void) {
             VTABLE_ADD_FUNC(ctype_char_do_toupper_ch)
             VTABLE_ADD_FUNC(ctype_char_do_widen)
             VTABLE_ADD_FUNC(ctype_char_do_widen_ch)
+#if _MSVCP_VER >= 80 && _MSVCP_VER <= 90
             VTABLE_ADD_FUNC(ctype_char__Do_widen_s)
             VTABLE_ADD_FUNC(ctype_char_do_narrow)
             VTABLE_ADD_FUNC(ctype_char_do_narrow_ch)
             VTABLE_ADD_FUNC(ctype_char__Do_narrow_s));
+#else
+            VTABLE_ADD_FUNC(ctype_char_do_narrow)
+            VTABLE_ADD_FUNC(ctype_char_do_narrow_ch));
+#endif
     __ASM_VTABLE(ctype_wchar,
             VTABLE_ADD_FUNC(ctype_wchar_vector_dtor)
             VTABLE_ADD_FUNC(ctype_wchar_do_is)
@@ -9354,10 +9553,15 @@ void __asm_dummy_vtables(void) {
             VTABLE_ADD_FUNC(ctype_wchar_do_toupper_ch)
             VTABLE_ADD_FUNC(ctype_wchar_do_widen)
             VTABLE_ADD_FUNC(ctype_wchar_do_widen_ch)
+#if _MSVCP_VER >= 80 && _MSVCP_VER <= 90
             VTABLE_ADD_FUNC(ctype_wchar__Do_widen_s)
             VTABLE_ADD_FUNC(ctype_wchar_do_narrow)
             VTABLE_ADD_FUNC(ctype_wchar_do_narrow_ch)
             VTABLE_ADD_FUNC(ctype_wchar__Do_narrow_s));
+#else
+            VTABLE_ADD_FUNC(ctype_wchar_do_narrow)
+            VTABLE_ADD_FUNC(ctype_wchar_do_narrow_ch));
+#endif
     __ASM_VTABLE(ctype_short,
             VTABLE_ADD_FUNC(ctype_wchar_vector_dtor)
             VTABLE_ADD_FUNC(ctype_wchar_do_is)
@@ -9370,10 +9574,15 @@ void __asm_dummy_vtables(void) {
             VTABLE_ADD_FUNC(ctype_wchar_do_toupper_ch)
             VTABLE_ADD_FUNC(ctype_wchar_do_widen)
             VTABLE_ADD_FUNC(ctype_wchar_do_widen_ch)
+#if _MSVCP_VER >= 80 && _MSVCP_VER <= 90
             VTABLE_ADD_FUNC(ctype_wchar__Do_widen_s)
             VTABLE_ADD_FUNC(ctype_wchar_do_narrow)
             VTABLE_ADD_FUNC(ctype_wchar_do_narrow_ch)
             VTABLE_ADD_FUNC(ctype_wchar__Do_narrow_s));
+#else
+            VTABLE_ADD_FUNC(ctype_wchar_do_narrow)
+            VTABLE_ADD_FUNC(ctype_wchar_do_narrow_ch));
+#endif
     __ASM_VTABLE(codecvt_base,
             VTABLE_ADD_FUNC(codecvt_base_vector_dtor)
             VTABLE_ADD_FUNC(codecvt_base_do_always_noconv)

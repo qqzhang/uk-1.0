@@ -95,7 +95,7 @@ typedef struct __parsed_symbol
 typedef struct __search_symbol
 {
   struct __search_symbol *next;
-  int found;
+  BOOL found;
   char symbolname[1];    /* static string, be ANSI C compliant by [1] */
 } search_symbol;
 
@@ -105,25 +105,25 @@ typedef struct __globals
   Mode  mode;		   /* SPEC, DEMANGLE or DUMP */
 
   /* Options: generic */
-  int   do_quiet;          /* -q */
-  int   do_verbose;        /* -v */
+  BOOL  do_quiet;          /* -q */
+  BOOL  do_verbose;        /* -v */
 
   /* Option arguments: generic */
   const char *input_name;  /* */
   const char *input_module; /* input module name generated after input_name according mode */
 
   /* Options: spec mode */
-  int   do_code;           /* -c, -t, -f */
-  int   do_trace;          /* -t, -f */
-  int   do_cdecl;          /* -C */
-  int   do_documentation;  /* -D */
+  BOOL  do_code;           /* -c, -t, -f */
+  BOOL  do_trace;          /* -t, -f */
+  BOOL  do_cdecl;          /* -C */
+  BOOL  do_documentation;  /* -D */
 
   /* Options: dump mode */
-  int   do_demangle;        /* -d */
-  int   do_dumpheader;      /* -f */
-  int   do_dump_rawdata;    /* -x */
-  int   do_debug;           /* -G == 1, -g == 2 */
-  int   do_symbol_table;    /* -t */
+  BOOL  do_demangle;        /* -d */
+  BOOL  do_dumpheader;      /* -f */
+  BOOL  do_dump_rawdata;    /* -x */
+  BOOL  do_debug;           /* -G == 1, -g == 2 */
+  BOOL  do_symbol_table;    /* -t */
 
   /* Option arguments: spec mode */
   int   start_ordinal;     /* -s */
@@ -157,7 +157,7 @@ extern _globals globals;
 void	dump_file(const char* name);
 
 /* DLL functions */
-int   dll_open (const char *dll_name);
+BOOL  dll_open (const char *dll_name);
 
 int   dll_next_symbol (parsed_symbol * sym);
 
@@ -206,7 +206,7 @@ char *str_substring(const char *start, const char *end);
 
 char *str_replace (char *str, const char *oldstr, const char *newstr);
 
-const char *str_match (const char *str, const char *match, int *found);
+const char *str_match (const char *str, const char *match, BOOL *found);
 
 const char *str_find_set (const char *str, const char *findset);
 
@@ -222,7 +222,7 @@ const void*	PRD(unsigned long prd, unsigned long len);
 unsigned long	Offset(const void* ptr);
 
 typedef void (*file_dumper)(void);
-int             dump_analysis(const char*, file_dumper, enum FileSig);
+BOOL            dump_analysis(const char*, file_dumper, enum FileSig);
 
 void            dump_data( const unsigned char *ptr, unsigned int size, const char *prefix );
 const char*	get_time_str( unsigned long );
@@ -256,9 +256,9 @@ void            fnt_dump( void );
 enum FileSig    get_kind_msft(void);
 void            msft_dump(void);
 
-int             codeview_dump_symbols(const void* root, unsigned long size);
-int             codeview_dump_types_from_offsets(const void* table, const DWORD* offsets, unsigned num_types);
-int             codeview_dump_types_from_block(const void* table, unsigned long len);
+BOOL            codeview_dump_symbols(const void* root, unsigned long size);
+BOOL            codeview_dump_types_from_offsets(const void* table, const DWORD* offsets, unsigned num_types);
+BOOL            codeview_dump_types_from_block(const void* table, unsigned long len);
 void            codeview_dump_linetab(const char* linetab, BOOL pascal_str, const char* pfx);
 void            codeview_dump_linetab2(const char* linetab, DWORD size, const char* strimage, DWORD strsize, const char* pfx);
 

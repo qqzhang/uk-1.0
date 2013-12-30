@@ -80,6 +80,7 @@ int macdrv_err_on;
 @property (readwrite, copy, nonatomic) NSEvent* lastFlagsChanged;
 @property (copy, nonatomic) NSArray* cursorFrames;
 @property (retain, nonatomic) NSTimer* cursorTimer;
+@property (retain, nonatomic) NSCursor* cursor;
 @property (retain, nonatomic) NSImage* applicationIcon;
 @property (readonly, nonatomic) BOOL inputSourceIsInputMethod;
 @property (retain, nonatomic) WineWindow* mouseCaptureWindow;
@@ -96,7 +97,7 @@ int macdrv_err_on;
 
     @synthesize keyboardType, lastFlagsChanged;
     @synthesize applicationIcon;
-    @synthesize cursorFrames, cursorTimer;
+    @synthesize cursorFrames, cursorTimer, cursor;
     @synthesize mouseCaptureWindow;
 
     + (void) initialize
@@ -149,11 +150,14 @@ int macdrv_err_on;
             keyWindows = [[NSMutableArray alloc] init];
 
             originalDisplayModes = [[NSMutableDictionary alloc] init];
+            latentDisplayModes = [[NSMutableDictionary alloc] init];
 
             warpRecords = [[NSMutableArray alloc] init];
 
+            windowsBeingDragged = [[NSMutableSet alloc] init];
+
             if (!requests || !requestsManipQueue || !eventQueues || !eventQueuesLock ||
-                !keyWindows || !originalDisplayModes || !warpRecords)
+                !keyWindows || !originalDisplayModes || !latentDisplayModes || !warpRecords)
             {
                 [self release];
                 return nil;
@@ -171,11 +175,14 @@ int macdrv_err_on;
 
     - (void) dealloc
     {
+        [windowsBeingDragged release];
+        [cursor release];
         [screenFrameCGRects release];
         [applicationIcon release];
         [warpRecords release];
         [cursorTimer release];
         [cursorFrames release];
+        [latentDisplayModes release];
         [originalDisplayModes release];
         [keyWindows release];
         [eventQueues release];
@@ -237,6 +244,11 @@ int macdrv_err_on;
             submenu = [[[NSMenu alloc] initWithTitle:@"Window"] autorelease];
             [submenu addItemWithTitle:@"Minimize" action:@selector(performMiniaturize:) keyEquivalent:@""];
             [submenu addItemWithTitle:@"Zoom" action:@selector(performZoom:) keyEquivalent:@""];
+            if ([NSWindow instancesRespondToSelector:@selector(toggleFullScreen:)])
+            {
+                item = [submenu addItemWithTitle:@"Enter Full Screen" action:@selector(toggleFullScreen:) keyEquivalent:@"f"];
+                [item setKeyEquivalentModifierMask:NSCommandKeyMask | NSAlternateKeyMask | NSControlKeyMask];
+            }
             [submenu addItem:[NSMenuItem separatorItem]];
             [submenu addItemWithTitle:@"Bring All to Front" action:@selector(arrangeInFront:) keyEquivalent:@""];
             item = [[[NSMenuItem alloc] init] autorelease];
@@ -365,15 +377,15 @@ int macdrv_err_on;
 
     - (void) keyboardSelectionDidChange
     {
-        TISInputSourceRef inputSource;
+        TISInputSourceRef inputSourceLayout;
 
         inputSourceIsInputMethodValid = FALSE;
 
-        inputSource = TISCopyCurrentKeyboardLayoutInputSource();
-        if (inputSource)
+        inputSourceLayout = TISCopyCurrentKeyboardLayoutInputSource();
+        if (inputSourceLayout)
         {
             CFDataRef uchr;
-            uchr = TISGetInputSourceProperty(inputSource,
+            uchr = TISGetInputSourceProperty(inputSourceLayout,
                     kTISPropertyUnicodeKeyLayoutData);
             if (uchr)
             {
@@ -384,6 +396,7 @@ int macdrv_err_on;
                 event->keyboard_changed.keyboard_type = self.keyboardType;
                 event->keyboard_changed.iso_keyboard = (KBGetLayoutType(self.keyboardType) == kKeyboardISO);
                 event->keyboard_changed.uchr = CFDataCreateCopy(NULL, uchr);
+                event->keyboard_changed.input_source = TISCopyCurrentKeyboardInputSource();
 
                 if (event->keyboard_changed.uchr)
                 {
@@ -398,8 +411,13 @@ int macdrv_err_on;
                 macdrv_release_event(event);
             }
 
-            CFRelease(inputSource);
+            CFRelease(inputSourceLayout);
         }
+    }
+
+    - (void) enabledKeyboardInputSourcesChanged
+    {
+        macdrv_layout_list_needs_update = TRUE;
     }
 
     - (CGFloat) primaryScreenHeight
@@ -686,10 +704,14 @@ int macdrv_err_on;
     - (BOOL) setMode:(CGDisplayModeRef)mode forDisplay:(CGDirectDisplayID)displayID
     {
         BOOL ret = FALSE;
+        BOOL active = [NSApp isActive];
         NSNumber* displayIDKey = [NSNumber numberWithUnsignedInt:displayID];
-        CGDisplayModeRef currentMode, originalMode;
+        CGDisplayModeRef currentMode = NULL, originalMode;
 
-        currentMode = CGDisplayCopyDisplayMode(displayID);
+        if (!active)
+            currentMode = CGDisplayModeRetain((CGDisplayModeRef)[latentDisplayModes objectForKey:displayIDKey]);
+        if (!currentMode)
+            currentMode = CGDisplayCopyDisplayMode(displayID);
         if (!currentMode) // Invalid display ID
             return FALSE;
 
@@ -714,34 +736,47 @@ int macdrv_err_on;
         {
             if ([originalDisplayModes count] == 1) // If this is the last changed display, do a blanket reset
             {
-                CGRestorePermanentDisplayConfiguration();
-                if (!displaysCapturedForFullscreen)
-                    CGReleaseAllDisplays();
+                if (active)
+                {
+                    CGRestorePermanentDisplayConfiguration();
+                    if (!displaysCapturedForFullscreen)
+                        CGReleaseAllDisplays();
+                }
                 [originalDisplayModes removeAllObjects];
+                [latentDisplayModes removeAllObjects];
                 ret = TRUE;
             }
             else // ... otherwise, try to restore just the one display
             {
-                if (CGDisplaySetDisplayMode(displayID, mode, NULL) == CGDisplayNoErr)
+                if (active)
+                    ret = (CGDisplaySetDisplayMode(displayID, mode, NULL) == CGDisplayNoErr);
+                else
                 {
-                    [originalDisplayModes removeObjectForKey:displayIDKey];
+                    [latentDisplayModes removeObjectForKey:displayIDKey];
                     ret = TRUE;
                 }
+                if (ret)
+                    [originalDisplayModes removeObjectForKey:displayIDKey];
             }
         }
         else
         {
             if ([originalDisplayModes count] || displaysCapturedForFullscreen ||
-                CGCaptureAllDisplays() == CGDisplayNoErr)
+                !active || CGCaptureAllDisplays() == CGDisplayNoErr)
             {
-                if (CGDisplaySetDisplayMode(displayID, mode, NULL) == CGDisplayNoErr)
+                if (active)
+                    ret = (CGDisplaySetDisplayMode(displayID, mode, NULL) == CGDisplayNoErr);
+                else
                 {
-                    [originalDisplayModes setObject:(id)originalMode forKey:displayIDKey];
+                    [latentDisplayModes setObject:(id)mode forKey:displayIDKey];
                     ret = TRUE;
                 }
+                if (ret)
+                    [originalDisplayModes setObject:(id)originalMode forKey:displayIDKey];
                 else if (![originalDisplayModes count])
                 {
                     CGRestorePermanentDisplayConfiguration();
+                    [latentDisplayModes removeAllObjects];
                     if (!displaysCapturedForFullscreen)
                         CGReleaseAllDisplays();
                 }
@@ -761,21 +796,69 @@ int macdrv_err_on;
         return ([originalDisplayModes count] > 0 || displaysCapturedForFullscreen);
     }
 
+    - (void) updateCursor:(BOOL)force
+    {
+        if (force || lastTargetWindow)
+        {
+            if (clientWantsCursorHidden && !cursorHidden)
+            {
+                [NSCursor hide];
+                cursorHidden = TRUE;
+            }
+
+            if (!cursorIsCurrent)
+            {
+                [cursor set];
+                cursorIsCurrent = TRUE;
+            }
+
+            if (!clientWantsCursorHidden && cursorHidden)
+            {
+                [NSCursor unhide];
+                cursorHidden = FALSE;
+            }
+        }
+        else
+        {
+            if (cursorIsCurrent)
+            {
+                [[NSCursor arrowCursor] set];
+                cursorIsCurrent = FALSE;
+            }
+            if (cursorHidden)
+            {
+                [NSCursor unhide];
+                cursorHidden = FALSE;
+            }
+        }
+    }
+
     - (void) hideCursor
     {
-        if (!cursorHidden)
+        if (!clientWantsCursorHidden)
         {
-            [NSCursor hide];
-            cursorHidden = TRUE;
+            clientWantsCursorHidden = TRUE;
+            [self updateCursor:TRUE];
         }
     }
 
     - (void) unhideCursor
     {
-        if (cursorHidden)
+        if (clientWantsCursorHidden)
         {
-            [NSCursor unhide];
-            cursorHidden = FALSE;
+            clientWantsCursorHidden = FALSE;
+            [self updateCursor:FALSE];
+        }
+    }
+
+    - (void) setCursor:(NSCursor*)newCursor
+    {
+        if (newCursor != cursor)
+        {
+            [cursor release];
+            cursor = [newCursor retain];
+            cursorIsCurrent = FALSE;
+            [self updateCursor:FALSE];
         }
     }
 
@@ -786,15 +869,12 @@ int macdrv_err_on;
         NSImage* image = [[NSImage alloc] initWithCGImage:cgimage size:NSZeroSize];
         CFDictionaryRef hotSpotDict = (CFDictionaryRef)[frame objectForKey:@"hotSpot"];
         CGPoint hotSpot;
-        NSCursor* cursor;
 
         if (!CGPointMakeWithDictionaryRepresentation(hotSpotDict, &hotSpot))
             hotSpot = CGPointZero;
-        cursor = [[NSCursor alloc] initWithImage:image hotSpot:NSPointFromCGPoint(hotSpot)];
+        self.cursor = [[[NSCursor alloc] initWithImage:image hotSpot:NSPointFromCGPoint(hotSpot)] autorelease];
         [image release];
-        [cursor set];
         [self unhideCursor];
-        [cursor release];
     }
 
     - (void) nextCursorFrame:(NSTimer*)theTimer
@@ -878,7 +958,6 @@ int macdrv_err_on;
         }
 
         self.applicationIcon = nsimage;
-        [NSApp setApplicationIconImage:nsimage];
     }
 
     - (void) handleCommandTab
@@ -891,6 +970,14 @@ int macdrv_err_on;
 
             if ([originalDisplayModes count] || displaysCapturedForFullscreen)
             {
+                NSNumber* displayID;
+                for (displayID in originalDisplayModes)
+                {
+                    CGDisplayModeRef mode = CGDisplayCopyDisplayMode([displayID unsignedIntValue]);
+                    [latentDisplayModes setObject:(id)mode forKey:displayID];
+                    CGDisplayModeRelease(mode);
+                }
+
                 CGRestorePermanentDisplayConfiguration();
                 CGReleaseAllDisplays();
                 [originalDisplayModes removeAllObjects];
@@ -1174,7 +1261,9 @@ int macdrv_err_on;
     {
         BOOL ret;
 
-        if (clippingCursor)
+        if ([windowsBeingDragged count])
+            ret = FALSE;
+        else if (clippingCursor)
         {
             [self clipCursorLocation:&pos];
 
@@ -1232,7 +1321,7 @@ int macdrv_err_on;
 
     - (void) activateCursorClipping
     {
-        if (clippingCursor)
+        if (cursorClippingEventTap && !CGEventTapIsEnabled(cursorClippingEventTap))
         {
             CGEventTapEnable(cursorClippingEventTap, TRUE);
             [self setCursorPosition:NSPointToCGPoint([self flippedMouseLocation:[NSEvent mouseLocation]])];
@@ -1241,12 +1330,20 @@ int macdrv_err_on;
 
     - (void) deactivateCursorClipping
     {
-        if (clippingCursor)
+        if (cursorClippingEventTap && CGEventTapIsEnabled(cursorClippingEventTap))
         {
             CGEventTapEnable(cursorClippingEventTap, FALSE);
             [warpRecords removeAllObjects];
             lastSetCursorPositionTime = [[NSProcessInfo processInfo] systemUptime];
         }
+    }
+
+    - (void) updateCursorClippingState
+    {
+        if (clippingCursor && [NSApp isActive] && ![windowsBeingDragged count])
+            [self activateCursorClipping];
+        else
+            [self deactivateCursorClipping];
     }
 
     - (BOOL) startClippingCursor:(CGRect)rect
@@ -1256,14 +1353,17 @@ int macdrv_err_on;
         if (!cursorClippingEventTap && ![self installEventTap])
             return FALSE;
 
+        if (clippingCursor && CGRectEqualToRect(rect, cursorClipRect) &&
+            CGEventTapIsEnabled(cursorClippingEventTap))
+            return TRUE;
+
         err = CGAssociateMouseAndMouseCursorPosition(false);
         if (err != kCGErrorSuccess)
             return FALSE;
 
         clippingCursor = TRUE;
         cursorClipRect = rect;
-        if ([NSApp isActive])
-            [self activateCursorClipping];
+        [self updateCursorClippingState];
 
         return TRUE;
     }
@@ -1274,8 +1374,8 @@ int macdrv_err_on;
         if (err != kCGErrorSuccess)
             return FALSE;
 
-        [self deactivateCursorClipping];
         clippingCursor = FALSE;
+        [self updateCursorClippingState];
 
         return TRUE;
     }
@@ -1304,7 +1404,9 @@ int macdrv_err_on;
         WineWindow* targetWindow;
         BOOL drag = [anEvent type] != NSMouseMoved;
 
-        if (mouseCaptureWindow)
+        if ([windowsBeingDragged count])
+            targetWindow = nil;
+        else if (mouseCaptureWindow)
             targetWindow = mouseCaptureWindow;
         else if (drag)
             targetWindow = (WineWindow*)[anEvent window];
@@ -1321,6 +1423,8 @@ int macdrv_err_on;
             windowUnderNumber = [NSWindow windowNumberAtPoint:point
                                   belowWindowWithWindowNumber:0];
             targetWindow = (WineWindow*)[NSApp windowWithWindowNumber:windowUnderNumber];
+            if (!NSMouseInRect(point, [targetWindow contentRectForFrameRect:[targetWindow frame]], NO))
+                targetWindow = nil;
         }
 
         if ([targetWindow isKindOfClass:[WineWindow class]])
@@ -1433,12 +1537,10 @@ int macdrv_err_on;
 
             lastTargetWindow = targetWindow;
         }
-        else if (lastTargetWindow)
-        {
-            [[NSCursor arrowCursor] set];
-            [self unhideCursor];
+        else
             lastTargetWindow = nil;
-        }
+
+        [self updateCursor:FALSE];
     }
 
     - (void) handleMouseButton:(NSEvent*)theEvent
@@ -1480,12 +1582,58 @@ int macdrv_err_on;
                 // respect to its siblings, but we want it to.  We have to do it
                 // manually.
                 NSWindow* parent = [window parentWindow];
-                [parent removeChildWindow:window];
-                [parent addChildWindow:window ordered:NSWindowAbove];
+                NSInteger level = [window level];
+                __block BOOL needReorder = FALSE;
+                NSMutableArray* higherLevelSiblings = [NSMutableArray array];
+
+                // If the window is already the last child or if it's only below
+                // children with higher window level, then no need to reorder it.
+                [[parent childWindows] enumerateObjectsWithOptions:NSEnumerationReverse
+                                                        usingBlock:^(id obj, NSUInteger idx, BOOL *stop){
+                    WineWindow* child = obj;
+                    if (child == window)
+                        *stop = TRUE;
+                    else if ([child level] <= level)
+                    {
+                        needReorder = TRUE;
+                        *stop = TRUE;
+                    }
+                    else
+                        [higherLevelSiblings insertObject:child atIndex:0];
+                }];
+
+                if (needReorder)
+                {
+                    WineWindow* sibling;
+
+                    NSDisableScreenUpdates();
+
+                    [parent removeChildWindow:window];
+                    for (sibling in higherLevelSiblings)
+                        [parent removeChildWindow:sibling];
+
+                    [parent addChildWindow:window ordered:NSWindowAbove];
+                    for (sibling in higherLevelSiblings)
+                    {
+                        // Setting a window as a child can reset its level to be
+                        // the same as the parent, so save it and restore it.
+                        // The call to -setLevel: puts the window at the front
+                        // of its level but testing shows that that's what Cocoa
+                        // does when you click on any window in an ownership
+                        // hierarchy, anyway.
+                        level = [sibling level];
+                        [parent addChildWindow:sibling ordered:NSWindowAbove];
+                        [sibling setLevel:level];
+                    }
+
+                    NSEnableScreenUpdates();
+                }
             }
         }
 
-        if (mouseCaptureWindow)
+        if ([windowsBeingDragged count])
+            window = nil;
+        else if (mouseCaptureWindow)
             window = mouseCaptureWindow;
 
         if ([window isKindOfClass:[WineWindow class]])
@@ -1506,7 +1654,7 @@ int macdrv_err_on;
                     // Test if the click was in the window's content area.
                     NSPoint nspoint = [self flippedMouseLocation:NSPointFromCGPoint(pt)];
                     NSRect contentRect = [window contentRectForFrameRect:[window frame]];
-                    process = NSPointInRect(nspoint, contentRect);
+                    process = NSMouseInRect(nspoint, contentRect, NO);
                     if (process && [window styleMask] & NSResizableWindowMask)
                     {
                         // Ignore clicks in the grow box (resize widget).
@@ -1529,7 +1677,7 @@ int macdrv_err_on;
                                                         NSMinY(contentRect),
                                                         bounds.size.width,
                                                         bounds.size.height);
-                            process = !NSPointInRect(nspoint, growBox);
+                            process = !NSMouseInRect(nspoint, growBox, NO);
                         }
                     }
                 }
@@ -1559,8 +1707,12 @@ int macdrv_err_on;
 
                 macdrv_release_event(event);
             }
-            else if (broughtWindowForward && ![window isKeyWindow])
-                [self windowGotFocus:window];
+            else if (broughtWindowForward)
+            {
+                [[window ancestorWineWindow] postBroughtForwardEvent];
+                if (![window isKeyWindow])
+                    [self windowGotFocus:window];
+            }
         }
 
         // Since mouse button events deliver absolute cursor position, the
@@ -1599,7 +1751,7 @@ int macdrv_err_on;
                 // Only process the event if it was in the window's content area.
                 NSPoint nspoint = [self flippedMouseLocation:NSPointFromCGPoint(pt)];
                 NSRect contentRect = [window contentRectForFrameRect:[window frame]];
-                process = NSPointInRect(nspoint, contentRect);
+                process = NSMouseInRect(nspoint, contentRect, NO);
             }
 
             if (process)
@@ -1722,6 +1874,39 @@ int macdrv_err_on;
                     [window postKeyEvent:anEvent];
             }
         }
+        else if (type == NSAppKitDefined)
+        {
+            short subtype = [anEvent subtype];
+
+            // These subtypes are not documented but they appear to mean
+            // "a window is being dragged" and "a window is no longer being
+            // dragged", respectively.
+            if (subtype == 20 || subtype == 21)
+            {
+                WineWindow* window = (WineWindow*)[anEvent window];
+                if ([window isKindOfClass:[WineWindow class]])
+                {
+                    macdrv_event* event;
+                    int eventType;
+
+                    if (subtype == 20)
+                    {
+                        [windowsBeingDragged addObject:window];
+                        eventType = WINDOW_DRAG_BEGIN;
+                    }
+                    else
+                    {
+                        [windowsBeingDragged removeObject:window];
+                        eventType = WINDOW_DRAG_END;
+                    }
+                    [self updateCursorClippingState];
+
+                    event = macdrv_create_event(eventType, window);
+                    [window.queue postEvent:event];
+                    macdrv_release_event(event);
+                }
+            }
+        }
 
         return ret;
     }
@@ -1765,6 +1950,8 @@ int macdrv_err_on;
                          queue:[NSOperationQueue mainQueue]
                     usingBlock:^(NSNotification *note){
             NSWindow* window = [note object];
+            if ([window isKindOfClass:[WineWindow class]] && [(WineWindow*)window isFakingClose])
+                return;
             [keyWindows removeObjectIdenticalTo:window];
             if (window == lastTargetWindow)
                 lastTargetWindow = nil;
@@ -1776,6 +1963,8 @@ int macdrv_err_on;
                     [self updateFullscreenWindows];
                 });
             }
+            [windowsBeingDragged removeObject:window];
+            [self updateCursorClippingState];
         }];
 
         [nc addObserver:self
@@ -1802,6 +1991,11 @@ int macdrv_err_on;
                            name:@"com.apple.HIToolbox.beginMenuTrackingNotification"
                          object:nil
              suspensionBehavior:NSNotificationSuspensionBehaviorDrop];
+
+        [dnc addObserver:self
+                selector:@selector(enabledKeyboardInputSourcesChanged)
+                    name:(NSString*)kTISNotifyEnabledKeyboardInputSourcesChanged
+                  object:nil];
     }
 
     - (BOOL) inputSourceIsInputMethod
@@ -1843,18 +2037,9 @@ int macdrv_err_on;
         }
     }
 
-
-    /*
-     * ---------- NSApplicationDelegate methods ----------
-     */
-    - (void)applicationDidBecomeActive:(NSNotification *)notification
+    - (void) unminimizeWindowIfNoneVisible
     {
-        [self activateCursorClipping];
-
-        [self updateFullscreenWindows];
-        [self adjustWindowLevels:YES];
-
-        if (beenActive && ![self frontWineWindow])
+        if (![self frontWineWindow])
         {
             for (WineWindow* window in [NSApp windows])
             {
@@ -1865,6 +2050,30 @@ int macdrv_err_on;
                 }
             }
         }
+    }
+
+
+    /*
+     * ---------- NSApplicationDelegate methods ----------
+     */
+    - (void)applicationDidBecomeActive:(NSNotification *)notification
+    {
+        NSNumber* displayID;
+
+        for (displayID in latentDisplayModes)
+        {
+            CGDisplayModeRef mode = (CGDisplayModeRef)[latentDisplayModes objectForKey:displayID];
+            [self setMode:mode forDisplay:[displayID unsignedIntValue]];
+        }
+        [latentDisplayModes removeAllObjects];
+
+        [self updateCursorClippingState];
+
+        [self updateFullscreenWindows];
+        [self adjustWindowLevels:YES];
+
+        if (beenActive)
+            [self unminimizeWindowIfNoneVisible];
         beenActive = TRUE;
 
         // If a Wine process terminates abruptly while it has the display captured
@@ -1902,6 +2111,8 @@ int macdrv_err_on;
         macdrv_event* event;
         WineEventQueue* queue;
 
+        [self updateCursorClippingState];
+
         [self invalidateGotFocusEvents];
 
         event = macdrv_create_event(APP_DEACTIVATED, nil);
@@ -1914,6 +2125,14 @@ int macdrv_err_on;
         macdrv_release_event(event);
 
         [self releaseMouseCapture];
+    }
+
+    - (BOOL) applicationShouldHandleReopen:(NSApplication*)theApplication hasVisibleWindows:(BOOL)flag
+    {
+        // Note that "flag" is often wrong.  WineWindows are NSPanels and NSPanels
+        // don't count as "visible windows" for this purpose.
+        [self unminimizeWindowIfNoneVisible];
+        return YES;
     }
 
     - (NSApplicationTerminateReply) applicationShouldTerminate:(NSApplication *)sender
@@ -1961,8 +2180,6 @@ int macdrv_err_on;
 
     - (void)applicationWillResignActive:(NSNotification *)notification
     {
-        [self deactivateCursorClipping];
-
         [self adjustWindowLevels:NO];
     }
 
@@ -2057,31 +2274,28 @@ void macdrv_window_rejected_focus(const macdrv_event *event)
 }
 
 /***********************************************************************
- *              macdrv_get_keyboard_layout
+ *              macdrv_get_input_source_info
  *
- * Returns the keyboard layout uchr data.
+ * Returns the keyboard layout uchr data, keyboard type and input source.
  */
-CFDataRef macdrv_copy_keyboard_layout(CGEventSourceKeyboardType* keyboard_type, int* is_iso)
+void macdrv_get_input_source_info(CFDataRef* uchr, CGEventSourceKeyboardType* keyboard_type, int* is_iso, TISInputSourceRef* input_source)
 {
-    __block CFDataRef result = NULL;
-
     OnMainThread(^{
-        TISInputSourceRef inputSource;
+        TISInputSourceRef inputSourceLayout;
 
-        inputSource = TISCopyCurrentKeyboardLayoutInputSource();
-        if (inputSource)
+        inputSourceLayout = TISCopyCurrentKeyboardLayoutInputSource();
+        if (inputSourceLayout)
         {
-            CFDataRef uchr = TISGetInputSourceProperty(inputSource,
+            CFDataRef data = TISGetInputSourceProperty(inputSourceLayout,
                                 kTISPropertyUnicodeKeyLayoutData);
-            result = CFDataCreateCopy(NULL, uchr);
-            CFRelease(inputSource);
+            *uchr = CFDataCreateCopy(NULL, data);
+            CFRelease(inputSourceLayout);
 
             *keyboard_type = [WineApplicationController sharedController].keyboardType;
             *is_iso = (KBGetLayoutType(*keyboard_type) == kKeyboardISO);
+            *input_source = TISCopyCurrentKeyboardInputSource();
         }
     });
-
-    return result;
 }
 
 /***********************************************************************
@@ -2141,9 +2355,8 @@ void macdrv_set_cursor(CFStringRef name, CFArrayRef frames)
     {
         OnMainThreadAsync(^{
             WineApplicationController* controller = [WineApplicationController sharedController];
-            NSCursor* cursor = [NSCursor performSelector:sel];
             [controller setCursorWithFrames:nil];
-            [cursor set];
+            controller.cursor = [NSCursor performSelector:sel];
             [controller unhideCursor];
         });
     }
@@ -2295,4 +2508,64 @@ void macdrv_set_mouse_capture_window(macdrv_window window)
     OnMainThread(^{
         [[WineApplicationController sharedController] setMouseCaptureWindow:w];
     });
+}
+
+const CFStringRef macdrv_input_source_input_key = CFSTR("input");
+const CFStringRef macdrv_input_source_type_key = CFSTR("type");
+const CFStringRef macdrv_input_source_lang_key = CFSTR("lang");
+
+/***********************************************************************
+ *              macdrv_create_input_source_list
+ */
+CFArrayRef macdrv_create_input_source_list(void)
+{
+    CFMutableArrayRef ret = CFArrayCreateMutable(NULL, 0, &kCFTypeArrayCallBacks);
+
+    OnMainThread(^{
+        CFArrayRef input_list;
+        CFDictionaryRef filter_dict;
+        const void *filter_keys[2] = { kTISPropertyInputSourceCategory, kTISPropertyInputSourceIsSelectCapable };
+        const void *filter_values[2] = { kTISCategoryKeyboardInputSource, kCFBooleanTrue };
+        int i;
+
+        filter_dict = CFDictionaryCreate(NULL, filter_keys, filter_values, sizeof(filter_keys)/sizeof(filter_keys[0]),
+                                         &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+        input_list = TISCreateInputSourceList(filter_dict, false);
+
+        for (i = 0; i < CFArrayGetCount(input_list); i++)
+        {
+            TISInputSourceRef input = (TISInputSourceRef)CFArrayGetValueAtIndex(input_list, i);
+            CFArrayRef source_langs = TISGetInputSourceProperty(input, kTISPropertyInputSourceLanguages);
+            CFDictionaryRef entry;
+            const void *input_keys[3] = { macdrv_input_source_input_key,
+                                          macdrv_input_source_type_key,
+                                          macdrv_input_source_lang_key };
+            const void *input_values[3];
+
+            input_values[0] = input;
+            input_values[1] = TISGetInputSourceProperty(input, kTISPropertyInputSourceType);
+            input_values[2] = CFArrayGetValueAtIndex(source_langs, 0);
+
+            entry = CFDictionaryCreate(NULL, input_keys, input_values, sizeof(input_keys) / sizeof(input_keys[0]),
+                                       &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+
+            CFArrayAppendValue(ret, entry);
+            CFRelease(entry);
+        }
+        CFRelease(input_list);
+        CFRelease(filter_dict);
+    });
+
+    return ret;
+}
+
+int macdrv_select_input_source(TISInputSourceRef input_source)
+{
+    __block int ret = FALSE;
+
+    OnMainThread(^{
+        ret = (TISSelectInputSource(input_source) == noErr);
+    });
+
+    return ret;
 }

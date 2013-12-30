@@ -75,7 +75,7 @@ struct debug_ctx
 
 
 static void debug_event_dump( struct object *obj, int verbose );
-static int debug_event_signaled( struct object *obj, struct thread *thread );
+static int debug_event_signaled( struct object *obj, struct wait_queue_entry *entry );
 static void debug_event_destroy( struct object *obj );
 
 static const struct object_ops debug_event_ops =
@@ -99,7 +99,7 @@ static const struct object_ops debug_event_ops =
 };
 
 static void debug_ctx_dump( struct object *obj, int verbose );
-static int debug_ctx_signaled( struct object *obj, struct thread *thread );
+static int debug_ctx_signaled( struct object *obj, struct wait_queue_entry *entry );
 static void debug_ctx_destroy( struct object *obj );
 
 static const struct object_ops debug_ctx_ops =
@@ -286,7 +286,7 @@ static void debug_event_dump( struct object *obj, int verbose )
              debug_event->sender, debug_event->data.code, debug_event->state );
 }
 
-static int debug_event_signaled( struct object *obj, struct thread *thread )
+static int debug_event_signaled( struct object *obj, struct wait_queue_entry *entry )
 {
     struct debug_event *debug_event = (struct debug_event *)obj;
     assert( obj->ops == &debug_event_ops );
@@ -337,7 +337,7 @@ static void debug_ctx_dump( struct object *obj, int verbose )
              debug_ctx->event_queue.next, debug_ctx->event_queue.prev );
 }
 
-static int debug_ctx_signaled( struct object *obj, struct thread *thread )
+static int debug_ctx_signaled( struct object *obj, struct wait_queue_entry *entry )
 {
     struct debug_ctx *debug_ctx = (struct debug_ctx *)obj;
     assert( obj->ops == &debug_ctx_ops );

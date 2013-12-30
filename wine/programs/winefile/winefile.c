@@ -1757,11 +1757,11 @@ static void PropDlg_DisplayValue(HWND hlbox, HWND hedit)
 
 static void CheckForFileInfo(struct PropertiesDialog* dlg, HWND hwnd, LPCWSTR strFilename)
 {
-	static WCHAR sBackSlash[] = {'\\','\0'};
-	static WCHAR sTranslation[] = {'\\','V','a','r','F','i','l','e','I','n','f','o','\\','T','r','a','n','s','l','a','t','i','o','n','\0'};
-	static WCHAR sStringFileInfo[] = {'\\','S','t','r','i','n','g','F','i','l','e','I','n','f','o','\\',
+        static const WCHAR sBackSlash[] = {'\\','\0'};
+        static const WCHAR sTranslation[] = {'\\','V','a','r','F','i','l','e','I','n','f','o','\\','T','r','a','n','s','l','a','t','i','o','n','\0'};
+        static const WCHAR sStringFileInfo[] = {'\\','S','t','r','i','n','g','F','i','l','e','I','n','f','o','\\',
 										'%','0','4','x','%','0','4','x','\\','%','s','\0'};
-        static WCHAR sFmt[] = {'%','d','.','%','d','.','%','d','.','%','d','\0'};
+        static const WCHAR sFmt[] = {'%','d','.','%','d','.','%','d','.','%','d','\0'};
 	DWORD dwVersionDataLen = GetFileVersionInfoSizeW(strFilename, NULL);
 
 	if (dwVersionDataLen) {
@@ -2005,7 +2005,7 @@ static BOOL activate_drive_window(LPCWSTR path)
 
 	_wsplitpath(path, drv1, 0, 0, 0);
 
-	/* search for a already open window for the same drive */
+        /* search for an already open window for the same drive */
 	for(child_wnd=GetNextWindow(Globals.hmdiclient,GW_CHILD); child_wnd; child_wnd=GetNextWindow(child_wnd, GW_HWNDNEXT)) {
 		ChildWnd* child = (ChildWnd*)GetWindowLongPtrW(child_wnd, GWLP_USERDATA);
 
@@ -2030,7 +2030,7 @@ static BOOL activate_fs_window(LPCWSTR filesys)
 {
 	HWND child_wnd;
 
-	/* search for a already open window of the given file system name */
+        /* search for an already open window of the given file system name */
 	for(child_wnd=GetNextWindow(Globals.hmdiclient,GW_CHILD); child_wnd; child_wnd=GetNextWindow(child_wnd, GW_HWNDNEXT)) {
 		ChildWnd* child = (ChildWnd*) GetWindowLongPtrW(child_wnd, GWLP_USERDATA);
 
@@ -2658,7 +2658,7 @@ static void format_bytes(LPWSTR buffer, LONGLONG bytes)
 			fBytes = ((float)bytes)/1048576.f+.5f;
 			resid = IDS_UNIT_MB;
 		}
-		else if (bytes >= 1024)		/* 1 kB */
+		else /* bytes >= 1024 */	/* 1 kB */
 		{
 			fBytes = ((float)bytes)/1024.f+.5f;
 			resid = IDS_UNIT_KB;
@@ -2695,7 +2695,7 @@ static void create_tree_window(HWND parent, Pane* pane, UINT id, UINT id_header,
 {
 	static const WCHAR sListBox[] = {'L','i','s','t','B','o','x','\0'};
 
-	static int s_init = 0;
+        static BOOL s_init = FALSE;
 	Entry* entry = pane->root;
 
 	pane->hwnd = CreateWindowW(sListBox, sEmpty, WS_CHILD|WS_VISIBLE|WS_HSCROLL|WS_VSCROLL|
@@ -2713,7 +2713,7 @@ static void create_tree_window(HWND parent, Pane* pane, UINT id, UINT id_header,
 
 	/* calculate column widths */
 	if (!s_init) {
-		s_init = 1;
+                s_init = TRUE;
 		init_output(pane->hwnd);
 	}
 

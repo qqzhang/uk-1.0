@@ -1106,7 +1106,7 @@ static ssize_t syscall_chardev_read(struct file *filp, char __user *buf, size_t 
     return uk_thread_wait(buf, len);
 }
 
-static ssize_t syscall_chardev_write(struct file *filp, char __user *buf, size_t len, loff_t *ppos)
+static ssize_t syscall_chardev_write(struct file *filp, const char __user *buf, size_t len, loff_t *ppos)
 {
     ssize_t ret;
     struct thread *thread = current_thread ?: get_thread_from_tid(current->pid);

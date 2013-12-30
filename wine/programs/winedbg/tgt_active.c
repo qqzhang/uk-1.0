@@ -118,7 +118,7 @@ static unsigned dbg_fetch_context(void)
  * or exception is silently continued(return FALSE)
  * is_debug means the exception is a breakpoint or single step exception
  */
-static unsigned dbg_exception_prolog(BOOL is_debug, const EXCEPTION_RECORD* rec)
+static BOOL dbg_exception_prolog(BOOL is_debug, const EXCEPTION_RECORD* rec)
 {
     ADDRESS64   addr;
     BOOL        is_break;
@@ -286,8 +286,8 @@ static BOOL tgt_process_active_close_process(struct dbg_process* pcs, BOOL kill)
 static void fetch_module_name(void* name_addr, BOOL unicode, void* mod_addr,
                               WCHAR* buffer, size_t bufsz, BOOL is_pcs)
 {
-    static WCHAR        pcspid[] = {'P','r','o','c','e','s','s','_','%','0','8','x',0};
-    static WCHAR        dlladdr[] = {'D','L','L','_','%','0','8','l','x',0};
+    static const WCHAR pcspid[] = {'P','r','o','c','e','s','s','_','%','0','8','x',0};
+    static const WCHAR dlladdr[] = {'D','L','L','_','%','0','8','l','x',0};
 
     memory_get_string_indirect(dbg_curr_process, name_addr, unicode, buffer, bufsz);
     if (!buffer[0] &&
@@ -587,7 +587,7 @@ void     dbg_active_wait_for_first_exception(void)
     wait_exception();
 }
 
-static	unsigned dbg_start_debuggee(LPSTR cmdLine)
+static BOOL dbg_start_debuggee(LPSTR cmdLine)
 {
     PROCESS_INFORMATION	info;
     STARTUPINFOA	startup, current;
@@ -602,8 +602,8 @@ static	unsigned dbg_start_debuggee(LPSTR cmdLine)
     startup.wShowWindow = (current.dwFlags & STARTF_USESHOWWINDOW) ?
         current.wShowWindow : SW_SHOWNORMAL;
 
-    /* FIXME: shouldn't need the CREATE_NEW_CONSOLE, but as usual CUI:s need it
-     * while GUI:s don't
+    /* FIXME: shouldn't need the CREATE_NEW_CONSOLE, but as usual CUIs need it
+     * while GUIs don't
      */
     flags = DEBUG_PROCESS | CREATE_NEW_CONSOLE;
     if (!DBG_IVAR(AlsoDebugProcChild)) flags |= DEBUG_ONLY_THIS_PROCESS;

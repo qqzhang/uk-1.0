@@ -249,8 +249,7 @@ __int32 WINAPI _CorExeMain2(PBYTE ptrMemory, DWORD cntMemory, LPWSTR imageName, 
 void WINAPI CorExitProcess(int exitCode)
 {
     TRACE("(%x)\n", exitCode);
-    unload_all_runtimes();
-    ExitProcess(exitCode);
+    CLRMetaHost_ExitProcess(0, exitCode);
 }
 
 VOID WINAPI _CorImageUnloading(PVOID imageBase)
@@ -588,10 +587,19 @@ HRESULT WINAPI CLRCreateInstance(REFCLSID clsid, REFIID riid, LPVOID *ppInterfac
 
     if (IsEqualGUID(clsid, &CLSID_CLRMetaHost))
         return CLRMetaHost_CreateInstance(riid, ppInterface);
+    if (IsEqualGUID(clsid, &CLSID_CLRMetaHostPolicy))
+        return CLRMetaHostPolicy_CreateInstance(riid, ppInterface);
 
     FIXME("not implemented for class %s\n", debugstr_guid(clsid));
 
     return CLASS_E_CLASSNOTAVAILABLE;
+}
+
+HRESULT WINAPI CreateInterface(REFCLSID clsid, REFIID riid, LPVOID *ppInterface)
+{
+    TRACE("(%s,%s,%p)\n", debugstr_guid(clsid), debugstr_guid(riid), ppInterface);
+
+    return CLRCreateInstance(clsid, riid, ppInterface);
 }
 
 HRESULT WINAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, LPVOID* ppv)
@@ -639,7 +647,7 @@ static void parse_msi_version_string(const char *version, int *parts)
 
 static BOOL install_wine_mono(void)
 {
-    BOOL is_wow64=0;
+    BOOL is_wow64 = FALSE;
     HMODULE hmsi;
     UINT (WINAPI *pMsiGetProductInfoA)(LPCSTR,LPCSTR,LPSTR,DWORD*);
     char versionstringbuf[15];
@@ -652,7 +660,7 @@ static BOOL install_wine_mono(void)
     LONG len;
     BOOL ret;
 
-    static const char* mono_version = "0.0.8";
+    static const char* mono_version = "4.5.2";
     static const char* mono_product_code = "{E45D8920-A758-4088-B6C6-31DBB276992E}";
 
     static const WCHAR controlW[] = {'\\','c','o','n','t','r','o','l','.','e','x','e',0};

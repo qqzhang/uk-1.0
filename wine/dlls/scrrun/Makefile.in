@@ -1,5 +1,5 @@
 MODULE    = scrrun.dll
-IMPORTS   = uuid oleaut32 version
+IMPORTS   = uuid oleaut32 version advapi32
 
 C_SRCS = \
 	dictionary.c \
@@ -9,7 +9,5 @@ C_SRCS = \
 RC_SRCS = scrrun.rc
 
 IDL_TLB_SRCS = scrrun.idl
-
-IDL_H_SRCS = scrrun.idl
 
 @MAKE_DLL_RULES@
