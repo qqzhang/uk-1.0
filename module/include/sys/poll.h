@@ -1,28 +1,22 @@
-#ifndef _SYS_POLL_H_
-#define _SYS_POLL_H_
+/*
+ * Copyright (C) 2006  Insigma Co., Ltd
+ *
+ * This software has been developed while working on the Linux Unified Kernel
+ * Project (http://www.longene.org) in the Insigma Research Institute,  
+ * which is a subdivision of Insigma Co., Ltd (http://www.insigma.com.cn).
+ * 
+ * The project is sponsored by Insigma Co., Ltd.
+ *
+ * The authors can be reached at linux@insigma.com.cn.
+ */
+
+#ifndef _UK_SYS_POLL_H_
+#define _UK_SYS_POLL_H_
 
 #include <linux/poll.h>
 
 #ifndef DEFAULT_POLLMASK
 #define DEFAULT_POLLMASK (POLLIN | POLLOUT | POLLRDNORM | POLLWRNORM)
-#endif
-#if 0
-#define POLLIN		0x0001
-#define POLLPRI		0x0002
-#define POLLOUT		0x0004
-#define POLLERR		0x0008
-#define POLLHUP		0x0010
-#define POLLNVAL	0x0020
-
-/* The rest seem to be more-or-less nonstandard. Check them! */
-#define POLLRDNORM	0x0040
-#define POLLRDBAND	0x0080
-
-struct pollfd {
-    int   fd;         /* file descriptor */
-    short events;     /* requested events */
-    short revents;    /* returned events */
-};
 #endif
 
 #endif

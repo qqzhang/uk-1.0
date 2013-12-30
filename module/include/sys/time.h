@@ -1,5 +1,17 @@
-#ifndef _SYS_TIME_H
-#define _SYS_TIME_H
+/*
+ * Copyright (C) 2006  Insigma Co., Ltd
+ *
+ * This software has been developed while working on the Linux Unified Kernel
+ * Project (http://www.longene.org) in the Insigma Research Institute,  
+ * which is a subdivision of Insigma Co., Ltd (http://www.insigma.com.cn).
+ * 
+ * The project is sponsored by Insigma Co., Ltd.
+ *
+ * The authors can be reached at linux@insigma.com.cn.
+ */
+
+#ifndef _UK_SYS_TIME_H
+#define _UK_SYS_TIME_H
 
 #include <linux/time.h>
 
@@ -10,29 +22,5 @@ extern long get_current_time(void);
 #endif
 
 #define current_time (get_current_time())
-#if 0
-struct timeval {
-    long    tv_sec;         /* seconds */
-    long    tv_usec;        /* microseconds */
-};
-
-struct timespec {
-    long    tv_sec;         /* seconds */
-    long    tv_nsec;        /* nanoseconds */
-};
-
-struct timezone {
-    int tz_minuteswest;     /* minutes west of Greenwich */
-    int tz_dsttime;         /* type of DST correction */
-};
-
-#define CLOCK_REALTIME			0
-#define CLOCK_MONOTONIC			1
-#define CLOCK_PROCESS_CPUTIME_ID	2
-#define CLOCK_THREAD_CPUTIME_ID		3
-#define CLOCK_MONOTONIC_RAW		4
-#define CLOCK_REALTIME_COARSE		5
-#define CLOCK_MONOTONIC_COARSE		6
-#endif
 
 #endif

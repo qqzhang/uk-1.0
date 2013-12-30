@@ -1,5 +1,17 @@
-#ifndef _TERMIOS_H_
-#define _TERMIOS_H_
+/*
+ * Copyright (C) 2006  Insigma Co., Ltd
+ *
+ * This software has been developed while working on the Linux Unified Kernel
+ * Project (http://www.longene.org) in the Insigma Research Institute,  
+ * which is a subdivision of Insigma Co., Ltd (http://www.insigma.com.cn).
+ * 
+ * The project is sponsored by Insigma Co., Ltd.
+ *
+ * The authors can be reached at linux@insigma.com.cn.
+ */
+
+#ifndef _UK_TERMIOS_H_
+#define _UK_TERMIOS_H_
 
 typedef unsigned long int tcflag_t;
 
@@ -239,7 +251,6 @@ struct termios
 #define	TCION	4		/* Send a START character.  */
 
 int tcgetattr(int fd, struct termios *termios_p);
-//int tcsetattr(int fd, int optional_actions, const struct termios *termios_p);
 int tcflush(int fd, int queue_selector);
 
 #endif

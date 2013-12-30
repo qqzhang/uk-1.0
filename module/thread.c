@@ -18,6 +18,18 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+/*
+ * Copyright (C) 2006  Insigma Co., Ltd
+ *
+ * This software has been developed while working on the Linux Unified Kernel
+ * Project (http://www.longene.org) in the Insigma Research Institute,  
+ * which is a subdivision of Insigma Co., Ltd (http://www.insigma.com.cn).
+ * 
+ * The project is sponsored by Insigma Co., Ltd.
+ *
+ * The authors can be reached at linux@insigma.com.cn.
+ */
+
 #include "config.h"
 #include "wine/port.h"
 
@@ -1341,6 +1353,7 @@ int thread_queue_apc( struct thread *thread, struct object *owner, const apc_cal
     }
     return ret;
 }
+
 
 /* cancel the async procedure call owned by a specific object */
 void thread_cancel_apc( struct thread *thread, struct object *owner, enum apc_type type )

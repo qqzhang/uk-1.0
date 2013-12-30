@@ -1,3 +1,15 @@
+/*
+ * Copyright (C) 2006  Insigma Co., Ltd
+ *
+ * This software has been developed while working on the Linux Unified Kernel
+ * Project (http://www.longene.org) in the Insigma Research Institute,  
+ * which is a subdivision of Insigma Co., Ltd (http://www.insigma.com.cn).
+ * 
+ * The project is sponsored by Insigma Co., Ltd.
+ *
+ * The authors can be reached at linux@insigma.com.cn.
+ */
+
 #ifndef _UK_LIB_H
 #define _UK_LIB_H
 
@@ -146,8 +158,8 @@ int poll(struct pollfd *pfds, unsigned int nfds, long timeout_msecs);
 //int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout);
 int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, void *timeout);
 
-int mmap(unsigned long addr, size_t len, int prot, int flags, int fd, off_t off);
-int munmap(unsigned long addr, size_t length);
+int mmap(void *addr, size_t len, int prot, int flags, int fd, off_t off);
+int munmap(void *addr, size_t length);
 
 int pipe(int pipefd[2]);
 
@@ -231,7 +243,8 @@ enum syscalls
     UK_NR_SYSCALLS
 };
 
-static const char * const syscall_names[UK_NR_SYSCALLS] = {
+static const char * const syscall_names[UK_NR_SYSCALLS] =
+{
     "sys_exit",
     "sys_close",
     "sys_open",

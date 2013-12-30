@@ -34,14 +34,17 @@ wineserver which is not needed any more.
 
 What's new in this release:
 ===========================
-o Don't need pathch kernel now.
-o Extremely stable.
+- Don't need pathch kernel now.
+- Update to Wine-1.6 latest stable version.
+- Support SMP.
+- Extremely stable.
+- Various bug fixes.
 
 
 To Build and Run:
 =================
 Install Longene, you have only 2 steps to go:
-1. Build Wine, without wineserver
+1. Build Wine
 2. Build Longene module
 
 To get more details of building and running, please read INSTALL.

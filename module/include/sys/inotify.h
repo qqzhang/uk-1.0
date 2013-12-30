@@ -1,5 +1,17 @@
-#ifndef _INOTIFY_H_
-#define _INOTIFY_H_
+/*
+ * Copyright (C) 2006  Insigma Co., Ltd
+ *
+ * This software has been developed while working on the Linux Unified Kernel
+ * Project (http://www.longene.org) in the Insigma Research Institute,  
+ * which is a subdivision of Insigma Co., Ltd (http://www.insigma.com.cn).
+ * 
+ * The project is sponsored by Insigma Co., Ltd.
+ *
+ * The authors can be reached at linux@insigma.com.cn.
+ */
+
+#ifndef _UK_SYS_INOTIFY_H_
+#define _UK_SYS_INOTIFY_H_
 
 #define SYS_inotify_init	291
 #define SYS_inotify_add_watch	292
@@ -26,6 +38,5 @@ struct inotify_event {
 #define IN_DELETE_SELF   0x00000400
 
 #define IN_ISDIR         0x40000000
-
 
 #endif

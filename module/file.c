@@ -18,6 +18,18 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+/*
+ * Copyright (C) 2006  Insigma Co., Ltd
+ *
+ * This software has been developed while working on the Linux Unified Kernel
+ * Project (http://www.longene.org) in the Insigma Research Institute,  
+ * which is a subdivision of Insigma Co., Ltd (http://www.insigma.com.cn).
+ * 
+ * The project is sponsored by Insigma Co., Ltd.
+ *
+ * The authors can be reached at linux@insigma.com.cn.
+ */
+
 #include "config.h"
 #include "wine/port.h"
 
@@ -242,6 +254,7 @@ static struct object *create_file( struct uk_fd *root, const char *nameptr, data
         obj = create_dir_obj( fd, access, mode );
     else if (S_ISCHR(mode) && is_serial_fd( fd ))
         obj = create_serial( fd );
+
     else
         obj = create_file_obj( fd, access, mode );
 

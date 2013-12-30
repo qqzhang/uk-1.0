@@ -1,7 +1,11 @@
 Quick start
 ===========
-Install Longene, you have only 2 steps to go:
-1. Build Wine, without wineserver
+Install Longene, you can simplely execute *uk_install.sh* in command line.
+
+OR
+
+If you want to compile the Longene by yourself, you have only 2 steps to go:
+1. Build Wine
 2. Build Longene module
 
 
@@ -11,8 +15,8 @@ To build Wine, cd to the top-level directory of the Wine for Longene
 source (wine), then configure and build it:
 
   ./configure
-  make
-  make install
+  sudo make
+  sudo make install
 
 
 Build Longene module
@@ -20,11 +24,11 @@ Build Longene module
 To build the module, cd to the "module" directory and run
 the command:
 
-  make
+  sudo make
 
 After building, install the module to get the Longene running:
 
-  insmod unifiedkernel.ko
+  sudo insmod unifiedkernel.ko
 
 All done, Longene is running!
 

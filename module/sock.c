@@ -21,6 +21,18 @@
  * on the access of the current_thread handle?
  */
 
+/*
+ * Copyright (C) 2006  Insigma Co., Ltd
+ *
+ * This software has been developed while working on the Linux Unified Kernel
+ * Project (http://www.longene.org) in the Insigma Research Institute,  
+ * which is a subdivision of Insigma Co., Ltd (http://www.insigma.com.cn).
+ * 
+ * The project is sponsored by Insigma Co., Ltd.
+ *
+ * The authors can be reached at linux@insigma.com.cn.
+ */
+
 #include "config.h"
 
 #include <assert.h>
@@ -986,6 +998,7 @@ DECL_HANDLER(accept_into_socket)
     if (accept_into_socket( sock, acceptsock ))
     {
         acceptsock->wparam = req->ahandle;  /* wparam for message is the socket handle */
+
         sock_reselect( acceptsock );
     }
     release_object( acceptsock );

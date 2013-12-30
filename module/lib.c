@@ -16,8 +16,6 @@
  * Free Software Foundation; either version 2 of the  License, or (at your
  * option) any later version.
  *
- * Revision History:
- *   Dec 2008 - Created.
  */
 
 #include <linux/kernel.h>
@@ -3396,7 +3394,7 @@ int inotify_rm_watch(int fd,int wd)
 }
 
 /*mman.h*/
-int mmap(unsigned long addr, size_t len, int prot, int flags, int fd, off_t off)
+int mmap(void *addr, size_t len, int prot, int flags, int fd, off_t off)
 {
     int ret;
 
@@ -3408,17 +3406,17 @@ int mmap(unsigned long addr, size_t len, int prot, int flags, int fd, off_t off)
     if (off & ~PAGE_MASK)
         goto out;
 
-    ret = sys_mmap_pgoff(addr, len, prot, flags, fd, off >> PAGE_SHIFT);
+    ret = sys_mmap_pgoff((unsigned long)addr, len, prot, flags, fd, off >> PAGE_SHIFT);
 out:
     SYSCALL_RETURN(ret);
 }
 
-int munmap(unsigned long addr, size_t length)
+int munmap(void *addr, size_t length)
 {
     int ret;
     asmlinkage long (*sys_munmap)(unsigned long addr, size_t len) = get_syscall(UK_munmap);
 
-    ret = sys_munmap(addr, length);
+    ret = sys_munmap((unsigned long)addr, length);
 
     SYSCALL_RETURN(ret);
 }
