@@ -90,7 +90,6 @@ static DEFINE_RECURSIVE_SPINLOCK(thread_lock);
 
 int uk_sched_setaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask);
 int uk_sched_getaffinity(pid_t pid, size_t cpusetsize, cpu_set_t *mask);
-static int wake_thread_softirq( struct thread *thread );
 
 /* for find_thread_by_pid() */
 static DEFINE_RWLOCK(thread_hash_lock);
@@ -1145,14 +1144,7 @@ void uk_wake_up( struct object *obj, int max )
     LIST_FOR_EACH( ptr, &obj->wait_queue )
     {
         struct wait_queue_entry *entry = LIST_ENTRY( ptr, struct wait_queue_entry, entry );
-        if (in_softirq())
-        {
-            if (!wake_thread_softirq( entry->thread )) continue;
-        }
-        else
-        {
-            if (!wake_thread( entry->thread )) continue;
-        }
+        if (!wake_thread( entry->thread )) continue;
         if (max && !--max) break;
         /* restart at the head of the list since a wake up can change the object wait queue */
         ptr = &obj->wait_queue;
@@ -1230,87 +1222,14 @@ static int queue_apc( struct process *process, struct thread *thread, struct thr
     grab_object( apc );
     recursive_spin_lock_bh(&thread_lock);
     wine_list_add_tail( queue, &apc->entry );
-    recursive_spin_unlock_bh(&thread_lock);
     if (!list_prev( queue, &apc->entry ))  /* first one */
         wake_thread( thread );
+    recursive_spin_unlock_bh(&thread_lock);
 
     return 1;
 }
 
 #ifdef CONFIG_UNIFIED_KERNEL
-static int wake_thread_softirq( struct thread *thread )
-{
-    int signaled, count;
-    client_ptr_t cookie;
-
-    for (count = 0; thread->wait; count++)
-    {
-        if ((signaled = check_wait( thread )) == -1) break;
-
-        cookie = thread->wait->cookie;
-        if (debug_level) fprintf( stderr, "%04x: *wakeup* signaled=%d\n", thread->id, signaled );
-        end_wait( thread );
-        if (send_thread_wakeup( thread, cookie, signaled ) == -1) /* error */
-	    break;
-    }
-    return count;
-}
-
-static int queue_apc_softirq( struct process *process, struct thread *thread, struct thread_apc *apc )
-{
-    struct list_head *queue;
-
-    if (!thread)  /* find a suitable thread inside the process */
-    {
-        struct thread *candidate;
-
-        /* first try to find a waiting thread */
-        LIST_FOR_EACH_ENTRY( candidate, &process->thread_list, struct thread, proc_entry )
-        {
-            if (candidate->state == TERMINATED) continue;
-            if (is_in_apc_wait( candidate ))
-            {
-                thread = candidate;
-                break;
-            }
-        }
-        if (!thread)
-        {
-            /* then use the first one that accepts a signal */
-            LIST_FOR_EACH_ENTRY( candidate, &process->thread_list, struct thread, proc_entry )
-            {
-                if (send_thread_signal( candidate, SIGUSR1 ))
-                {
-                    thread = candidate;
-                    break;
-                }
-            }
-        }
-        if (!thread) return 0;  /* nothing found */
-        queue = get_apc_queue( thread, apc->call.type );
-    }
-    else
-    {
-        if (thread->state == TERMINATED) return 0;
-        queue = get_apc_queue( thread, apc->call.type );
-        /* send signal for system APCs if needed */
-        if (queue == &thread->system_apc && list_empty( queue ) && !is_in_apc_wait( thread ))
-        {
-            if (!send_thread_signal( thread, SIGUSR1 )) return 0;
-        }
-        /* cancel a possible previous APC with the same owner */
-        if (apc->owner) thread_cancel_apc( thread, apc->owner, apc->call.type );
-    }
-
-    grab_object( apc );
-    recursive_spin_lock(&thread_lock);
-    wine_list_add_tail( queue, &apc->entry );
-    if (!list_prev( queue, &apc->entry ))  /* first one */
-        wake_thread_softirq( thread );
-    recursive_spin_unlock(&thread_lock);
-
-    return 1;
-}
 void *async_alloc_apc(void)
 {
     return alloc_object( &thread_apc_ops);
@@ -1330,10 +1249,7 @@ int async_queue_apc( void *async_apc, struct thread *thread, struct object *owne
         apc->result.type = APC_NONE;
         if (owner) grab_object( owner );
 
-        if (in_softirq())
-            ret = queue_apc_softirq( NULL, thread, apc );
-        else
-            ret = queue_apc( NULL, thread, apc );
+        ret = queue_apc( NULL, thread, apc );
         release_object( apc );
     }
     return ret;
