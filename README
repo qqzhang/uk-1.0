@@ -1,5 +1,5 @@
             The Longene(Linux Unified Kernel) Project
-            	-- Longene 1.0 Beta
+                  -- Longene-1.0-rc1
 
 Copyright:
 ==========
@@ -34,8 +34,8 @@ wineserver which is not needed any more.
 
 What's new in this release:
 ===========================
-- Don't need pathch kernel now.
-- Update to Wine-1.6 latest stable version.
+- Don't need patch kernel now.
+- Update to Wine-1.7.9 latest version.
 - Support SMP.
 - Extremely stable.
 - Various bug fixes.

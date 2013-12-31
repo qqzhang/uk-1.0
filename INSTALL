@@ -38,6 +38,7 @@ Run programs
 
 First, execute under cmdlind:
 
+mount -t binfmt_misc none /proc/sys/fs/binfmt_misc
 echo ':DOSWin:M::MZ::/usr/local/bin/wine:' > /proc/sys/fs/binfmt_misc/register
 
 Now you can run some Win32 programs in X terminal windows just like what 
