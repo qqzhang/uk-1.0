@@ -2095,7 +2095,9 @@ void flush_registry(void)
 {
     int i;
 
+#ifndef CONFIG_UNIFIED_KERNEL
     if (fchdir( config_dir_fd ) == -1) return;
+#endif
     for (i = 0; i < save_branch_count; i++)
     {
         if (!save_branch( save_branch_info[i].key, save_branch_info[i].path ))
@@ -2105,7 +2107,9 @@ void flush_registry(void)
             perror( " " );
         }
     }
+#ifndef CONFIG_UNIFIED_KERNEL
     if (fchdir( server_dir_fd ) == -1) fatal_error( "chdir to server dir: %s\n", strerror( errno ));
+#endif
 }
 
 /* determine if the thread is wow64 (32-bit client running on 64-bit prefix) */
