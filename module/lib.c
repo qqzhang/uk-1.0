@@ -915,9 +915,7 @@ char *strerror(int err)
     return NULL;
 }
 
-/*from libs/port/mkstemps.c*/ //need __udivdi3, __umoddi3
-pid_t getpid(void);
-int open(const char *pathname, int flags, ...);
+/*from libs/port/mkstemps.c*/
 
 #ifdef __GNUC__
 __extension__ typedef unsigned long long gcc_uint64_t;
@@ -1012,8 +1010,31 @@ int mkstemps ( char *template, int suffix_len)
     return -1;
 }
 
+/*from libs/wine/config.c*/
+
+/* return the configuration directory ($WINEPREFIX or $HOME/.wine) */
+const char *wine_get_config_dir(void)
+{
+    klog(0,"NOT IMPLEMENT!\n");
+    return NULL;
+}
+
+/* return the full name of the server directory (the one containing the socket) */
+const char *wine_get_server_dir(void)
+{
+    klog(0,"NOT IMPLEMENT!\n");
+    return NULL;
+}
+
+/* return the build id string */
+const char *wine_get_build_id(void)
+{
+    klog(0,"NOT IMPLEMENT!\n");
+    return NULL;
+}
+
 /*from libs/wine/casemap.c*/
-//#include "casemap.c"
+
 const WCHAR wine_casemap_lower[3802] =
 {
     /* index */
@@ -2036,206 +2057,8 @@ const WCHAR wine_casemap_upper[3994] =
     0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000
 };
 
-/*from libs/wine/config.c*/
-//#include "config.c"
-#if 1
-static const char server_config_dir[] = "/.wine";        /* config dir relative to $HOME */
-static const char server_root_prefix[] = "/tmp/.wine-";  /* prefix for server root dir */
-static const char server_dir_prefix[] = "/server-";      /* prefix for server dir */
-static char *config_dir;
-static char *user_name;
-static char *server_dir;
-
-//static void fatal_error( const char *err, ... )  __attribute__((noreturn,format(printf,1,2)));
-//static void fatal_perror( const char *err, ... )  __attribute__((noreturn,format(printf,1,2)));
-static void fatal_error( const char *err, ... );
-static void fatal_perror( const char *err, ... );
-
-char* getenv(const char* name)
-{
-    klog(0,"NOT IMPLEMENT!\n");
-    return NULL;
-}
-
-static void fatal_error( const char *err, ... )
-{
-    va_list args;
-
-    va_start( args, err );
-    fprintf( stderr, "wine: " );
-    vfprintf( stderr, err, args );
-    va_end( args );
-    exit(1);
-}
-
-/* die on a fatal error */
-static void fatal_perror( const char *err, ... )
-{
-    va_list args;
-
-    va_start( args, err );
-    fprintf( stderr, "wine: " );
-    vfprintf( stderr, err, args );
-    perror( " " );
-    va_end( args );
-    exit(1);
-}
-
-/* malloc wrapper */
-static void *xmalloc( size_t size )
-{
-    void *res;
-
-    if (!size) size = 1;
-    if (!(res = malloc( size ))) fatal_error( "virtual memory exhausted\n");
-    return res;
-}
-
-/* strdup wrapper */
-static char *xstrdup( const char *str )
-{
-    size_t len = strlen(str) + 1;
-    char *res = xmalloc( len );
-    memcpy( res, str, len );
-    return res;
-}
-/* remove all trailing slashes from a path name */
-static inline void remove_trailing_slashes( char *path )
-{
-    int len = strlen( path );
-    while (len > 1 && path[len-1] == '/') path[--len] = 0;
-}
-
-/* initialize the server directory value */
-static void init_server_dir( dev_t dev, ino_t ino )
-{
-    char *p;
-#ifdef HAVE_GETUID
-    const unsigned int uid = getuid();
-#else
-    const unsigned int uid = 0;
-#endif
-
-    server_dir = xmalloc( sizeof(server_root_prefix) + 32 + sizeof(server_dir_prefix) +
-            2*sizeof(dev) + 2*sizeof(ino) );
-    sprintf( server_dir, "%s%u%s", server_root_prefix, uid, server_dir_prefix );
-    p = server_dir + strlen(server_dir);
-
-    if (dev != (unsigned long)dev)
-        p += sprintf( p, "%lx%08lx-", (unsigned long)((unsigned long long)dev >> 32), (unsigned long)dev );
-    else
-        p += sprintf( p, "%lx-", (unsigned long)dev );
-
-    if (ino != (unsigned long)ino)
-        sprintf( p, "%lx%08lx", (unsigned long)((unsigned long long)ino >> 32), (unsigned long)ino );
-    else
-        sprintf( p, "%lx", (unsigned long)ino );
-}
-
-
-/* initialize all the paths values */
-static void init_paths(void)
-{
-    struct stat st;
-
-    const char *home = getenv( "HOME" );
-    const char *user = NULL;
-    const char *prefix = getenv( "WINEPREFIX" );
-
-#ifdef HAVE_GETPWUID
-    char uid_str[32];
-    struct passwd *pwd = getpwuid( getuid() );
-
-    if (pwd)
-    {
-        user = pwd->pw_name;
-        if (!home) home = pwd->pw_dir;
-    }
-    if (!user)
-    {
-        sprintf( uid_str, "%lu", (unsigned long)getuid() );
-        user = uid_str;
-    }
-#else  /* HAVE_GETPWUID */
-    if (!(user = getenv( "USER" )))
-        fatal_error( "cannot determine your user name, set the USER environment variable\n" );
-#endif  /* HAVE_GETPWUID */
-    user_name = xstrdup( user );
-
-    /* build config_dir */
-
-    if (prefix)
-    {
-        config_dir = xstrdup( prefix );
-        remove_trailing_slashes( config_dir );
-        if (config_dir[0] != '/')
-            fatal_error( "invalid directory %s in WINEPREFIX: not an absolute path\n", prefix );
-        if (stat( config_dir, &st ) == -1)
-        {
-            if (errno == ENOENT) return;  /* will be created later on */
-            fatal_perror( "cannot open %s as specified in WINEPREFIX", config_dir );
-        }
-    }
-    else
-    {
-        if (!home) fatal_error( "could not determine your home directory\n" );
-        if (home[0] != '/') fatal_error( "your home directory %s is not an absolute path\n", home );
-        config_dir = xmalloc( strlen(home) + sizeof(server_config_dir) );
-        strcpy( config_dir, home );
-        remove_trailing_slashes( config_dir );
-        strcat( config_dir, server_config_dir );
-        if (stat( config_dir, &st ) == -1)
-        {
-            if (errno == ENOENT) return;  /* will be created later on */
-            fatal_perror( "cannot open %s", config_dir );
-        }
-    }
-    if (!S_ISDIR(st.st_mode)) fatal_error( "%s is not a directory\n", config_dir );
-#ifdef HAVE_GETUID
-    if (st.st_uid != getuid()) fatal_error( "%s is not owned by you\n", config_dir );
-#endif
-
-    init_server_dir( st.st_dev, st.st_ino );
-}
-
-/* return the configuration directory ($WINEPREFIX or $HOME/.wine) */
-const char *wine_get_config_dir(void)
-{
-    if (!config_dir) init_paths();
-    return config_dir;
-}
-
-/* return the full name of the server directory (the one containing the socket) */
-const char *wine_get_server_dir(void)
-{
-    if (!server_dir)
-    {
-        if (!config_dir) init_paths();
-        else
-        {
-            struct stat st;
-
-            if (stat( config_dir, &st ) == -1)
-            {
-                if (errno != ENOENT) fatal_error( "cannot stat %s\n", config_dir );
-                return NULL;  /* will have to try again once config_dir has been created */
-            }
-            init_server_dir( st.st_dev, st.st_ino );
-        }
-    }
-    return server_dir;
-}
-
-/* return the build id string */
-const char wine_build[] = "wine-1.6-longene";
-const char *wine_get_build_id(void)
-{
-    extern const char wine_build[];
-    return wine_build;
-}
-#endif
-
 /*from libs/wine/strings.c*/
+
 int strncmpiW( const WCHAR *str1, const WCHAR *str2, int n )
 {
     int ret = 0;
@@ -3146,43 +2969,20 @@ int poll(struct pollfd *pfds, unsigned int nfds, long timeout_msecs)
 /*epoll.h*/
 int epoll_create(int size)
 {
+    klog(0,"NOT IMPLEMENT!\n");
     return -1;
-#if 0
-    int ret;
-    asmlinkage long (*sys_epoll_create)(int size) = get_syscall(UK_epoll_create);
-
-    ret = sys_epoll_create(size);
-
-    SYSCALL_RETURN(ret);
-#endif
 }
 
 int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 {
+    klog(0,"NOT IMPLEMENT!\n");
     return -1;
-#if 0
-    int ret;
-    asmlinkage long (*sys_epoll_ctl)(int epfd, int op, int fd,
-            struct epoll_event __user *event) = get_syscall(UK_epoll_ctl);
-
-    ret = sys_epoll_ctl(epfd, op, fd, event);
-
-    SYSCALL_RETURN(ret);
-#endif
 }
 
 int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
 {
+    klog(0,"NOT IMPLEMENT!\n");
     return -1;
-#if 0
-    int ret;
-    asmlinkage long (*sys_epoll_wait)(int epfd, struct epoll_event __user *events,
-            int maxevents, int timeout) = get_syscall(UK_epoll_wait);
-
-    ret=sys_epoll_wait(epfd, events, maxevents, timeout);
-
-    SYSCALL_RETURN(ret);
-#endif
 }
 
 /*socket.h*/
@@ -3251,33 +3051,12 @@ ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
 {
     klog(0,"NOT IMPLEMENT!\n");
     return 0;
-#if 0
-    long ret;
-    asmlinkage long (*sys_recvfrom)(int, void*, size_t, unsigned, struct sockaddr*, int*) 
-        = get_syscall(UK_recvfrom);
-
-    PREPARE_KERNEL_CALL;
-    ret = sys_recvfrom(fd, buf, size, flags, NULL, NULL);
-    END_KERNEL_CALL;
-
-    SYSCALL_RETURN(ret);
-#endif
 }
+
 ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
 {
     klog(0,"NOT IMPLEMENT!\n");
     return 0;
-#if 0
-    int ret;
-    asmlinkage long (*sys_recvmsg)(int, struct msghdr __user*, unsigned)
-        = get_syscall(UK_recvmsg);
-
-    PREPARE_KERNEL_CALL;
-    ret = sys_recvmsg(sockfd,msg,flags);
-    END_KERNEL_CALL;
-
-    SYSCALL_RETURN(ret);
-#endif
 }
 
 ssize_t send(int sockfd, const void *buf, size_t len, int flags)
@@ -3285,27 +3064,18 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags)
     klog(0,"NOT IMPLEMENT!\n");
     return 0;
 }
+
 ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
         const struct sockaddr *dest_addr, int addrlen)
 {
     klog(0,"NOT IMPLEMENT!\n");
     return 0;
 }
+
 ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 {
     klog(0,"NOT IMPLEMENT!\n");
     return 0;
-#if 0
-    int ret;
-    asmlinkage long (*sys_sendmsg)(int, const struct msghdr __user*, unsigned)
-        = get_syscall(UK_sendmsg);
-
-    PREPARE_KERNEL_CALL;
-    ret = sys_sendmsg(sockfd,msg,flags);
-    END_KERNEL_CALL;
-
-    SYSCALL_RETURN(ret);
-#endif
 }
 
 long socketpair(int family, int type, int protocol, int *sockvec)
