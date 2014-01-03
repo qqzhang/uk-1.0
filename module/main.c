@@ -182,11 +182,11 @@ struct task_struct* timer_kernel_task = NULL;
 static int __init unifiedkernel_init(void)
 {
     server_start_time = current_time;
-	get_kallsyms_lookup_name();
-	init_thread_hash_table();
-	create_syscall_chardev();
-	init_directories();
-	init_uk_lock();
+    get_kallsyms_lookup_name();
+    init_thread_hash_table();
+    create_syscall_chardev();
+    init_directories();
+    init_uk_lock();
     register_pe_binfmt();
 
     timer_kernel_task = kthread_run(timer_loop, NULL, "timer_thread");
@@ -195,14 +195,14 @@ static int __init unifiedkernel_init(void)
         klog(0, "create timer_thread failed \n");
     }
 
-	return 0;
+    return 0;
 }
 
 static void __exit unifiedkernel_exit(void)
 {
-	destroy_syscall_chardev();
+    destroy_syscall_chardev();
     unregister_pe_binfmt();
-	kthread_stop(timer_kernel_task);
+    kthread_stop(timer_kernel_task);
     flush_registry();
 #ifdef DEBUG_OBJECTS
     close_objects();  /* shut down everything properly */
