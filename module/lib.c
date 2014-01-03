@@ -2773,6 +2773,32 @@ int fsync(int fd)
     SYSCALL_RETURN(ret);
 }
 
+int mount(char *dev_name, char *dir_name, char *type, unsigned long flags, void *data)
+{
+    int ret;
+    asmlinkage long (*sys_mount)(char __user *dev_name, char __user *dir_name,
+            char __user *type, unsigned long flags,
+            void __user *data) = get_syscall(UK_mount);
+
+    PREPARE_KERNEL_CALL;
+    ret = sys_mount(dev_name, dir_name, type, flags, data);
+    END_KERNEL_CALL;
+
+    SYSCALL_RETURN(ret);
+}
+
+int umount(char *name, int flags)
+{
+    int ret;
+    asmlinkage long (*sys_umount)(char __user *name, int flags) = get_syscall(UK_umount);
+
+    PREPARE_KERNEL_CALL;
+    ret = sys_umount(name, flags);
+    END_KERNEL_CALL;
+
+    SYSCALL_RETURN(ret);
+}
+
 int chmod(const char *path, mode_t mode)
 {
     int ret;
@@ -3721,4 +3747,61 @@ void recursive_spinlock_init(recursive_spinlock_t *lock)
     spin_lock_init(&lock->lock);
     lock->pid = -1;
     lock->count = 0;
+}
+
+/*
+mount -t binfmt_misc none /proc/sys/fs/binfmt_misc
+echo ':DOSWin:M::MZ::/usr/local/bin/wine:' > /proc/sys/fs/binfmt_misc/register
+*/
+static char need_unmount = 0;
+
+void register_pe_binfmt(void)
+{
+    int err;
+    struct stat st;
+    struct file *filp;
+    char buf[] = ":DOSWin:M::MZ::/usr/local/bin/wine:";
+
+    err = mount("none", "/proc/sys/fs/binfmt_misc", "binfmt_misc", 0, NULL);
+    if (err==-1 && errno==EBUSY)
+    {
+        need_unmount = 0;
+    }
+    else if (err==-1)
+    {
+        klog(0,"mount err %d \n",errno);
+        return;
+    }
+
+    need_unmount = 1;
+
+    err = stat("/proc/sys/fs/binfmt_misc/DOSWin", &st);
+    if (err==-1 && errno==ENOENT)
+    {
+        filp = filp_open("/proc/sys/fs/binfmt_misc/register", O_WRONLY, 0200);
+        if(!filp)
+        {
+            klog(0,"filp_open err \n");
+            return;
+        }
+
+        PREPARE_KERNEL_CALL;
+        err = filp->f_op->write(filp, buf, sizeof(buf)-1, &filp->f_pos);
+        END_KERNEL_CALL;
+
+        filp_close(filp, NULL);
+    }
+    else if (err==-1)
+    {
+        klog(0,"stat err %d \n",errno);
+        return;
+    }
+}
+
+void unregister_pe_binfmt(void)
+{
+    if (need_unmount)
+    {
+        umount("/proc/sys/fs/binfmt_misc", 0);
+    }
 }

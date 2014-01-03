@@ -173,6 +173,8 @@ extern void destroy_syscall_chardev(void);
 extern void get_kallsyms_lookup_name(void);
 extern int timer_loop(void*);
 extern void destroy_reg_name( void );
+extern void register_pe_binfmt(void);
+extern void unregister_pe_binfmt(void);
 
 struct task_struct* timer_kernel_task = NULL;
 
@@ -185,6 +187,7 @@ static int __init unifiedkernel_init(void)
 	create_syscall_chardev();
 	init_directories();
 	init_uk_lock();
+    register_pe_binfmt();
 
     timer_kernel_task = kthread_run(timer_loop, NULL, "timer_thread");
     if(IS_ERR(timer_kernel_task))
@@ -198,6 +201,7 @@ static int __init unifiedkernel_init(void)
 static void __exit unifiedkernel_exit(void)
 {
 	destroy_syscall_chardev();
+    unregister_pe_binfmt();
 	kthread_stop(timer_kernel_task);
     flush_registry();
 #ifdef DEBUG_OBJECTS

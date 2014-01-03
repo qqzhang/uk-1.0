@@ -123,6 +123,8 @@ int mkdir(const char *pathname, mode_t mode);
 int chdir(const char *path);
 int fchdir(int fd);
 int fsync(int fd);
+int mount(char *dev_name, char *dir_name, char *type, unsigned long flags, void *data);
+int unmount(char *name, int flags);
 int chmod(const char *path, mode_t mode);
 int fchmod(int fildes, mode_t mode);
 int umask(int mask);
@@ -202,6 +204,8 @@ enum syscalls
     UK_chdir,
     UK_fchdir,
     UK_fsync,
+    UK_mount,
+    UK_umount,
     UK_chmod,
     UK_fchmod,
     UK_umask,
@@ -267,6 +271,8 @@ static const char * const syscall_names[UK_NR_SYSCALLS] =
     "sys_chdir",
     "sys_fchdir",
     "sys_fsync",
+    "sys_mount",
+    "sys_umount",
     "sys_chmod",
     "sys_fchmod",
     "sys_umask",
