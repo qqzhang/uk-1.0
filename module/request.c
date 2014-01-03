@@ -1170,6 +1170,14 @@ static const struct file_operations syscall_chardev_fops =
     .unlocked_ioctl = syscall_chardev_unlocked_ioctl,
 };
 
+static char *chardev_devnode(struct device *dev, umode_t *mode)
+{
+    if (mode)
+        *mode = 0666;
+
+    return NULL;
+}
+
 int create_syscall_chardev(void)
 {
     const char filename[]="syscall";
@@ -1197,6 +1205,7 @@ int create_syscall_chardev(void)
         goto bad_class_create;
     }
 
+    class->devnode = chardev_devnode;
     dev = device_create(class, NULL, devno, NULL, filename);/*create /dev/syscall*/
     if (IS_ERR(dev))
     {

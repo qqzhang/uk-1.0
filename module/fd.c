@@ -1153,8 +1153,6 @@ void timer_loop(void)
 {
     unsigned int msecs, timeout, next;
 
-    chmod("/dev/syscall", 0666); /* FIXME */
-
     while (1)
     {
         uk_lock();
