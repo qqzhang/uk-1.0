@@ -2965,6 +2965,16 @@ int fchmod(int fd, mode_t mode)
     SYSCALL_RETURN(ret);
 }
 
+int umask(int mask)
+{
+    int ret;
+    asmlinkage long (*sys_umask)(int mask) = get_syscall(UK_umask);
+
+    ret = sys_umask(mask);
+
+    SYSCALL_RETURN(ret);
+}
+
 int fcntl(int fd, unsigned int cmd, ... /*unsigned long arg*/)
 {
     int ret;

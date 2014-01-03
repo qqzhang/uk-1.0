@@ -125,6 +125,7 @@ int fchdir(int fd);
 int fsync(int fd);
 int chmod(const char *path, mode_t mode);
 int fchmod(int fildes, mode_t mode);
+int umask(int mask);
 int fcntl(int fd, unsigned int cmd, ... /*unsigned long arg*/);
 
 long socket(int socket_family, int socket_type, int protocol);
@@ -203,6 +204,7 @@ enum syscalls
     UK_fsync,
     UK_chmod,
     UK_fchmod,
+    UK_umask,
     UK_fcntl,
     UK_clock_gettime,
     UK_alarm,
@@ -267,6 +269,7 @@ static const char * const syscall_names[UK_NR_SYSCALLS] =
     "sys_fsync",
     "sys_chmod",
     "sys_fchmod",
+    "sys_umask",
     "sys_fcntl",
     "sys_clock_gettime",
     "sys_alarm",
