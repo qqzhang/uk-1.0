@@ -567,11 +567,18 @@ FILE* fopen(const char* filename, const char* mode) /*for register.c */
     FILE* fp;
     struct file *filp = NULL;
     int flags = 0;
+    int kmode = 0666;
 
     if (!strcmp(mode, "r"))
+    {
         flags = O_RDONLY;
+        kmode = 0444;
+    }
     else if (!strcmp(mode, "w"))
+    {
         flags = O_WRONLY | O_TRUNC;
+        kmode = 0222;
+    }
     else if (!strcmp(mode, "a"))
         flags = O_APPEND;
     else if (!strcmp(mode, "r+"))
@@ -586,7 +593,7 @@ FILE* fopen(const char* filename, const char* mode) /*for register.c */
         return NULL;
     }
 
-    filp = filp_open( filename, flags, 0666 );
+    filp = filp_open( filename, flags, kmode);
     if(IS_ERR(filp))
     {
         klog(0,"filp_open error %d\n", (ULONG)PTR_ERR(filp));
