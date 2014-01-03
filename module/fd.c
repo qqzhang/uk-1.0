@@ -1149,7 +1149,7 @@ static void remove_poll_user( struct uk_fd *fd, int user )
 }
 
 #ifdef CONFIG_UNIFIED_KERNEL
-void timer_loop(void)
+int timer_loop(void *data)
 {
     unsigned int msecs, timeout, next;
 
@@ -1162,7 +1162,7 @@ void timer_loop(void)
         uk_unlock();
         if (kthread_should_stop())
         {
-            return;
+            return 0;
         }
 
         msecs = (next==-1) ? 10000 : next;
@@ -1171,6 +1171,8 @@ void timer_loop(void)
         set_current_state(TASK_INTERRUPTIBLE);
         schedule_timeout(timeout);
     }
+
+    return 0;
 }
 #endif
 

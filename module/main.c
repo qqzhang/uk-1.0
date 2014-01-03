@@ -171,7 +171,7 @@ extern void init_thread_hash_table(void);
 extern int create_syscall_chardev(void);
 extern void destroy_syscall_chardev(void);
 extern void get_kallsyms_lookup_name(void);
-extern void timer_loop(void);
+extern int timer_loop(void*);
 extern void destroy_reg_name( void );
 
 struct task_struct* timer_kernel_task = NULL;
@@ -184,14 +184,13 @@ static int __init unifiedkernel_init(void)
 	init_thread_hash_table();
 	create_syscall_chardev();
 	init_directories();
-	/*init_registry(); */ /* NtEarlyInit will call uk_init_registry() */
 	init_uk_lock();
 
-	timer_kernel_task = kthread_create((void*)timer_loop, NULL, "timer_thread");
-	if(!IS_ERR(timer_kernel_task))
-		wake_up_process(timer_kernel_task);
-	else
-		klog(0, "kthread_create error\n");
+    timer_kernel_task = kthread_run(timer_loop, NULL, "timer_thread");
+    if(IS_ERR(timer_kernel_task))
+    {
+        klog(0, "create timer_thread failed \n");
+    }
 
 	return 0;
 }
@@ -199,18 +198,12 @@ static int __init unifiedkernel_init(void)
 static void __exit unifiedkernel_exit(void)
 {
 	destroy_syscall_chardev();
-
-	wake_up_process(timer_kernel_task);
 	kthread_stop(timer_kernel_task);
-
     flush_registry();
-
 #ifdef DEBUG_OBJECTS
     close_objects();  /* shut down everything properly */
 #endif
-
     destroy_reg_name();
-
 #ifdef MEM_LEAK_CHECK
     void print_mem_list(void);
     print_mem_list();
