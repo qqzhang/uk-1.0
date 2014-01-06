@@ -906,7 +906,7 @@ void close_master_socket( timeout_t timeout )
 
 #ifdef CONFIG_UNIFIED_KERNEL
 
-char __user *current_config_dir;
+const char __user *current_config_dir;
 extern void uk_init_registry(const char __user* config_dir, int len);
 extern ssize_t uk_thread_wait(char __user *buf, size_t len);
 

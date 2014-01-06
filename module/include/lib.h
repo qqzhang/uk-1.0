@@ -161,7 +161,7 @@ int poll(struct pollfd *pfds, unsigned int nfds, long timeout_msecs);
 //int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout);
 int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, void *timeout);
 
-int mmap(void *addr, size_t len, int prot, int flags, int fd, off_t off);
+void *mmap(void *addr, size_t len, int prot, int flags, int fd, off_t off);
 int munmap(void *addr, size_t length);
 
 int pipe(int pipefd[2]);

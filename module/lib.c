@@ -526,6 +526,7 @@ void exit(int status)
     sys_exit(status);
 
     klog(0,"warnning : The exit() function does not return. \n");
+    BUG();
 }
 
 void _exit(int status)
@@ -3206,7 +3207,7 @@ int inotify_rm_watch(int fd,int wd)
 }
 
 /*mman.h*/
-int mmap(void *addr, size_t len, int prot, int flags, int fd, off_t off)
+void *mmap(void *addr, size_t len, int prot, int flags, int fd, off_t off)
 {
     int ret;
 
@@ -3220,7 +3221,13 @@ int mmap(void *addr, size_t len, int prot, int flags, int fd, off_t off)
 
     ret = sys_mmap_pgoff((unsigned long)addr, len, prot, flags, fd, off >> PAGE_SHIFT);
 out:
-    SYSCALL_RETURN(ret);
+    if(IS_ERR_VALUE(ret))
+    {
+        klog(0," errno=%d \n",(int)ret);
+        current_thread ? (current_thread->unix_errno=-ret) : (dummy_errno=-ret);
+        ret = -1;
+    }
+    return (void*)ret;
 }
 
 int munmap(void *addr, size_t length)

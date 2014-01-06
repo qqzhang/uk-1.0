@@ -215,9 +215,13 @@ unsigned int alloc_ptid( void *ptr )
 void free_ptid( unsigned int id )
 {
 #ifdef CONFIG_UNIFIED_KERNEL
+    struct ptid_entry *entry;
+
     down_write( &ptid_sem );
-#endif
+    entry = &ptid_entries[id - PTID_OFFSET];
+#else
     struct ptid_entry *entry = &ptid_entries[id - PTID_OFFSET];
+#endif
 
     entry->ptr  = NULL;
     entry->next = 0;
