@@ -69,11 +69,6 @@
 #include "request.h"
 #include "user.h"
 
-#ifdef CONFIG_UNIFIED_KERNEL
-#include <linux/hardirq.h>
-#include "klog.h"
-#endif
-
 /* From winsock.h */
 #define FD_MAX_EVENTS              10
 #define FD_READ_BIT                0

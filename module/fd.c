@@ -118,10 +118,6 @@
 #include <linux/kthread.h>
 #include <linux/poll.h>
 #include <linux/version.h>
-#include <linux/hardirq.h>
-#include <linux/file.h>
-#include <asm/div64.h>
-#include "klog.h"
 
 #define FD_UNINIT 0x1
 #define FD_ADDED  0x2

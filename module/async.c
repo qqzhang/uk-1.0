@@ -45,7 +45,6 @@
 #include "request.h"
 
 #ifdef CONFIG_UNIFIED_KERNEL
-#include <linux/hardirq.h>
 extern void *async_alloc_apc(void);
 extern int async_queue_apc( void *async_apc, struct thread *thread,
         struct object *owner, const apc_call_t *call_data );

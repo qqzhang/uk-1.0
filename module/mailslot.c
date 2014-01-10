@@ -64,11 +64,6 @@
 #include "thread.h"
 #include "request.h"
 
-#ifdef CONFIG_UNIFIED_KERNEL
-#include <linux/file.h>
-#include "klog.h"
-#endif
-
 struct mailslot
 {
     struct object       obj;

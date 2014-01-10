@@ -81,10 +81,7 @@ static const unsigned int supported_cpus = CPU_FLAG(CPU_ARM64);
 
 #ifdef CONFIG_UNIFIED_KERNEL
 #include <linux/completion.h>
-#include <linux/spinlock.h>
-#include <linux/hardirq.h>
 #include <linux/sched.h>
-#include "klog.h"
 
 static DEFINE_RECURSIVE_SPINLOCK(thread_lock);
 

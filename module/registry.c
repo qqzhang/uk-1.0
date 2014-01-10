@@ -62,12 +62,6 @@
 #include "winternl.h"
 #include "wine/library.h"
 
-#ifdef CONFIG_UNIFIED_KERNEL
-#include <linux/uaccess.h>
-#include <asm/div64.h>
-#include "klog.h"
-#endif
-
 struct notify
 {
     struct list_head       entry;    /* entry in list of notifications */

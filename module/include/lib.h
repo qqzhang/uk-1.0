@@ -16,6 +16,12 @@
 #include <linux/types.h>
 #include <linux/major.h>
 #include <linux/spinlock.h>
+#include <linux/fs.h>
+#include <linux/file.h>
+#include <linux/uaccess.h>
+#include <linux/hardirq.h>
+#include <asm/div64.h>
+
 #include "stdarg.h"
 #include "klog.h"
 #include "sys/poll.h"

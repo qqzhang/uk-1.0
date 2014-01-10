@@ -165,7 +165,6 @@ int main( int argc, char *argv[] )
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/kthread.h>
-#include "klog.h"
 
 extern void init_thread_hash_table(void);
 extern int create_syscall_chardev(void);

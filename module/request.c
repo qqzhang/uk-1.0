@@ -82,16 +82,12 @@
 
 #ifdef CONFIG_UNIFIED_KERNEL
 #include "wine/server.h" /* for struct __server_request_info */
-#include "klog.h" /* for klog */
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/fs.h>
 #include <linux/errno.h>
 #include <linux/cdev.h>
 #include <linux/slab.h>
-#include <linux/uaccess.h>
 #include <linux/device.h>
-#include <asm/div64.h>
 #endif
 
 /* Some versions of glibc don't define this */
