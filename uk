@@ -11,9 +11,6 @@ UK_DIR=/lib/modules/`uname -r`/misc
 case "$1" in
     start)
     insmod $UK_DIR/unifiedkernel.ko;
-    [ -c /dev/syscall ] && chmod 666 /dev/syscall;
-    [ -f /proc/sys/fs/binfmt_misc/register ] || mount -t binfmt_misc none /proc/sys/fs/binfmt_misc;
-    [ -f /proc/sys/fs/binfmt_misc/register ] && echo ':DOSWin:M::MZ::/usr/local/bin/wine:' > /proc/sys/fs/binfmt_misc/register;
     ;;
 
     stop)

@@ -17,8 +17,7 @@ sleep 3
 
 #install dlls
 cd $uk_dir/wine
-[ -f config.log ] || sudo ./configure;
-#[ -f /usr/local/bin/wine ] || sudo make install -j8;
+[ -f config.status ] || sudo ./configure;
 sudo make install -j8;
 
 #complier module
