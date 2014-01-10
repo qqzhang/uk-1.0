@@ -41,7 +41,7 @@ First, execute under cmdlind:
 mount -t binfmt_misc none /proc/sys/fs/binfmt_misc
 echo ':DOSWin:M::MZ::/usr/local/bin/wine:' > /proc/sys/fs/binfmt_misc/register
 
-Now you can run some Win32 programs in X terminal windows just like what 
+Now you can run some Win32 programs in X terminal windows just like what
 you do on Linux, such as:
 
   ./Hellworld.exe
@@ -58,9 +58,9 @@ UNINSTALL
 If you don't want to use Longene any more, you can uninstall it:
 
 1. Uninstall module:
-  
+ 
   rmmod unifiedkernel.ko
 
 cd to the directory "module" and run command:
-  
-  make clean 
+
+  make clean
