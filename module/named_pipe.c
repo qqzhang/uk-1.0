@@ -531,7 +531,9 @@ static int pipe_data_remaining( struct pipe_server *server )
     filp = get_unix_file( server->client->fd );
     if (filp && filp->f_op && filp->f_op->poll)
     {
+        get_file(filp);
         revents = filp->f_op->poll(filp, NULL);
+        fput(filp);
     }
 
     return revents&POLLIN;
