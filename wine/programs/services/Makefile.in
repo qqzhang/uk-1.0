@@ -7,6 +7,4 @@ C_SRCS = \
 	services.c \
 	utils.c
 
-IDL_S_SRCS = svcctl.idl
-
-@MAKE_PROG_RULES@
+IDL_SRCS = svcctl.idl

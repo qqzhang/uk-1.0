@@ -433,7 +433,7 @@ int   main (int argc, char *argv[])
 	output_header_preamble ();
 	output_c_preamble ();
 
-	while (!dll_next_symbol (&symbol))
+        while (dll_next_symbol (&symbol))
 	{
 	    count++;
 
@@ -447,7 +447,7 @@ int   main (int argc, char *argv[])
 		int result = symbol_demangle (&symbol);
 
 		if (result)
-		    result = symbol_search (&symbol);
+                    result = !symbol_search (&symbol);
 
 		if (!result && symbol.function_name)
 		    /* Clean up the prototype */

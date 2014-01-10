@@ -45,22 +45,31 @@ C_SRCS = \
 	window.c \
 	winstation.c
 
+CONFIG_UNIFIED_KERNEL = y
+
+ifeq  ($(CONFIG_UNIFIED_KERNEL),y)
+all:
+
+PROGRAMS =
+
+MANPAGES =
+
+@MAKE_RULES@
+
+wineserver:
+
+wineserver-installed:
+
+install install-lib::
+
+uninstall::
+else
 PROGRAMS = wineserver wineserver-installed
 
 MANPAGES = \
 	wineserver.de.UTF-8.man.in \
 	wineserver.fr.UTF-8.man.in \
 	wineserver.man.in
-
-INSTALLDIRS = $(DESTDIR)$(bindir)
-
-CONFIG_UNIFIED_KERNEL = y
-
-ifeq  ($(CONFIG_UNIFIED_KERNEL),y)
-all:
-else
-all: $(PROGRAMS)
-endif
 
 @MAKE_RULES@
 
@@ -70,13 +79,7 @@ wineserver: $(OBJS)
 wineserver-installed: $(OBJS)
 	$(CC) -o $@ $(OBJS) $(LIBWINE) $(LIBPORT) $(LDFLAGS) $(EXTRALIBS) $(LIBS) $(LDRPATH_INSTALL)
 
-ifeq  ($(CONFIG_UNIFIED_KERNEL),y)
-install install-lib::
-
-uninstall::
-
-else
-install install-lib:: wineserver-installed $(DESTDIR)$(bindir) install-man-pages
+install install-lib:: wineserver-installed install-man-pages
 	$(INSTALL_PROGRAM) wineserver-installed $(DESTDIR)$(bindir)/wineserver
 
 uninstall::

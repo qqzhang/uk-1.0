@@ -11,6 +11,8 @@ AC_CONFIG_SRCDIR(server/atom.c)
 AC_CONFIG_HEADERS(include/config.h)
 AC_CONFIG_AUX_DIR(tools)
 
+libwine_version="1.0"
+
 dnl autoconf versions before 2.63b don't have AS_VAR_APPEND or AS_VAR_IF
 m4_ifdef([AS_VAR_APPEND],,[as_fn_append () { eval $[1]=\$$[1]\$[2]; }
 AC_DEFUN([AS_VAR_APPEND],[as_fn_append $1 $2])])dnl
@@ -266,24 +268,28 @@ AC_PROG_MKDIR_P
 AC_PATH_PROG(LDCONFIG, ldconfig, true, [/sbin /usr/sbin $PATH])
 
 dnl Use the correct strip to install programs
-test -z "$INSTALL_PROGRAM" && INSTALL_PROGRAM="STRIPPROG=\"\$(STRIP)\" \$(top_srcdir)/tools/install-sh"
-AC_PROG_INSTALL
+test -z "$INSTALL" && AC_SUBST([INSTALL],"\$(top_srcdir)/tools/install-sh")
+test -z "$INSTALL_PROGRAM" && AC_SUBST([INSTALL_PROGRAM],"STRIPPROG=\"\$(STRIP)\" \$(INSTALL)")
+test -z "$INSTALL_SCRIPT" && AC_SUBST([INSTALL_SCRIPT],"\$(INSTALL)")
+test -z "$INSTALL_DATA" && AC_SUBST([INSTALL_DATA],"\$(INSTALL) -m 644")
 
-dnl Check for various programs
-AC_CHECK_PROGS(FONTFORGE, fontforge, false)
-AC_CHECK_PROGS(RSVG, rsvg, false)
-AC_CHECK_PROGS(CONVERT, convert, false)
-AC_CHECK_PROGS(ICOTOOL, icotool, false)
 AC_CHECK_PROGS(MSGFMT, msgfmt, false)
 WINE_PATH_PKG_CONFIG
 
 if test "x$enable_maintainer_mode" != "xyes"
 then
-  AC_SUBST([MAINTAINER_MODE],[\#])
+  FONTFORGE=""
+  RSVG=""
+  CONVERT=""
+  ICOTOOL=""
 else
   test "$srcdir" = . || AC_MSG_ERROR([Maintainer mode cannot work out of tree.])
-  if test "$FONTFORGE" = "false"; then AC_MSG_ERROR([You need fontforge to rebuild fonts in maintainer mode.]); fi
-  if test "$RSVG" = "false"; then AC_MSG_ERROR([You need rsvg to rebuild icons in maintainer mode.]); fi
+  AC_CHECK_PROGS(FONTFORGE, fontforge, false)
+  AC_CHECK_PROGS(RSVG, rsvg, false)
+  AC_CHECK_PROGS(CONVERT, convert, false)
+  AC_CHECK_PROGS(ICOTOOL, icotool, false)
+  test "$FONTFORGE" != "false" || AC_MSG_ERROR([You need fontforge to rebuild fonts in maintainer mode.])
+  test "$RSVG" != "false" || AC_MSG_ERROR([You need rsvg to rebuild icons in maintainer mode.])
 
   dnl Check the imagemagick version
   if test "$CONVERT" = false
@@ -671,26 +677,22 @@ dnl **** Check for working dll ****
 AC_SUBST(dlldir,"\${libdir}/wine")
 AC_SUBST(DLLPREFIX,"")
 AC_SUBST(DLLFLAGS,"-D_REENTRANT")
-AC_SUBST(IMPLIBEXT,"def")
 AC_SUBST(LDRPATH_INSTALL,"")
 AC_SUBST(LDRPATH_LOCAL,"")
 LIBEXT="so"
 DLLEXT=".so"
+IMPLIBEXT="def"
 STATIC_IMPLIBEXT="def.a"
 WINE_PATH_SONAME_TOOLS
+WINE_CONFIG_HELPERS
 
 wine_binary="wine"
 test "x$enable_win64" != "xyes" || wine_binary="wine64"
-
-WINE_IGNORE_FILE("loader/wine")
-test "$wine_binary" = wine || WINE_IGNORE_FILE("loader/$wine_binary")
-WINE_IGNORE_FILE("loader/wine-installed")
-WINE_IGNORE_FILE("libs/wine/version.c")
+loader_programs="$wine_binary wine-installed"
+libwine_soversion=`expr $libwine_version : '\([[0-9]]*\)\..*'`
 
 AC_SUBST(LOADER_RULES,["
-all: $wine_binary wine-installed
-
-install install-lib:: wine-installed \$(DESTDIR)\$(bindir)
+install install-lib:: wine-installed
 	\$(INSTALL_PROGRAM) wine-installed \$(DESTDIR)\$(bindir)/$wine_binary
 
 uninstall::
@@ -724,8 +726,7 @@ case $host_os in
           AC_SUBST(SOCKETLIBS,"-L\$(top_builddir)/dlls/ws2_32 -lws2_32") ;;
     esac
 
-    WINE_IGNORE_FILE("libs/wine/libwine.dll")
-    WINE_IGNORE_FILE("libs/wine/libwine.a")
+    libwine_targets="libwine.dll libwine.a"
     AC_SUBST(LIBWINE_RULES,["
 all: libwine.dll libwine.a
 
@@ -735,17 +736,14 @@ libwine.a: \$(srcdir)/wine.def
 libwine.dll: \$(OBJS) \$(srcdir)/wine.def
 	\$(CC) -shared \$(srcdir)/wine.def -o \$@ \$(OBJS) $crtlibs \$(EXTRALIBS)
 
-install install-lib:: libwine.dll \$(DESTDIR)\$(libdir) dummy
+install install-lib:: libwine.dll
 	\$(INSTALL_DATA) libwine.dll \$(DESTDIR)\$(libdir)/libwine.dll
 
-install install-dev:: libwine.a \$(DESTDIR)\$(libdir) dummy
+install install-dev:: libwine.a
 	\$(INSTALL_DATA) libwine.a \$(DESTDIR)\$(libdir)/libwine.a
 
 uninstall::
 	-cd \$(DESTDIR)\$(libdir) && \$(RM) libwine.a libwine.dll
-
-clean::
-	\$(RM) libwine.dll version.c
 "])
     ;;
 
@@ -853,31 +851,28 @@ clean::
                                        AC_MSG_RESULT([[cross-compiling, assuming yes]]))
     fi
 
-    WINE_IGNORE_FILE("libs/wine/libwine*.dylib")
+    libwine_targets="libwine.dylib libwine.$libwine_soversion.dylib libwine.$libwine_version.dylib"
     AC_SUBST(LIBWINE_RULES,["
 all: libwine.dylib
 
-libwine.\$(VERSION).dylib: \$(OBJS)
-	\$(CC) -dynamiclib -install_name @rpath/libwine.\$(SOVERSION).dylib -Wl,-rpath,@loader_path/ -compatibility_version \$(SOVERSION) -current_version \$(VERSION) \$(OBJS) \$(EXTRALIBS) \$(LDFLAGS) \$(LIBS) -o \$@
+libwine.$libwine_version.dylib: \$(OBJS)
+	\$(CC) -dynamiclib -install_name @rpath/libwine.$libwine_soversion.dylib -Wl,-rpath,@loader_path/ -compatibility_version $libwine_soversion -current_version $libwine_version \$(OBJS) \$(EXTRALIBS) \$(LDFLAGS) \$(LIBS) -o \$@
 
-libwine.\$(SOVERSION).dylib: libwine.\$(VERSION).dylib
-	\$(RM) \$@ && \$(LN_S) libwine.\$(VERSION).dylib \$@
+libwine.$libwine_soversion.dylib: libwine.$libwine_version.dylib
+	\$(RM) \$@ && \$(LN_S) libwine.$libwine_version.dylib \$@
 
-libwine.dylib: libwine.\$(SOVERSION).dylib
-	\$(RM) \$@ && \$(LN_S) libwine.\$(SOVERSION).dylib \$@
+libwine.dylib: libwine.$libwine_soversion.dylib
+	\$(RM) \$@ && \$(LN_S) libwine.$libwine_soversion.dylib \$@
 
-install install-lib:: libwine.\$(VERSION).dylib \$(DESTDIR)\$(libdir) dummy
-	\$(INSTALL_PROGRAM) libwine.\$(VERSION).dylib \$(DESTDIR)\$(libdir)/libwine.\$(VERSION).dylib
-	cd \$(DESTDIR)\$(libdir) && \$(RM) libwine.\$(SOVERSION).dylib && \$(LN_S) libwine.\$(VERSION).dylib libwine.\$(SOVERSION).dylib
+install install-lib:: libwine.$libwine_version.dylib
+	\$(INSTALL_PROGRAM) libwine.$libwine_version.dylib \$(DESTDIR)\$(libdir)/libwine.$libwine_version.dylib
+	cd \$(DESTDIR)\$(libdir) && \$(RM) libwine.$libwine_soversion.dylib && \$(LN_S) libwine.$libwine_version.dylib libwine.$libwine_soversion.dylib
 
-install install-dev:: \$(DESTDIR)\$(libdir) dummy
-	cd \$(DESTDIR)\$(libdir) && \$(RM) libwine.dylib && \$(LN_S) libwine.\$(VERSION).dylib libwine.dylib
+install install-dev::
+	cd \$(DESTDIR)\$(libdir) && \$(RM) libwine.dylib && \$(LN_S) libwine.$libwine_version.dylib libwine.dylib
 
 uninstall::
-	-cd \$(DESTDIR)\$(libdir) && \$(RM) libwine.dylib libwine.\$(VERSION).dylib libwine.\$(SOVERSION).dylib
-
-clean::
-	\$(RM) libwine.dylib libwine.\$(VERSION).dylib libwine.\$(SOVERSION).dylib version.c
+	-cd \$(DESTDIR)\$(libdir) && \$(RM) libwine.dylib libwine.$libwine_soversion.dylib libwine.$libwine_version.dylib
 "])
 
     AS_VAR_APPEND([LOADER_RULES],["
@@ -913,21 +908,18 @@ wine-installed: main.o wine_info.plist
         ;;
     esac
 
-    WINE_IGNORE_FILE("libs/wine/libwine.so")
+    libwine_targets="libwine.so"
     AC_SUBST(LIBWINE_RULES,["
 all: libwine.so
 
 libwine.so: \$(OBJS)
 	\$(CC) -shared \$(OBJS) \$(EXTRALIBS) \$(LDFLAGS) \$(LIBS) -o \$@
 
-install install-lib:: libwine.so \$(DESTDIR)\$(libdir) dummy
+install install-lib:: libwine.so
 	\$(INSTALL_PROGRAM) libwine.so \$(DESTDIR)\$(libdir)/libwine.so
 
 uninstall::
 	\$(RM) \$(DESTDIR)\$(libdir)/libwine.so
-
-clean::
-	\$(RM) libwine.so version.c
 "])
 
     AS_VAR_APPEND([LOADER_RULES],["
@@ -949,9 +941,9 @@ wine-installed: main.o
     then
       LDSHARED="\$(CC) -shared"
       WINE_TRY_CFLAGS([-fPIC -shared -Wl,-soname,confest.so.1],
-                      [LDSHARED="\$(CC) -shared -Wl,-soname,libwine.so.\$(SOVERSION)"],
+                      [LDSHARED="\$(CC) -shared -Wl,-soname,libwine.so.$libwine_soversion"],
                       [WINE_TRY_CFLAGS([-fPIC -shared -Wl,-h,confest.so.1],
-                                       [LDSHARED="\$(CC) -shared -Wl,-h,libwine.so.\$(SOVERSION)"])])
+                                       [LDSHARED="\$(CC) -shared -Wl,-h,libwine.so.$libwine_soversion"])])
 
       echo '{ global: *; };' >conftest.map
       WINE_TRY_CFLAGS([-fPIC -shared -Wl,--version-script=conftest.map],
@@ -993,34 +985,31 @@ wine-installed: main.o
                                 ac_cv_c_dll_unixware="yes",ac_cv_c_dll_unixware="no")])
       if test "$ac_cv_c_dll_unixware" = "yes"
       then
-        LDSHARED="\$(CC) -Wl,-G,-h,libwine.so.\$(SOVERSION)"
+        LDSHARED="\$(CC) -Wl,-G,-h,libwine.so.$libwine_soversion"
       fi
     fi
-    WINE_IGNORE_FILE("libs/wine/libwine.so*")
+    libwine_targets="libwine.so libwine.so.$libwine_soversion libwine.so.$libwine_version"
     AC_SUBST(LIBWINE_RULES,["
 all: libwine.so
 
-libwine.so.\$(VERSION): \$(OBJS) \$(srcdir)/wine.map
+libwine.so.$libwine_version: \$(OBJS) \$(srcdir)/wine.map
 	$LDSHARED \$(OBJS) \$(EXTRALIBS) \$(LDFLAGS) \$(LIBS) -o \$@
 
-libwine.so.\$(SOVERSION): libwine.so.\$(VERSION)
-	\$(RM) \$@ && \$(LN_S) libwine.so.\$(VERSION) \$@
+libwine.so.$libwine_soversion: libwine.so.$libwine_version
+	\$(RM) \$@ && \$(LN_S) libwine.so.$libwine_version \$@
 
-libwine.so: libwine.so.\$(SOVERSION)
-	\$(RM) \$@ && \$(LN_S) libwine.so.\$(SOVERSION) \$@
+libwine.so: libwine.so.$libwine_soversion
+	\$(RM) \$@ && \$(LN_S) libwine.so.$libwine_soversion \$@
 
-install install-lib:: libwine.so.\$(VERSION) \$(DESTDIR)\$(libdir) dummy
-	\$(INSTALL_PROGRAM) libwine.so.\$(VERSION) \$(DESTDIR)\$(libdir)/libwine.so.\$(VERSION)
-	cd \$(DESTDIR)\$(libdir) && \$(RM) libwine.so.\$(SOVERSION) && \$(LN_S) libwine.so.\$(VERSION) libwine.so.\$(SOVERSION)
+install install-lib:: libwine.so.$libwine_version
+	\$(INSTALL_PROGRAM) libwine.so.$libwine_version \$(DESTDIR)\$(libdir)/libwine.so.$libwine_version
+	cd \$(DESTDIR)\$(libdir) && \$(RM) libwine.so.$libwine_soversion && \$(LN_S) libwine.so.$libwine_version libwine.so.$libwine_soversion
 
-install install-dev:: \$(DESTDIR)\$(libdir) dummy
-	cd \$(DESTDIR)\$(libdir) && \$(RM) libwine.so && \$(LN_S) libwine.so.\$(VERSION) libwine.so
+install install-dev::
+	cd \$(DESTDIR)\$(libdir) && \$(RM) libwine.so && \$(LN_S) libwine.so.$libwine_version libwine.so
 
 uninstall::
-	-cd \$(DESTDIR)\$(libdir) && \$(RM) libwine.so libwine.so.\$(VERSION) libwine.so.\$(SOVERSION)
-
-clean::
-	\$(RM) libwine.so.\$(SOVERSION) libwine.so.\$(VERSION) version.c
+	-cd \$(DESTDIR)\$(libdir) && \$(RM) libwine.so libwine.so.$libwine_soversion libwine.so.$libwine_version
 "])
 
     AS_VAR_APPEND([LOADER_RULES],["
@@ -1032,6 +1021,10 @@ wine-installed: main.o
 "])
     ;;
 esac
+
+AS_VAR_APPEND([LIBWINE_RULES],["
+EXTRA_TARGETS = $libwine_targets
+"])
 
 enable_wineqtdecoder=${enable_wineqtdecoder:-no}
 enable_winemac_drv=${enable_winemac_drv:-no}
@@ -1997,15 +1990,13 @@ case $host_os in
   linux*)
     case $host_cpu in
       *i[[3456789]]86*|x86_64*)
-        WINE_IGNORE_FILE("loader/wine-preloader")
-        test "$wine_binary" = wine || WINE_IGNORE_FILE("loader/$wine_binary-preloader")
+        test "$wine_binary" = wine || WINE_IGNORE_FILE("loader/wine-preloader")
+        loader_programs="$loader_programs $wine_binary-preloader"
         AS_VAR_APPEND([LOADER_RULES],["
-all: $wine_binary-preloader
-
 $wine_binary-preloader: preloader.o
 	\$(CC) -o \$@ -static -nostartfiles -nodefaultlibs -Wl,-Ttext=0x7c400000 preloader.o \$(LIBPORT) \$(LDFLAGS)
 
-install install-lib:: $wine_binary-preloader \$(DESTDIR)\$(bindir)
+install install-lib:: $wine_binary-preloader
 	\$(INSTALL_PROGRAM) $wine_binary-preloader \$(DESTDIR)\$(bindir)/$wine_binary-preloader
 
 uninstall::
@@ -2014,6 +2005,9 @@ uninstall::
     esac
     ;;
 esac
+AS_VAR_APPEND([LOADER_RULES],["
+PROGRAMS = $loader_programs
+"])
 
 dnl **** Check for functions ****
 
@@ -2597,77 +2591,6 @@ AH_BOTTOM([#endif /* WINE_CROSSTEST */
 AC_CONFIG_COMMANDS([include/stamp-h], [echo timestamp > include/stamp-h])
 AS_ECHO_N("creating Makefile rules...") >&AS_MESSAGE_FD
 
-dnl Import library rules
-
-AC_SUBST(MAKE_IMPLIB_RULES,"DLLFLAGS = $DLLFLAGS
-")
-if test -n "$CROSSTARGET"
-then
-    AS_VAR_APPEND([MAKE_IMPLIB_RULES],"MAKEDEPFLAGS = -xo -xcross.o
-all: \$(STATICLIB:.a=.cross.a)
-")
-fi
-
-dnl Dll and program rules
-
-if test -n "$DLLEXT"
-then
-    deps="\$(MODULE)$DLLEXT \$(MODULE).fake"
-else
-    deps="\$(MODULE)"
-fi
-
-AC_SUBST(MAKE_DLL_RULES,"
-DLLFLAGS    = $DLLFLAGS
-MAINSPEC    = \$(srcdir)/\$(MODULE:%.dll=%).spec
-IDL_TLB_RES = \$(IDL_TLB_SRCS:.idl=_t.res)
-MODULEFLAGS = -shared \$(MAINSPEC) \$(EXTRADLLFLAGS)
-
-all: $deps
-
-manpages:: dummy
-	\$(C2MAN) -o \$(top_builddir)/documentation/man\$(api_manext) -R\$(top_builddir) -C\$(srcdir) \$(PARENTSRC:%=-P%) -I\$(top_srcdir)/include \$(MAINSPEC:%=-w %) \$(C_SRCS)
-htmlpages:: dummy
-	\$(C2MAN) -o \$(top_builddir)/documentation/html -R\$(top_builddir) -C\$(srcdir) \$(PARENTSRC:%=-P%) -I\$(top_srcdir)/include -Th \$(MAINSPEC:%=-w %) \$(C_SRCS)
-sgmlpages:: dummy
-	\$(C2MAN) -o \$(top_builddir)/documentation/api-guide -R\$(top_builddir) -C\$(srcdir) \$(PARENTSRC:%=-P%) -I\$(top_srcdir)/include -Ts \$(MAINSPEC:%=-w %) \$(C_SRCS)
-xmlpages:: dummy
-	\$(C2MAN) -o \$(top_builddir)/documentation/api-guide-xml -R\$(top_builddir) -C\$(srcdir) \$(PARENTSRC:%=-P%) -I\$(top_srcdir)/include -Tx \$(MAINSPEC:%=-w %) \$(C_SRCS)
-.PHONY: manpages htmlpages sgmlpages xmlpages
-")
-
-AC_SUBST(MAKE_PROG_RULES,"
-DLLFLAGS    = $DLLFLAGS
-
-all: $deps
-")
-
-dnl Test rules
-
-AC_SUBST(MAKE_TEST_RULES,"
-DLLFLAGS     = $DLLFLAGS
-TESTMODULE   = \$(TESTDLL:%.dll=%)_test.exe
-TESTMODULE_STRIPPED = \$(TESTDLL:%.dll=%)_test-stripped.exe$DLLEXT
-WINETEST_RES = \$(top_builddir)/programs/winetest/\$(TESTDLL:%.dll=%)_test.res
-RUNTESTFLAGS = -q -P wine -T \$(top_builddir) -M \$(TESTDLL) -p \$(TESTMODULE)$DLLEXT
-EXTRA_OBJS   = testlist.o
-
-all: \$(TESTMODULE)$DLLEXT \$(WINETEST_RES)
-
-\$(C_SRCS:.c=.ok): \$(TESTMODULE)$DLLEXT \$(TESTDLL:%=../%$DLLEXT)
-
-.PHONY: check test testclean crosstest
-")
-if test -n "$CROSSTARGET"
-then
-    AS_VAR_APPEND([MAKE_TEST_RULES],"
-MAKEDEPFLAGS    = -xo -xcross.o
-CROSSTESTMODULE = \$(TESTDLL:%.dll=%)_crosstest.exe
-
-crosstest: \$(CROSSTESTMODULE)
-")
-fi
-
 dnl Main makefile
 
 WINE_APPEND_RULE([
@@ -3017,6 +2940,7 @@ WINE_CONFIG_DLL(msls31)
 WINE_CONFIG_DLL(msnet32)
 WINE_CONFIG_DLL(mspatcha)
 WINE_CONFIG_DLL(msrle32,,[po])
+WINE_CONFIG_TEST(dlls/msrle32/tests)
 WINE_CONFIG_DLL(mssign32)
 WINE_CONFIG_DLL(mssip32)
 WINE_CONFIG_DLL(mstask,,[clean])
@@ -3192,6 +3116,7 @@ WINE_CONFIG_TEST(dlls/sxs/tests)
 WINE_CONFIG_DLL(system.drv16,enable_win16)
 WINE_CONFIG_DLL(t2embed)
 WINE_CONFIG_DLL(tapi32,,[implib])
+WINE_CONFIG_DLL(taskschd,,[clean])
 WINE_CONFIG_DLL(toolhelp.dll16,enable_win16)
 WINE_CONFIG_DLL(traffic)
 WINE_CONFIG_DLL(twain.dll16,enable_win16)
@@ -3465,10 +3390,6 @@ dnl End of auto-generated output commands
 
 dnl Main ignore file
 
-WINE_IGNORE_FILE("*.a")
-WINE_IGNORE_FILE("*.exe")
-test -n "$DLLEXT" && WINE_IGNORE_FILE("*$DLLEXT")
-test -n "$DLLEXT" && WINE_IGNORE_FILE("*.fake")
 WINE_IGNORE_FILE(".gitignore")
 WINE_IGNORE_FILE("Makefile")
 WINE_IGNORE_FILE("TAGS")
@@ -3480,20 +3401,7 @@ WINE_IGNORE_FILE("config.status")
 WINE_IGNORE_FILE("configure.lineno")
 WINE_IGNORE_FILE("include/config.h")
 WINE_IGNORE_FILE("include/stamp-h")
-WINE_IGNORE_FILE("dlls/*/*.def")
-WINE_IGNORE_FILE("fonts/*.fon",enable_fonts)
-WINE_IGNORE_FILE("programs/winetest/build.nfo",enable_winetest)
-WINE_IGNORE_FILE("programs/winetest/build.rc",enable_winetest)
-WINE_IGNORE_FILE("server/wineserver",enable_server)
-WINE_IGNORE_FILE("server/wineserver-installed",enable_server)
-WINE_IGNORE_FILE("tools/fnt2fon$ac_exeext",enable_tools)
-WINE_IGNORE_FILE("tools/make_ctests$ac_exeext",enable_tools)
-WINE_IGNORE_FILE("tools/make_xftmpl$ac_exeext",enable_tools)
-WINE_IGNORE_FILE("tools/makedep$ac_exeext",enable_tools)
-WINE_IGNORE_FILE("tools/sfnt2fnt$ac_exeext",enable_tools)
-WINE_IGNORE_FILE("tools/wineapploader$ac_exeext",enable_tools)
-WINE_IGNORE_FILE("tools/winegcc/winecpp$ac_exeext",enable_tools)
-WINE_IGNORE_FILE("tools/winegcc/wineg++$ac_exeext",enable_tools)
+test "$wine_binary" = wine || WINE_IGNORE_FILE("loader/wine")
 
 AC_CONFIG_COMMANDS([Makefile], [wine_fn_output_makefile Makefile],
 [wine_fn_output_makefile ()
@@ -3554,6 +3462,7 @@ fi
 if test "x$enable_tools" != xno
 then
     AC_CONFIG_COMMANDS([tools],[AS_MKDIR_P(tools)])
+    WINE_IGNORE_FILE("tools/makedep$ac_exeext")
     WINE_APPEND_RULE(
 [tools/makedep$ac_exeext: $srcdir/tools/makedep.c include/config.h
 	\$(CC) -Iinclude -I$srcdir/include -D__WINESRC__ \$(EXTRACFLAGS) \$(CPPFLAGS) \$(CFLAGS) -o \$@ $srcdir/tools/makedep.c \$(LDFLAGS)
@@ -3581,7 +3490,7 @@ else
     AS_VAR_APPEND([LOADER_RULES],["
 all: wine.inf
 
-install install-lib:: wine.inf \$(DESTDIR)\$(datadir)/wine install-man-pages
+install install-lib:: wine.inf install-man-pages
 	\$(INSTALL_DATA) wine.inf \$(DESTDIR)\$(datadir)/wine/wine.inf
 	\$(INSTALL_DATA) \$(srcdir)/l_intl.nls \$(DESTDIR)\$(datadir)/wine/l_intl.nls
 

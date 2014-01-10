@@ -10,8 +10,6 @@ C_SRCS = \
 	xmlparser.c \
 	xmlview.c
 
-IDL_H_SRCS = xmlparser.idl
+IDL_SRCS = xmlparser.idl
 
 RC_SRCS = rsrc.rc
-
-@MAKE_TEST_RULES@

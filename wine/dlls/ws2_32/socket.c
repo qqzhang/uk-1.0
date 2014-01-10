@@ -195,11 +195,13 @@ static const INT valid_protocols[] =
 {
     WS_IPPROTO_TCP,
     WS_IPPROTO_UDP,
-    NSPROTO_IPX,
-    NSPROTO_SPX,
-    NSPROTO_SPXII,
+    WS_NSPROTO_IPX,
+    WS_NSPROTO_SPX,
+    WS_NSPROTO_SPXII,
     0
 };
+
+#define IS_IPX_PROTO(X) ((X) >= WS_NSPROTO_IPX && (X) <= WS_NSPROTO_IPX + 255)
 
 #if defined(IP_UNICAST_IF) && defined(SO_ATTACH_FILTER)
 # define LINUX_BOUND_IF
@@ -292,6 +294,18 @@ static inline const char *debugstr_sockaddr( const struct WS_sockaddr *a )
         return wine_dbg_sprintf("{ family AF_INET6, address %s, port %d }",
                                 p, ntohs(sin->sin6_port));
     }
+    case WS_AF_IPX:
+    {
+        int i;
+        char netnum[16], nodenum[16];
+        struct WS_sockaddr_ipx *sin = (struct WS_sockaddr_ipx *)a;
+
+        for (i = 0;i < 4; i++) sprintf(netnum + i * 2, "%02X", (unsigned char) sin->sa_netnum[i]);
+        for (i = 0;i < 6; i++) sprintf(nodenum + i * 2, "%02X", (unsigned char) sin->sa_nodenum[i]);
+
+        return wine_dbg_sprintf("{ family AF_IPX, address %s.%s, ipx socket %d }",
+                                netnum, nodenum, sin->sa_socket);
+    }
     case WS_AF_IRDA:
     {
         DWORD addr;
@@ -378,6 +392,7 @@ struct per_thread_data
     int he_len;
     int se_len;
     int pe_len;
+    char ntoa_buffer[16]; /* 4*3 digits + 3 '.' + 1 '\0' */
 };
 
 /* internal: routing description information */
@@ -510,6 +525,7 @@ static const int ws_aiflag_map[][2] =
     MAP_OPTION( AI_PASSIVE ),
     MAP_OPTION( AI_CANONNAME ),
     MAP_OPTION( AI_NUMERICHOST ),
+    MAP_OPTION( AI_V4MAPPED ),
     MAP_OPTION( AI_ADDRCONFIG ),
 };
 
@@ -1108,6 +1124,11 @@ convert_proto_w2u(int windowsproto) {
     for (i=0;i<sizeof(ws_proto_map)/sizeof(ws_proto_map[0]);i++)
     	if (ws_proto_map[i][0] == windowsproto)
 	    return ws_proto_map[i][1];
+
+    /* check for extended IPX */
+    if (IS_IPX_PROTO(windowsproto))
+      return windowsproto;
+
     FIXME("unhandled Windows socket protocol %d\n", windowsproto);
     return -1;
 }
@@ -1119,6 +1140,12 @@ convert_proto_u2w(int unixproto) {
     for (i=0;i<sizeof(ws_proto_map)/sizeof(ws_proto_map[0]);i++)
     	if (ws_proto_map[i][1] == unixproto)
 	    return ws_proto_map[i][0];
+
+    /* if value is inside IPX range just return it - the kernel simply
+     * echoes the value used in the socket() function */
+    if (IS_IPX_PROTO(unixproto))
+      return unixproto;
+
     FIXME("unhandled UNIX socket protocol %d\n", unixproto);
     return -1;
 }
@@ -1143,6 +1170,36 @@ convert_socktype_u2w(int unixsocktype) {
 	    return ws_socktype_map[i][0];
     FIXME("unhandled UNIX socket type %d\n", unixsocktype);
     return -1;
+}
+
+static int set_ipx_packettype(int sock, int ptype)
+{
+#ifdef HAS_IPX
+    int fd = get_sock_fd( sock, 0, NULL ), ret = 0;
+    TRACE("trying to set IPX_PTYPE: %d (fd: %d)\n", ptype, fd);
+
+    /* We try to set the ipx type on ipx socket level. */
+#ifdef SOL_IPX
+    if(setsockopt(fd, SOL_IPX, IPX_TYPE, &ptype, sizeof(ptype)) == -1)
+    {
+        ERR("IPX: could not set ipx option type; expect weird behaviour\n");
+        ret = SOCKET_ERROR;
+    }
+#else
+    {
+        struct ipx val;
+        /* Should we retrieve val using a getsockopt call and then
+         * set the modified one? */
+        val.ipx_pt = ptype;
+        setsockopt(fd, 0, SO_DEFAULT_HEADERS, &val, sizeof(struct ipx));
+    }
+#endif
+    release_sock_fd( sock, fd );
+    return ret;
+#else
+    WARN("IPX support is not enabled, can't set packet type\n");
+    return SOCKET_ERROR;
+#endif
 }
 
 /* ----------------------------------- API -----
@@ -1413,8 +1470,11 @@ static BOOL is_sockaddr_bound(const struct sockaddr *uaddr, int uaddrlen)
     {
 #ifdef HAS_IPX
         case AF_IPX:
-            FIXME("don't know how to tell if IPX socket is bound, assuming it is!\n");
-            return TRUE;
+        {
+            static const struct sockaddr_ipx emptyAddr;
+            struct sockaddr_ipx *ipx = (struct sockaddr_ipx*) uaddr;
+            return ipx->sipx_port || ipx->sipx_network || memcmp(&ipx->sipx_node, &emptyAddr.sipx_node, sizeof(emptyAddr.sipx_node));
+        }
 #endif
         case AF_INET6:
         {
@@ -1639,7 +1699,7 @@ static BOOL WS_EnterSingleProtocolW( INT protocol, WSAPROTOCOL_INFOW* info )
         strcpyW( info->szProtocol, NameUdpW );
         break;
 
-    case NSPROTO_IPX:
+    case WS_NSPROTO_IPX:
         info->dwServiceFlags1 = XP1_PARTIAL_MESSAGE | XP1_SUPPORT_BROADCAST |
                                 XP1_SUPPORT_MULTIPOINT | XP1_MESSAGE_ORIENTED |
                                 XP1_CONNECTIONLESS;
@@ -1657,7 +1717,7 @@ static BOOL WS_EnterSingleProtocolW( INT protocol, WSAPROTOCOL_INFOW* info )
         strcpyW( info->szProtocol, NameIpxW );
         break;
 
-    case NSPROTO_SPX:
+    case WS_NSPROTO_SPX:
         info->dwServiceFlags1 = XP1_IFS_HANDLES | XP1_PSEUDO_STREAM |
                                 XP1_MESSAGE_ORIENTED | XP1_GUARANTEED_ORDER |
                                 XP1_GUARANTEED_DELIVERY;
@@ -1674,7 +1734,7 @@ static BOOL WS_EnterSingleProtocolW( INT protocol, WSAPROTOCOL_INFOW* info )
         strcpyW( info->szProtocol, NameSpxW );
         break;
 
-    case NSPROTO_SPXII:
+    case WS_NSPROTO_SPXII:
         info->dwServiceFlags1 = XP1_IFS_HANDLES | XP1_GRACEFUL_CLOSE |
                                 XP1_PSEUDO_STREAM | XP1_MESSAGE_ORIENTED |
                                 XP1_GUARANTEED_ORDER | XP1_GUARANTEED_DELIVERY;
@@ -2943,6 +3003,7 @@ int WINAPI WS_getsockname(SOCKET s, struct WS_sockaddr *name, int *namelen)
         else
         {
             res=0;
+            TRACE("=> %s\n", debugstr_sockaddr(name));
         }
         release_sock_fd( s, fd );
     }
@@ -3204,7 +3265,7 @@ INT WINAPI WS_getsockopt(SOCKET s, INT level,
         } /* end switch(optname) */
     }/* end case WS_SOL_SOCKET */
 #ifdef HAS_IPX
-    case NSPROTO_IPX:
+    case WS_NSPROTO_IPX:
     {
         struct WS_sockaddr_ipx addr;
         IPX_ADDRESS_DATA *data;
@@ -3266,7 +3327,7 @@ INT WINAPI WS_getsockopt(SOCKET s, INT level,
             FIXME("IPX optname:%x\n", optname);
             return SOCKET_ERROR;
         }/* end switch(optname) */
-    } /* end case NSPROTO_IPX */
+    } /* end case WS_NSPROTO_IPX */
 #endif
 
 #ifdef HAS_IRDA
@@ -3284,6 +3345,7 @@ INT WINAPI WS_getsockopt(SOCKET s, INT level,
             if ( (fd = get_sock_fd( s, 0, NULL )) == -1)
                 return SOCKET_ERROR;
             res = getsockopt( fd, SOL_IRLMP, IRLMP_ENUMDEVICES, buf, &len );
+            release_sock_fd( s, fd );
             if (res < 0)
             {
                 SetLastError(wsaErrno());
@@ -3523,17 +3585,12 @@ WS_u_short WINAPI WS_ntohs(WS_u_short netshort)
  */
 char* WINAPI WS_inet_ntoa(struct WS_in_addr in)
 {
-  /* use "buffer for dummies" here because some applications have a
-   * propensity to decode addresses in ws_hostent structure without
-   * saving them first...
-   */
-    static char dbuffer[16]; /* Yes, 16: 4*3 digits + 3 '.' + 1 '\0' */
-
     char* s = inet_ntoa(*((struct in_addr*)&in));
     if( s )
     {
-        strcpy(dbuffer, s);
-        return dbuffer;
+        struct per_thread_data *data = get_per_thread_data();
+        strcpy(data->ntoa_buffer, s);
+        return data->ntoa_buffer;
     }
     SetLastError(wsaErrno());
     return NULL;
@@ -4754,32 +4811,11 @@ int WINAPI WS_setsockopt(SOCKET s, int level, int optname,
         break; /* case WS_SOL_SOCKET */
 
 #ifdef HAS_IPX
-    case NSPROTO_IPX:
+    case WS_NSPROTO_IPX:
         switch(optname)
         {
         case IPX_PTYPE:
-            fd = get_sock_fd( s, 0, NULL );
-            TRACE("trying to set IPX_PTYPE: %d (fd: %d)\n", *(const int*)optval, fd);
-
-            /* We try to set the ipx type on ipx socket level. */
-#ifdef SOL_IPX
-            if(setsockopt(fd, SOL_IPX, IPX_TYPE, optval, optlen) == -1)
-            {
-                ERR("IPX: could not set ipx option type; expect weird behaviour\n");
-                release_sock_fd( s, fd );
-                return SOCKET_ERROR;
-            }
-#else
-            {
-                struct ipx val;
-                /* Should we retrieve val using a getsockopt call and then
-                 * set the modified one? */
-                val.ipx_pt = *optval;
-                setsockopt(fd, 0, SO_DEFAULT_HEADERS, &val, sizeof(struct ipx));
-            }
-#endif
-            release_sock_fd( s, fd );
-            return 0;
+            return set_ipx_packettype(s, *(int*)optval);
 
         case IPX_FILTERPTYPE:
             /* Sets the receive filter packet type, at the moment we don't support it */
@@ -4791,7 +4827,7 @@ int WINAPI WS_setsockopt(SOCKET s, int level, int optname,
             FIXME("opt_name:%x\n", optname);
             return SOCKET_ERROR;
         }
-        break; /* case NSPROTO_IPX */
+        break; /* case WS_NSPROTO_IPX */
 #endif
 
     /* Levels WS_IPPROTO_TCP and WS_IPPROTO_IP convert directly */
@@ -5367,9 +5403,19 @@ static int convert_aiflag_u2w(int unixflags) {
 static int convert_eai_u2w(int unixret) {
     int i;
 
+    if (!unixret) return 0;
+
     for (i=0;ws_eai_map[i][0];i++)
         if (ws_eai_map[i][1] == unixret)
             return ws_eai_map[i][0];
+
+    if (unixret == EAI_SYSTEM)
+        /* There are broken versions of glibc which return EAI_SYSTEM
+         * and set errno to 0 instead of returning EAI_NONAME.
+         */
+        return errno ? sock_get_error( errno ) : WS_EAI_NONAME;
+
+    FIXME("Unhandled unix EAI_xxx ret %d\n", unixret);
     return unixret;
 }
 
@@ -5418,19 +5464,33 @@ int WINAPI WS_getaddrinfo(LPCSTR nodename, LPCSTR servname, const struct WS_addr
         punixhints = &unixhints;
 
         memset(&unixhints, 0, sizeof(unixhints));
-        punixhints->ai_flags    = convert_aiflag_w2u(hints->ai_flags);
-        if (hints->ai_family == 0) /* wildcard, specific to getaddrinfo() */
-            punixhints->ai_family = 0;
-        else
+        punixhints->ai_flags = convert_aiflag_w2u(hints->ai_flags);
+
+        /* zero is a wildcard, no need to convert */
+        if (hints->ai_family)
             punixhints->ai_family = convert_af_w2u(hints->ai_family);
-        if (hints->ai_socktype == 0) /* wildcard, specific to getaddrinfo() */
-            punixhints->ai_socktype = 0;
-        else
+        if (hints->ai_socktype)
             punixhints->ai_socktype = convert_socktype_w2u(hints->ai_socktype);
-        if (hints->ai_protocol == 0) /* wildcard, specific to getaddrinfo() */
-            punixhints->ai_protocol = 0;
-        else
-            punixhints->ai_protocol = convert_proto_w2u(hints->ai_protocol);
+        if (hints->ai_protocol)
+            punixhints->ai_protocol = max(convert_proto_w2u(hints->ai_protocol), 0);
+
+        if (punixhints->ai_socktype < 0)
+        {
+            WSASetLastError(WSAESOCKTNOSUPPORT);
+            return SOCKET_ERROR;
+        }
+
+        /* windows allows invalid combinations of socket type and protocol, unix does not.
+         * fix the parameters here to make getaddrinfo call always work */
+        if (punixhints->ai_protocol == IPPROTO_TCP &&
+            punixhints->ai_socktype != SOCK_STREAM && punixhints->ai_socktype != SOCK_SEQPACKET)
+            punixhints->ai_socktype = 0;
+
+        else if (punixhints->ai_protocol == IPPROTO_UDP && punixhints->ai_socktype != SOCK_DGRAM)
+            punixhints->ai_socktype = 0;
+
+        else if (IS_IPX_PROTO(punixhints->ai_protocol) && punixhints->ai_socktype != SOCK_DGRAM)
+            punixhints->ai_socktype = 0;
     }
 
     /* getaddrinfo(3) is thread safe, no need to wrap in CS */
@@ -5446,7 +5506,7 @@ int WINAPI WS_getaddrinfo(LPCSTR nodename, LPCSTR servname, const struct WS_addr
         *xai = NULL;
         while (xuai) {
             struct WS_addrinfo *ai = HeapAlloc(GetProcessHeap(),HEAP_ZERO_MEMORY, sizeof(struct WS_addrinfo));
-            int len;
+            SIZE_T len;
 
             if (!ai)
                 goto outofmem;
@@ -5454,8 +5514,14 @@ int WINAPI WS_getaddrinfo(LPCSTR nodename, LPCSTR servname, const struct WS_addr
             *xai = ai;xai = &ai->ai_next;
             ai->ai_flags    = convert_aiflag_u2w(xuai->ai_flags);
             ai->ai_family   = convert_af_u2w(xuai->ai_family);
-            ai->ai_socktype = convert_socktype_u2w(xuai->ai_socktype);
-            ai->ai_protocol = convert_proto_u2w(xuai->ai_protocol);
+            /* copy whatever was sent in the hints */
+            if(hints) {
+                ai->ai_socktype = hints->ai_socktype;
+                ai->ai_protocol = hints->ai_protocol;
+            } else {
+                ai->ai_socktype = convert_socktype_u2w(xuai->ai_socktype);
+                ai->ai_protocol = convert_proto_u2w(xuai->ai_protocol);
+            }
             if (xuai->ai_canonname) {
                 TRACE("canon name - %s\n",debugstr_a(xuai->ai_canonname));
                 ai->ai_canonname = HeapAlloc(GetProcessHeap(),0,strlen(xuai->ai_canonname)+1);
@@ -5484,6 +5550,18 @@ int WINAPI WS_getaddrinfo(LPCSTR nodename, LPCSTR servname, const struct WS_addr
             xuai = xuai->ai_next;
         }
         freeaddrinfo(unixaires);
+
+        if (TRACE_ON(winsock))
+        {
+            struct WS_addrinfo *ai = *res;
+            while (ai)
+            {
+                TRACE("=> %p, flags %#x, family %d, type %d, protocol %d, len %ld, name %s, addr %s\n",
+                      ai, ai->ai_flags, ai->ai_family, ai->ai_socktype, ai->ai_protocol, ai->ai_addrlen,
+                      ai->ai_canonname, debugstr_sockaddr(ai->ai_addr));
+                ai = ai->ai_next;
+            }
+        }
     } else
         result = convert_eai_u2w(result);
 
@@ -5931,7 +6009,7 @@ SOCKET WINAPI WSASocketW(int af, int type, int protocol,
 {
     SOCKET ret;
     DWORD err;
-    int unixaf, unixtype;
+    int unixaf, unixtype, ipxptype = -1;
 
    /*
       FIXME: The "advanced" parameters of WSASocketW (lpProtocolInfo,
@@ -5966,13 +6044,16 @@ SOCKET WINAPI WSASocketW(int af, int type, int protocol,
 
     if (!type && (af || protocol))
     {
+        int autoproto = protocol;
         WSAPROTOCOL_INFOW infow;
 
         /* default to the first valid protocol */
-        if (!protocol)
-            protocol = valid_protocols[0];
+        if (!autoproto)
+            autoproto = valid_protocols[0];
+        else if(IS_IPX_PROTO(autoproto))
+            autoproto = WS_NSPROTO_IPX;
 
-        if (WS_EnterSingleProtocolW(protocol, &infow))
+        if (WS_EnterSingleProtocolW(autoproto, &infow))
         {
             type = infow.iSocketType;
 
@@ -5982,6 +6063,14 @@ SOCKET WINAPI WSASocketW(int af, int type, int protocol,
                 af = infow.iAddressFamily;
         }
     }
+
+    /*
+       Windows has an extension to the IPX protocol that allows to create sockets
+       and set the IPX packet type at the same time, to do that a caller will use
+       a protocol like NSPROTO_IPX + <PACKET TYPE>
+    */
+    if (IS_IPX_PROTO(protocol))
+        ipxptype = protocol - WS_NSPROTO_IPX;
 
     /* convert the socket family, type and protocol */
     unixaf = convert_af_w2u(af);
@@ -6038,7 +6127,9 @@ SOCKET WINAPI WSASocketW(int af, int type, int protocol,
     if (ret)
     {
         TRACE("\tcreated %04lx\n", ret );
-        return ret;
+        if (ipxptype > 0)
+            set_ipx_packettype(ret, ipxptype);
+       return ret;
     }
 
     err = GetLastError();
@@ -6976,6 +7067,7 @@ INT WINAPI WSAAddressToStringA( LPSOCKADDR sockaddr, DWORD len,
         return SOCKET_ERROR;
     }
 
+    TRACE("=> %s,%u bytes\n", debugstr_a(buffer), size);
     *lenstr = size;
     strcpy( string, buffer );
     return 0;
@@ -7025,6 +7117,7 @@ INT WINAPI WSAAddressToStringW( LPSOCKADDR sockaddr, DWORD len,
         return SOCKET_ERROR;
     }
 
+    TRACE("=> %s,%u bytes\n", debugstr_w(buffer), size);
     *lenstr = size;
     lstrcpyW( string, buffer );
     return 0;

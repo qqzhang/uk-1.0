@@ -249,3 +249,17 @@ DECL_HANDLER(release_semaphore)
         release_object( sem );
     }
 }
+
+/* query details about the semaphore */
+DECL_HANDLER(query_semaphore)
+{
+    struct uk_semaphore *sem;
+
+    if ((sem = (struct uk_semaphore *)get_handle_obj( current_thread->process, req->handle,
+                                                   SEMAPHORE_QUERY_STATE, &semaphore_ops )))
+    {
+        reply->current_count = sem->count;
+        reply->max = sem->max;
+        release_object( sem );
+    }
+}

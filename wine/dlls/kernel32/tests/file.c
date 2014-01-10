@@ -1632,6 +1632,9 @@ static void test_DeleteFileA( void )
                 GetLastError() == ERROR_INVALID_FUNCTION),
        "DeleteFileA(\"nul\") returned ret=%d error=%d\n",ret,GetLastError());
 
+    ret = DeleteFileA("nonexist.txt");
+    ok(!ret && GetLastError() == ERROR_FILE_NOT_FOUND, "DeleteFileA(\"nonexist.txt\") returned ret=%d error=%d\n",ret,GetLastError());
+
     GetTempPathA(MAX_PATH, temp_path);
     GetTempFileNameA(temp_path, "tst", 0, temp_file);
 
@@ -1650,6 +1653,15 @@ todo_wine
     ret = DeleteFileA(temp_file);
 todo_wine
     ok(!ret, "DeleteFile should fail\n");
+
+    SetLastError(0xdeadbeef);
+    ret = CreateDirectoryA("testdir", NULL);
+    ok(ret, "CreateDirectory failed, got err %d\n", GetLastError());
+    ret = DeleteFileA("testdir");
+    ok(!ret && GetLastError() == ERROR_ACCESS_DENIED,
+        "Expected ERROR_ACCESS_DENIED, got error %d\n", GetLastError());
+    ret = RemoveDirectoryA("testdir");
+    ok(ret, "Remove a directory failed, got error %d\n", GetLastError());
 }
 
 static void test_DeleteFileW( void )
@@ -2417,6 +2429,14 @@ static void test_FindFirstFileA(void)
     todo_wine {
         ok ( err == ERROR_PATH_NOT_FOUND, "Bad Error number %d\n", err );
     }
+
+    /* try FindFirstFileA without trailing backslash */
+    SetLastError( 0xdeadbeaf );
+    strcpy(buffer2, nonexistent);
+    handle = FindFirstFileA(buffer2, &data);
+    err = GetLastError();
+    ok ( handle == INVALID_HANDLE_VALUE, "FindFirstFile on %s should Fail\n", buffer2 );
+    ok ( err == ERROR_FILE_NOT_FOUND, "Bad Error number %d\n", err );
 
     /* try FindFirstFileA on "C:\foo\bar.txt" */
     SetLastError( 0xdeadbeaf );

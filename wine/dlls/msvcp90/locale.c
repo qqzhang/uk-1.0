@@ -26,6 +26,7 @@
 #include "limits.h"
 #include "math.h"
 #include "stdio.h"
+#include "wchar.h"
 #include "wctype.h"
 #include "time.h"
 
@@ -1409,8 +1410,11 @@ void __thiscall ctype_char__Tidy(ctype_char *this)
 /* ?classic_table@?$ctype@D@std@@KAPEBFXZ */
 const short* __cdecl ctype_char_classic_table(void)
 {
+    ctype_char *ctype;
+
     TRACE("()\n");
-    return &((short*)GetProcAddress(GetModuleHandleA("msvcrt.dll"), "_ctype"))[1];
+    ctype = ctype_char_use_facet( locale_classic() );
+    return ctype->ctype.table;
 }
 
 /* ??0?$ctype@D@std@@QAE@ABV_Locinfo@1@I@Z */
@@ -6868,7 +6872,11 @@ ostreambuf_iterator_char* __cdecl num_put_char__Iput(const num_put *this, ostrea
 #define call_num_put_char_do_put_long(this, ret, dest, base, fill, v) CALL_VTBL_FUNC(this, 28, ostreambuf_iterator_char*, \
         (const num_put*, ostreambuf_iterator_char*, ostreambuf_iterator_char, ios_base*, char, LONG), \
         (this, ret, dest, base, fill, v))
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_char_do_put_long, 28)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_char_do_put_long, 32)
+#endif
 ostreambuf_iterator_char* __thiscall num_put_char_do_put_long(const num_put *this, ostreambuf_iterator_char *ret,
         ostreambuf_iterator_char dest, ios_base *base, char fill, LONG v)
 {
@@ -6883,7 +6891,11 @@ ostreambuf_iterator_char* __thiscall num_put_char_do_put_long(const num_put *thi
 
 /* ?put@?$num_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@QBE?AV?$ostreambuf_iterator@DU?$char_traits@D@std@@@2@V32@AAVios_base@2@DJ@Z */
 /* ?put@?$num_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@DU?$char_traits@D@std@@@2@V32@AEAVios_base@2@DJ@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_char_put_long, 28)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_char_put_long, 32)
+#endif
 ostreambuf_iterator_char* __thiscall num_put_char_put_long(const num_put *this, ostreambuf_iterator_char *ret,
         ostreambuf_iterator_char dest, ios_base *base, char fill, LONG v)
 {
@@ -6896,7 +6908,11 @@ ostreambuf_iterator_char* __thiscall num_put_char_put_long(const num_put *this, 
 #define call_num_put_char_do_put_ulong(this, ret, dest, base, fill, v) CALL_VTBL_FUNC(this, 24, ostreambuf_iterator_char*, \
         (const num_put*, ostreambuf_iterator_char*, ostreambuf_iterator_char, ios_base*, char, ULONG), \
         (this, ret, dest, base, fill, v))
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_char_do_put_ulong, 28)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_char_do_put_ulong, 32)
+#endif
 ostreambuf_iterator_char* __thiscall num_put_char_do_put_ulong(const num_put *this, ostreambuf_iterator_char *ret,
         ostreambuf_iterator_char dest, ios_base *base, char fill, ULONG v)
 {
@@ -6911,7 +6927,11 @@ ostreambuf_iterator_char* __thiscall num_put_char_do_put_ulong(const num_put *th
 
 /* ?put@?$num_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@QBE?AV?$ostreambuf_iterator@DU?$char_traits@D@std@@@2@V32@AAVios_base@2@DK@Z */
 /* ?put@?$num_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@DU?$char_traits@D@std@@@2@V32@AEAVios_base@2@DK@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_char_put_ulong, 28)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_char_put_ulong, 32)
+#endif
 ostreambuf_iterator_char* __thiscall num_put_char_put_ulong(const num_put *this, ostreambuf_iterator_char *ret,
         ostreambuf_iterator_char dest, ios_base *base, char fill, ULONG v)
 {
@@ -6934,7 +6954,11 @@ static inline streamsize get_precision(const ios_base *base)
 #define call_num_put_char_do_put_ldouble(this, ret, dest, base, fill, v) CALL_VTBL_FUNC(this, 8, ostreambuf_iterator_char*, \
         (const num_put*, ostreambuf_iterator_char*, ostreambuf_iterator_char, ios_base*, char, double), \
         (this, ret, dest, base, fill, v))
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_char_do_put_double, 32)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_char_do_put_double, 36)
+#endif
 ostreambuf_iterator_char* __thiscall num_put_char_do_put_double(const num_put *this, ostreambuf_iterator_char *ret,
         ostreambuf_iterator_char dest, ios_base *base, char fill, double v)
 {
@@ -6962,7 +6986,11 @@ ostreambuf_iterator_char* __thiscall num_put_char_do_put_double(const num_put *t
 
 /* ?put@?$num_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@QBE?AV?$ostreambuf_iterator@DU?$char_traits@D@std@@@2@V32@AAVios_base@2@DN@Z */
 /* ?put@?$num_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@DU?$char_traits@D@std@@@2@V32@AEAVios_base@2@DN@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_char_put_double, 32)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_char_put_double, 36)
+#endif
 ostreambuf_iterator_char* __thiscall num_put_char_put_double(const num_put *this, ostreambuf_iterator_char *ret,
         ostreambuf_iterator_char dest, ios_base *base, char fill, double v)
 {
@@ -6972,7 +7000,11 @@ ostreambuf_iterator_char* __thiscall num_put_char_put_double(const num_put *this
 
 /* ?put@?$num_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@QBE?AV?$ostreambuf_iterator@DU?$char_traits@D@std@@@2@V32@AAVios_base@2@DO@Z */
 /* ?put@?$num_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@DU?$char_traits@D@std@@@2@V32@AEAVios_base@2@DO@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_char_put_ldouble, 32)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_char_put_ldouble, 36)
+#endif
 ostreambuf_iterator_char* __thiscall num_put_char_put_ldouble(const num_put *this, ostreambuf_iterator_char *ret,
         ostreambuf_iterator_char dest, ios_base *base, char fill, double v)
 {
@@ -6985,7 +7017,11 @@ ostreambuf_iterator_char* __thiscall num_put_char_put_ldouble(const num_put *thi
 #define call_num_put_char_do_put_ptr(this, ret, dest, base, fill, v) CALL_VTBL_FUNC(this, 4, ostreambuf_iterator_char*, \
         (const num_put*, ostreambuf_iterator_char*, ostreambuf_iterator_char, ios_base*, char, const void*), \
         (this, ret, dest, base, fill, v))
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_char_do_put_ptr, 28)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_char_do_put_ptr, 32)
+#endif
 ostreambuf_iterator_char* __thiscall num_put_char_do_put_ptr(const num_put *this, ostreambuf_iterator_char *ret,
         ostreambuf_iterator_char dest, ios_base *base, char fill, const void *v)
 {
@@ -6998,7 +7034,11 @@ ostreambuf_iterator_char* __thiscall num_put_char_do_put_ptr(const num_put *this
 
 /* ?put@?$num_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@QBE?AV?$ostreambuf_iterator@DU?$char_traits@D@std@@@2@V32@AAVios_base@2@DPBX@Z */
 /* ?put@?$num_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@DU?$char_traits@D@std@@@2@V32@AEAVios_base@2@DPEBX@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_char_put_ptr, 28)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_char_put_ptr, 32)
+#endif
 ostreambuf_iterator_char* __thiscall num_put_char_put_ptr(const num_put *this, ostreambuf_iterator_char *ret,
         ostreambuf_iterator_char dest, ios_base *base, char fill, const void *v)
 {
@@ -7011,7 +7051,11 @@ ostreambuf_iterator_char* __thiscall num_put_char_put_ptr(const num_put *this, o
 #define call_num_put_char_do_put_int64(this, ret, dest, base, fill, v) CALL_VTBL_FUNC(this, 20, ostreambuf_iterator_char*, \
         (const num_put*, ostreambuf_iterator_char*, ostreambuf_iterator_char, ios_base*, char, __int64), \
         (this, ret, dest, base, fill, v))
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_char_do_put_int64, 32)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_char_do_put_int64, 36)
+#endif
 ostreambuf_iterator_char* __thiscall num_put_char_do_put_int64(const num_put *this, ostreambuf_iterator_char *ret,
         ostreambuf_iterator_char dest, ios_base *base, char fill, __int64 v)
 {
@@ -7026,7 +7070,11 @@ ostreambuf_iterator_char* __thiscall num_put_char_do_put_int64(const num_put *th
 
 /* ?put@?$num_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@QBE?AV?$ostreambuf_iterator@DU?$char_traits@D@std@@@2@V32@AAVios_base@2@D_J@Z */
 /* ?put@?$num_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@DU?$char_traits@D@std@@@2@V32@AEAVios_base@2@D_J@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_char_put_int64, 32)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_char_put_int64, 36)
+#endif
 ostreambuf_iterator_char* __thiscall num_put_char_put_int64(const num_put *this, ostreambuf_iterator_char *ret,
         ostreambuf_iterator_char dest, ios_base *base, char fill, __int64 v)
 {
@@ -7039,7 +7087,11 @@ ostreambuf_iterator_char* __thiscall num_put_char_put_int64(const num_put *this,
 #define call_num_put_char_do_put_uint64(this, ret, dest, base, fill, v) CALL_VTBL_FUNC(this, 16, ostreambuf_iterator_char*, \
         (const num_put*, ostreambuf_iterator_char*, ostreambuf_iterator_char, ios_base*, char, unsigned __int64), \
         (this, ret, dest, base, fill, v))
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_char_do_put_uint64, 32)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_char_do_put_uint64, 36)
+#endif
 ostreambuf_iterator_char* __thiscall num_put_char_do_put_uint64(const num_put *this, ostreambuf_iterator_char *ret,
         ostreambuf_iterator_char dest, ios_base *base, char fill, unsigned __int64 v)
 {
@@ -7054,7 +7106,11 @@ ostreambuf_iterator_char* __thiscall num_put_char_do_put_uint64(const num_put *t
 
 /* ?put@?$num_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@QBE?AV?$ostreambuf_iterator@DU?$char_traits@D@std@@@2@V32@AAVios_base@2@D_K@Z */
 /* ?put@?$num_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@DU?$char_traits@D@std@@@2@V32@AEAVios_base@2@D_K@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_char_put_uint64, 32)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_char_put_uint64, 36)
+#endif
 ostreambuf_iterator_char* __thiscall num_put_char_put_uint64(const num_put *this, ostreambuf_iterator_char *ret,
         ostreambuf_iterator_char dest, ios_base *base, char fill, unsigned __int64 v)
 {
@@ -7067,7 +7123,11 @@ ostreambuf_iterator_char* __thiscall num_put_char_put_uint64(const num_put *this
 #define call_num_put_char_do_put_bool(this, ret, dest, base, fill, v) CALL_VTBL_FUNC(this, 32, ostreambuf_iterator_char*, \
         (const num_put*, ostreambuf_iterator_char*, ostreambuf_iterator_char, ios_base*, char, MSVCP_bool), \
         (this, ret, dest, base, fill, v))
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_char_do_put_bool, 28)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_char_do_put_bool, 32)
+#endif
 ostreambuf_iterator_char* __thiscall num_put_char_do_put_bool(const num_put *this, ostreambuf_iterator_char *ret,
         ostreambuf_iterator_char dest, ios_base *base, char fill, MSVCP_bool v)
 {
@@ -7101,7 +7161,11 @@ ostreambuf_iterator_char* __thiscall num_put_char_do_put_bool(const num_put *thi
 
 /* ?put@?$num_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@QBE?AV?$ostreambuf_iterator@DU?$char_traits@D@std@@@2@V32@AAVios_base@2@D_N@Z */
 /* ?put@?$num_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@DU?$char_traits@D@std@@@2@V32@AEAVios_base@2@D_N@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_char_put_bool, 28)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_char_put_bool, 32)
+#endif
 ostreambuf_iterator_char* __thiscall num_put_char_put_bool(const num_put *this, ostreambuf_iterator_char *ret,
         ostreambuf_iterator_char dest, ios_base *base, char fill, MSVCP_bool v)
 {
@@ -7645,7 +7709,11 @@ ostreambuf_iterator_wchar* __cdecl num_put_short__Iput(const num_put *this, ostr
 #define call_num_put_wchar_do_put_long(this, ret, dest, base, fill, v) CALL_VTBL_FUNC(this, 28, ostreambuf_iterator_wchar*, \
         (const num_put*, ostreambuf_iterator_wchar*, ostreambuf_iterator_wchar, ios_base*, wchar_t, LONG), \
         (this, ret, dest, base, fill, v))
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_wchar_do_put_long, 28)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_wchar_do_put_long, 32)
+#endif
 ostreambuf_iterator_wchar* __thiscall num_put_wchar_do_put_long(const num_put *this, ostreambuf_iterator_wchar *ret,
         ostreambuf_iterator_wchar dest, ios_base *base, wchar_t fill, LONG v)
 {
@@ -7660,7 +7728,11 @@ ostreambuf_iterator_wchar* __thiscall num_put_wchar_do_put_long(const num_put *t
 
 /* ?do_put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@MBE?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AAVios_base@2@GJ@Z */
 /* ?do_put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@MEBA?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AEAVios_base@2@GJ@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_short_do_put_long, 28)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_short_do_put_long, 32)
+#endif
 ostreambuf_iterator_wchar* __thiscall num_put_short_do_put_long(const num_put *this, ostreambuf_iterator_wchar *ret,
         ostreambuf_iterator_wchar dest, ios_base *base, wchar_t fill, LONG v)
 {
@@ -7677,7 +7749,11 @@ ostreambuf_iterator_wchar* __thiscall num_put_short_do_put_long(const num_put *t
 /* ?put@?$num_put@_WV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@2@V32@AEAVios_base@2@_WJ@Z */
 /* ?put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@QBE?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AAVios_base@2@GJ@Z */
 /* ?put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AEAVios_base@2@GJ@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_wchar_put_long, 28)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_wchar_put_long, 32)
+#endif
 ostreambuf_iterator_wchar* __thiscall num_put_wchar_put_long(const num_put *this, ostreambuf_iterator_wchar *ret,
         ostreambuf_iterator_wchar dest, ios_base *base, wchar_t fill, LONG v)
 {
@@ -7690,7 +7766,11 @@ ostreambuf_iterator_wchar* __thiscall num_put_wchar_put_long(const num_put *this
 #define call_num_put_wchar_do_put_ulong(this, ret, dest, base, fill, v) CALL_VTBL_FUNC(this, 24, ostreambuf_iterator_wchar*, \
         (const num_put*, ostreambuf_iterator_wchar*, ostreambuf_iterator_wchar, ios_base*, wchar_t, ULONG), \
         (this, ret, dest, base, fill, v))
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_wchar_do_put_ulong, 28)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_wchar_do_put_ulong, 32)
+#endif
 ostreambuf_iterator_wchar* __thiscall num_put_wchar_do_put_ulong(const num_put *this, ostreambuf_iterator_wchar *ret,
         ostreambuf_iterator_wchar dest, ios_base *base, wchar_t fill, ULONG v)
 {
@@ -7705,7 +7785,11 @@ ostreambuf_iterator_wchar* __thiscall num_put_wchar_do_put_ulong(const num_put *
 
 /* ?do_put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@MBE?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AAVios_base@2@GK@Z */
 /* ?do_put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@MEBA?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AEAVios_base@2@GK@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_short_do_put_ulong, 28)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_short_do_put_ulong, 32)
+#endif
 ostreambuf_iterator_wchar* __thiscall num_put_short_do_put_ulong(const num_put *this, ostreambuf_iterator_wchar *ret,
         ostreambuf_iterator_wchar dest, ios_base *base, wchar_t fill, ULONG v)
 {
@@ -7722,7 +7806,11 @@ ostreambuf_iterator_wchar* __thiscall num_put_short_do_put_ulong(const num_put *
 /* ?put@?$num_put@_WV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@2@V32@AEAVios_base@2@_WK@Z */
 /* ?put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@QBE?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AAVios_base@2@GK@Z */
 /* ?put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AEAVios_base@2@GK@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_wchar_put_ulong, 28)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_wchar_put_ulong, 32)
+#endif
 ostreambuf_iterator_wchar* __thiscall num_put_wchar_put_ulong(const num_put *this, ostreambuf_iterator_wchar *ret,
         ostreambuf_iterator_wchar dest, ios_base *base, wchar_t fill, ULONG v)
 {
@@ -7740,7 +7828,11 @@ ostreambuf_iterator_wchar* __thiscall num_put_wchar_put_ulong(const num_put *thi
 #define call_num_put_wchar_do_put_ldouble(this, ret, dest, base, fill, v) CALL_VTBL_FUNC(this, 8, ostreambuf_iterator_wchar*, \
         (const num_put*, ostreambuf_iterator_wchar*, ostreambuf_iterator_wchar, ios_base*, wchar_t, double), \
         (this, ret, dest, base, fill, v))
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_wchar_do_put_double, 32)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_wchar_do_put_double, 36)
+#endif
 ostreambuf_iterator_wchar* __thiscall num_put_wchar_do_put_double(const num_put *this, ostreambuf_iterator_wchar *ret,
         ostreambuf_iterator_wchar dest, ios_base *base, wchar_t fill, double v)
 {
@@ -7771,7 +7863,11 @@ ostreambuf_iterator_wchar* __thiscall num_put_wchar_do_put_double(const num_put 
 /* ?do_put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@MEBA?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AEAVios_base@2@GN@Z */
 /* ?do_put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@MBE?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AAVios_base@2@GO@Z */
 /* ?do_put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@MEBA?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AEAVios_base@2@GO@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_short_do_put_double, 32)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_short_do_put_double, 36)
+#endif
 ostreambuf_iterator_wchar* __thiscall num_put_short_do_put_double(const num_put *this, ostreambuf_iterator_wchar *ret,
         ostreambuf_iterator_wchar dest, ios_base *base, wchar_t fill, double v)
 {
@@ -7802,7 +7898,11 @@ ostreambuf_iterator_wchar* __thiscall num_put_short_do_put_double(const num_put 
 /* ?put@?$num_put@_WV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@2@V32@AEAVios_base@2@_WN@Z */
 /* ?put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@QBE?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AAVios_base@2@GN@Z */
 /* ?put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AEAVios_base@2@GN@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_wchar_put_double, 32)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_wchar_put_double, 36)
+#endif
 ostreambuf_iterator_wchar* __thiscall num_put_wchar_put_double(const num_put *this, ostreambuf_iterator_wchar *ret,
         ostreambuf_iterator_wchar dest, ios_base *base, wchar_t fill, double v)
 {
@@ -7814,7 +7914,11 @@ ostreambuf_iterator_wchar* __thiscall num_put_wchar_put_double(const num_put *th
 /* ?put@?$num_put@_WV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@2@V32@AEAVios_base@2@_WO@Z */
 /* ?put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@QBE?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AAVios_base@2@GO@Z */
 /* ?put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AEAVios_base@2@GO@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_wchar_put_ldouble, 32)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_wchar_put_ldouble, 36)
+#endif
 ostreambuf_iterator_wchar* __thiscall num_put_wchar_put_ldouble(const num_put *this, ostreambuf_iterator_wchar *ret,
         ostreambuf_iterator_wchar dest, ios_base *base, wchar_t fill, double v)
 {
@@ -7827,7 +7931,11 @@ ostreambuf_iterator_wchar* __thiscall num_put_wchar_put_ldouble(const num_put *t
 #define call_num_put_wchar_do_put_ptr(this, ret, dest, base, fill, v) CALL_VTBL_FUNC(this, 4, ostreambuf_iterator_wchar*, \
         (const num_put*, ostreambuf_iterator_wchar*, ostreambuf_iterator_wchar, ios_base*, wchar_t, const void*), \
         (this, ret, dest, base, fill, v))
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_wchar_do_put_ptr, 28)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_wchar_do_put_ptr, 32)
+#endif
 ostreambuf_iterator_wchar* __thiscall num_put_wchar_do_put_ptr(const num_put *this, ostreambuf_iterator_wchar *ret,
         ostreambuf_iterator_wchar dest, ios_base *base, wchar_t fill, const void *v)
 {
@@ -7840,7 +7948,11 @@ ostreambuf_iterator_wchar* __thiscall num_put_wchar_do_put_ptr(const num_put *th
 
 /* ?do_put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@MBE?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AAVios_base@2@GPBX@Z */
 /* ?do_put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@MEBA?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AEAVios_base@2@GPEBX@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_short_do_put_ptr, 28)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_short_do_put_ptr, 32)
+#endif
 ostreambuf_iterator_wchar* __thiscall num_put_short_do_put_ptr(const num_put *this, ostreambuf_iterator_wchar *ret,
         ostreambuf_iterator_wchar dest, ios_base *base, wchar_t fill, const void *v)
 {
@@ -7855,7 +7967,11 @@ ostreambuf_iterator_wchar* __thiscall num_put_short_do_put_ptr(const num_put *th
 /* ?put@?$num_put@_WV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@2@V32@AEAVios_base@2@_WPEBX@Z */
 /* ?put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@QBE?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AAVios_base@2@GPBX@Z */
 /* ?put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AEAVios_base@2@GPEBX@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_wchar_put_ptr, 28)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_wchar_put_ptr, 32)
+#endif
 ostreambuf_iterator_wchar* __thiscall num_put_wchar_put_ptr(const num_put *this, ostreambuf_iterator_wchar *ret,
         ostreambuf_iterator_wchar dest, ios_base *base, wchar_t fill, const void *v)
 {
@@ -7868,7 +7984,11 @@ ostreambuf_iterator_wchar* __thiscall num_put_wchar_put_ptr(const num_put *this,
 #define call_num_put_wchar_do_put_int64(this, ret, dest, base, fill, v) CALL_VTBL_FUNC(this, 20, ostreambuf_iterator_wchar*, \
         (const num_put*, ostreambuf_iterator_wchar*, ostreambuf_iterator_wchar, ios_base*, wchar_t, __int64), \
         (this, ret, dest, base, fill, v))
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_wchar_do_put_int64, 32)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_wchar_do_put_int64, 36)
+#endif
 ostreambuf_iterator_wchar* __thiscall num_put_wchar_do_put_int64(const num_put *this, ostreambuf_iterator_wchar *ret,
         ostreambuf_iterator_wchar dest, ios_base *base, wchar_t fill, __int64 v)
 {
@@ -7883,7 +8003,11 @@ ostreambuf_iterator_wchar* __thiscall num_put_wchar_do_put_int64(const num_put *
 
 /* ?do_put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@MBE?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AAVios_base@2@G_J@Z */
 /* ?do_put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@MEBA?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AEAVios_base@2@G_J@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_short_do_put_int64, 32)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_short_do_put_int64, 36)
+#endif
 ostreambuf_iterator_wchar* __thiscall num_put_short_do_put_int64(const num_put *this, ostreambuf_iterator_wchar *ret,
         ostreambuf_iterator_wchar dest, ios_base *base, wchar_t fill, __int64 v)
 {
@@ -7900,7 +8024,11 @@ ostreambuf_iterator_wchar* __thiscall num_put_short_do_put_int64(const num_put *
 /* ?put@?$num_put@_WV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@2@V32@AEAVios_base@2@_W_J@Z */
 /* ?put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@QBE?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AAVios_base@2@G_J@Z */
 /* ?put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AEAVios_base@2@G_J@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_wchar_put_int64, 32)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_wchar_put_int64, 36)
+#endif
 ostreambuf_iterator_wchar* __thiscall num_put_wchar_put_int64(const num_put *this, ostreambuf_iterator_wchar *ret,
         ostreambuf_iterator_wchar dest, ios_base *base, wchar_t fill, __int64 v)
 {
@@ -7913,7 +8041,11 @@ ostreambuf_iterator_wchar* __thiscall num_put_wchar_put_int64(const num_put *thi
 #define call_num_put_wchar_do_put_uint64(this, ret, dest, base, fill, v) CALL_VTBL_FUNC(this, 16, ostreambuf_iterator_wchar*, \
         (const num_put*, ostreambuf_iterator_wchar*, ostreambuf_iterator_wchar, ios_base*, wchar_t, unsigned __int64), \
         (this, ret, dest, base, fill, v))
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_wchar_do_put_uint64, 32)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_wchar_do_put_uint64, 36)
+#endif
 ostreambuf_iterator_wchar* __thiscall num_put_wchar_do_put_uint64(const num_put *this, ostreambuf_iterator_wchar *ret,
         ostreambuf_iterator_wchar dest, ios_base *base, wchar_t fill, unsigned __int64 v)
 {
@@ -7928,7 +8060,11 @@ ostreambuf_iterator_wchar* __thiscall num_put_wchar_do_put_uint64(const num_put 
 
 /* ?do_put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@MBE?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AAVios_base@2@G_K@Z */
 /* ?do_put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@MEBA?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AEAVios_base@2@G_K@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_short_do_put_uint64, 32)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_short_do_put_uint64, 36)
+#endif
 ostreambuf_iterator_wchar* __thiscall num_put_short_do_put_uint64(const num_put *this, ostreambuf_iterator_wchar *ret,
         ostreambuf_iterator_wchar dest, ios_base *base, wchar_t fill, unsigned __int64 v)
 {
@@ -7945,7 +8081,11 @@ ostreambuf_iterator_wchar* __thiscall num_put_short_do_put_uint64(const num_put 
 /* ?put@?$num_put@_WV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@2@V32@AEAVios_base@2@_W_K@Z */
 /* ?put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@QBE?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AAVios_base@2@G_K@Z */
 /* ?put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AEAVios_base@2@G_K@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_wchar_put_uint64, 32)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_wchar_put_uint64, 36)
+#endif
 ostreambuf_iterator_wchar* __thiscall num_put_wchar_put_uint64(const num_put *this, ostreambuf_iterator_wchar *ret,
         ostreambuf_iterator_wchar dest, ios_base *base, wchar_t fill, unsigned __int64 v)
 {
@@ -7958,7 +8098,11 @@ ostreambuf_iterator_wchar* __thiscall num_put_wchar_put_uint64(const num_put *th
 #define call_num_put_wchar_do_put_bool(this, ret, dest, base, fill, v) CALL_VTBL_FUNC(this, 32, ostreambuf_iterator_wchar*, \
         (const num_put*, ostreambuf_iterator_wchar*, ostreambuf_iterator_wchar, ios_base*, wchar_t, MSVCP_bool), \
         (this, ret, dest, base, fill, v))
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_wchar_do_put_bool, 28)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_wchar_do_put_bool, 32)
+#endif
 ostreambuf_iterator_wchar* __thiscall num_put_wchar_do_put_bool(const num_put *this, ostreambuf_iterator_wchar *ret,
         ostreambuf_iterator_wchar dest, ios_base *base, wchar_t fill, MSVCP_bool v)
 {
@@ -7992,7 +8136,11 @@ ostreambuf_iterator_wchar* __thiscall num_put_wchar_do_put_bool(const num_put *t
 
 /* ?do_put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@MBE?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AAVios_base@2@G_N@Z */
 /* ?do_put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@MEBA?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AEAVios_base@2@G_N@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_short_do_put_bool, 28)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_short_do_put_bool, 32)
+#endif
 ostreambuf_iterator_wchar* __thiscall num_put_short_do_put_bool(const num_put *this, ostreambuf_iterator_wchar *ret,
         ostreambuf_iterator_wchar dest, ios_base *base, wchar_t fill, MSVCP_bool v)
 {
@@ -8028,7 +8176,11 @@ ostreambuf_iterator_wchar* __thiscall num_put_short_do_put_bool(const num_put *t
 /* ?put@?$num_put@_WV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@2@V32@AEAVios_base@2@_W_N@Z */
 /* ?put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@QBE?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AAVios_base@2@G_N@Z */
 /* ?put@?$num_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AEAVios_base@2@G_N@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(num_put_wchar_put_bool, 28)
+#else
+DEFINE_THISCALL_WRAPPER(num_put_wchar_put_bool, 32)
+#endif
 ostreambuf_iterator_wchar* __thiscall num_put_wchar_put_bool(const num_put *this, ostreambuf_iterator_wchar *ret,
         ostreambuf_iterator_wchar dest, ios_base *base, wchar_t fill, MSVCP_bool v)
 {
@@ -8177,7 +8329,11 @@ static time_put* time_put_char_use_facet(const locale *loc)
 
 /* ?do_put@?$time_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@MBE?AV?$ostreambuf_iterator@DU?$char_traits@D@std@@@2@V32@AAVios_base@2@DPBUtm@@DD@Z */
 /* ?do_put@?$time_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@MEBA?AV?$ostreambuf_iterator@DU?$char_traits@D@std@@@2@V32@AEAVios_base@2@DPEBUtm@@DD@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(time_put_char_do_put, 36)
+#else
+DEFINE_THISCALL_WRAPPER(time_put_char_do_put, 40)
+#endif
 #define call_time_put_char_do_put(this, ret, dest, base, fill, t, spec, mod) CALL_VTBL_FUNC(this, 4, ostreambuf_iterator_char*, \
         (const time_put*, ostreambuf_iterator_char*, ostreambuf_iterator_char, ios_base*, char, const struct tm*, char, char), \
         (this, ret, dest, base, fill, t, spec, mod))
@@ -8205,7 +8361,11 @@ ostreambuf_iterator_char* __thiscall time_put_char_do_put(const time_put *this, 
 
 /* ?put@?$time_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@QBE?AV?$ostreambuf_iterator@DU?$char_traits@D@std@@@2@V32@AAVios_base@2@DPBUtm@@DD@Z */
 /* ?put@?$time_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@DU?$char_traits@D@std@@@2@V32@AEAVios_base@2@DPEBUtm@@DD@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(time_put_char_put, 36)
+#else
+DEFINE_THISCALL_WRAPPER(time_put_char_put, 40)
+#endif
 ostreambuf_iterator_char* __thiscall time_put_char_put(const time_put *this, ostreambuf_iterator_char *ret,
         ostreambuf_iterator_char dest, ios_base *base, char fill, const struct tm *t, char spec, char mod)
 {
@@ -8215,7 +8375,11 @@ ostreambuf_iterator_char* __thiscall time_put_char_put(const time_put *this, ost
 
 /* ?put@?$time_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@QBE?AV?$ostreambuf_iterator@DU?$char_traits@D@std@@@2@V32@AAVios_base@2@DPBUtm@@PBD3@Z */
 /* ?put@?$time_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@DU?$char_traits@D@std@@@2@V32@AEAVios_base@2@DPEBUtm@@PEBD3@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(time_put_char_put_format, 36)
+#else
+DEFINE_THISCALL_WRAPPER(time_put_char_put_format, 40)
+#endif
 ostreambuf_iterator_char* __thiscall time_put_char_put_format(const time_put *this, ostreambuf_iterator_char *ret,
         ostreambuf_iterator_char dest, ios_base *base, char fill, const struct tm *t, const char *pat, const char *pat_end)
 {
@@ -8504,7 +8668,11 @@ static time_put* time_put_short_use_facet(const locale *loc)
 /* ?do_put@?$time_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@MEBA?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AEAVios_base@2@GPEBUtm@@DD@Z */
 /* ?do_put@?$time_put@_WV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@MBE?AV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@2@V32@AAVios_base@2@_WPBUtm@@DD@Z */
 /* ?do_put@?$time_put@_WV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@MEBA?AV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@2@V32@AEAVios_base@2@_WPEBUtm@@DD@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(time_put_wchar_do_put, 36)
+#else
+DEFINE_THISCALL_WRAPPER(time_put_wchar_do_put, 40)
+#endif
 #define call_time_put_wchar_do_put(this, ret, dest, base, fill, t, spec, mod) CALL_VTBL_FUNC(this, 4, ostreambuf_iterator_wchar*, \
         (const time_put*, ostreambuf_iterator_wchar*, ostreambuf_iterator_wchar, ios_base*, wchar_t, const struct tm*, char, char), \
         (this, ret, dest, base, fill, t, spec, mod))
@@ -8538,7 +8706,11 @@ ostreambuf_iterator_wchar* __thiscall time_put_wchar_do_put(const time_put *this
 /* ?put@?$time_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AEAVios_base@2@GPEBUtm@@DD@Z */
 /* ?put@?$time_put@_WV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@QBE?AV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@2@V32@AAVios_base@2@_WPBUtm@@DD@Z */
 /* ?put@?$time_put@_WV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@2@V32@AEAVios_base@2@_WPEBUtm@@DD@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(time_put_wchar_put, 36)
+#else
+DEFINE_THISCALL_WRAPPER(time_put_wchar_put, 40)
+#endif
 ostreambuf_iterator_wchar* __thiscall time_put_wchar_put(const time_put *this,
         ostreambuf_iterator_wchar *ret, ostreambuf_iterator_wchar dest, ios_base *base,
         wchar_t fill, const struct tm *t, char spec, char mod)
@@ -8551,7 +8723,11 @@ ostreambuf_iterator_wchar* __thiscall time_put_wchar_put(const time_put *this,
 /* ?put@?$time_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@GU?$char_traits@G@std@@@2@V32@AEAVios_base@2@GPEBUtm@@PEBG3@Z */
 /* ?put@?$time_put@_WV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@QBE?AV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@2@V32@AAVios_base@2@_WPBUtm@@PB_W4@Z */
 /* ?put@?$time_put@_WV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@QEBA?AV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@2@V32@AEAVios_base@2@_WPEBUtm@@PEB_W4@Z */
+#if _MSVCP_VER != 80
 DEFINE_THISCALL_WRAPPER(time_put_wchar_put_format, 36)
+#else
+DEFINE_THISCALL_WRAPPER(time_put_wchar_put_format, 40)
+#endif
 ostreambuf_iterator_wchar* __thiscall time_put_wchar_put_format(const time_put *this,
         ostreambuf_iterator_wchar *ret, ostreambuf_iterator_wchar dest, ios_base *base,
         wchar_t fill, const struct tm *t, const wchar_t *pat, const wchar_t *pat_end)
@@ -9454,6 +9630,16 @@ basic_string_char* __thiscall locale_name(const locale *this, basic_string_char 
     return ret;
 }
 
+#else
+
+/* ?_Getname@_Locinfo@std@@QBEPBDXZ */
+/* ?_Getname@_Locinfo@std@@QEBAPEBDXZ */
+DEFINE_THISCALL_WRAPPER(_Locinfo__Getname, 4)
+const char * __thiscall _Locinfo__Getname( const _Locinfo *this )
+{
+    return locale_string_char_c_str( &this->newlocname );
+}
+
 #endif  /* _MSVCP_VER < 100 */
 
 /* wctrans */
@@ -9476,6 +9662,107 @@ wint_t __cdecl towctrans(wint_t c, wctrans_t category)
         return towupper(c);
     return towlower(c);
 }
+
+/* btowc */
+wint_t __cdecl btowc(int c)
+{
+    wchar_t ret;
+    int state = 0;
+    char ch = c;
+
+    if (c == EOF || _Mbrtowc( &ret, &ch, 1, &state, NULL ) != 1) return WEOF;
+    return ret;
+}
+
+/* mbrlen */
+size_t __cdecl mbrlen(const char *str, size_t n, mbstate_t *state)
+{
+    static int local_state;
+
+    if (!state) state = &local_state;
+    return _Mbrtowc( NULL, str, n, state, NULL );
+}
+
+/* mbrtowc */
+size_t __cdecl mbrtowc(wchar_t *dst, const char *str, size_t n, mbstate_t *state)
+{
+    static int local_state;
+
+    if (!state) state = &local_state;
+    return _Mbrtowc( dst, str, n, state, NULL );
+}
+
+/* mbsrtowcs */
+size_t __cdecl mbsrtowcs(wchar_t *dst, const char **pstr, size_t n, mbstate_t *state)
+{
+    static int local_state;
+    size_t ret = 0;
+    wchar_t wc;
+    const char *src;
+
+    if (!pstr)
+    {
+        *_errno() = EINVAL;
+        _invalid_parameter( NULL, NULL, NULL, 0, 0 );
+    }
+    src = *pstr;
+    if (!state) state = &local_state;
+
+    while (!dst || n > ret)
+    {
+        int len = _Mbrtowc( &wc, src, 2, state, NULL );
+        if (len < 0) return -1;
+        if (!len) break;
+        if (dst) dst[ret] = wc;
+        ret++;
+        if (!wc) break;
+        src += len;
+    }
+    return ret;
+}
+
+/* wctob */
+int __cdecl wctob(wint_t wc)
+{
+    char ret[MB_LEN_MAX];
+
+    if (wc == WEOF || _Wcrtomb( ret, wc, NULL, NULL ) != -1) return EOF;
+    return ret[0];
+}
+
+/* wcrtomb */
+size_t __cdecl wcrtomb(char *dst, wchar_t wc, mbstate_t *state)
+{
+    return _Wcrtomb( dst, wc, state, NULL );
+}
+
+/* wcsrtombs */
+size_t __cdecl wcsrtombs(char *dst, const wchar_t **pstr, size_t n, mbstate_t *state)
+{
+    const wchar_t *src;
+    char buffer[MB_LEN_MAX];
+    size_t ret = 0;
+
+    if (!pstr)
+    {
+        *_errno() = EINVAL;
+        _invalid_parameter( NULL, NULL, NULL, 0, 0 );
+    }
+    src = *pstr;
+
+    while (!dst || n > ret)
+    {
+        int len = _Wcrtomb( buffer, *src, state, NULL );
+        if (len <= 0) return -1;
+        if (n < ret + len) break;
+        memcpy( dst + ret, buffer, len );
+        ret += len;
+        if (!buffer[0]) break;
+        src++;
+    }
+    return ret;
+}
+
 
 DEFINE_RTTI_DATA0(locale_facet, 0, ".?AVfacet@locale@std@@")
 DEFINE_RTTI_DATA1(collate_char, 0, &locale_facet_rtti_base_descriptor, ".?AV?$collate@D@std@@")
@@ -9536,11 +9823,12 @@ void __asm_dummy_vtables(void) {
             VTABLE_ADD_FUNC(ctype_char__Do_widen_s)
             VTABLE_ADD_FUNC(ctype_char_do_narrow)
             VTABLE_ADD_FUNC(ctype_char_do_narrow_ch)
-            VTABLE_ADD_FUNC(ctype_char__Do_narrow_s));
+            VTABLE_ADD_FUNC(ctype_char__Do_narrow_s)
 #else
             VTABLE_ADD_FUNC(ctype_char_do_narrow)
-            VTABLE_ADD_FUNC(ctype_char_do_narrow_ch));
+            VTABLE_ADD_FUNC(ctype_char_do_narrow_ch)
 #endif
+            );
     __ASM_VTABLE(ctype_wchar,
             VTABLE_ADD_FUNC(ctype_wchar_vector_dtor)
             VTABLE_ADD_FUNC(ctype_wchar_do_is)
@@ -9557,11 +9845,12 @@ void __asm_dummy_vtables(void) {
             VTABLE_ADD_FUNC(ctype_wchar__Do_widen_s)
             VTABLE_ADD_FUNC(ctype_wchar_do_narrow)
             VTABLE_ADD_FUNC(ctype_wchar_do_narrow_ch)
-            VTABLE_ADD_FUNC(ctype_wchar__Do_narrow_s));
+            VTABLE_ADD_FUNC(ctype_wchar__Do_narrow_s)
 #else
             VTABLE_ADD_FUNC(ctype_wchar_do_narrow)
-            VTABLE_ADD_FUNC(ctype_wchar_do_narrow_ch));
+            VTABLE_ADD_FUNC(ctype_wchar_do_narrow_ch)
 #endif
+            );
     __ASM_VTABLE(ctype_short,
             VTABLE_ADD_FUNC(ctype_wchar_vector_dtor)
             VTABLE_ADD_FUNC(ctype_wchar_do_is)
@@ -9578,11 +9867,12 @@ void __asm_dummy_vtables(void) {
             VTABLE_ADD_FUNC(ctype_wchar__Do_widen_s)
             VTABLE_ADD_FUNC(ctype_wchar_do_narrow)
             VTABLE_ADD_FUNC(ctype_wchar_do_narrow_ch)
-            VTABLE_ADD_FUNC(ctype_wchar__Do_narrow_s));
+            VTABLE_ADD_FUNC(ctype_wchar__Do_narrow_s)
 #else
             VTABLE_ADD_FUNC(ctype_wchar_do_narrow)
-            VTABLE_ADD_FUNC(ctype_wchar_do_narrow_ch));
+            VTABLE_ADD_FUNC(ctype_wchar_do_narrow_ch)
 #endif
+            );
     __ASM_VTABLE(codecvt_base,
             VTABLE_ADD_FUNC(codecvt_base_vector_dtor)
             VTABLE_ADD_FUNC(codecvt_base_do_always_noconv)

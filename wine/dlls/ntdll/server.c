@@ -1484,7 +1484,7 @@ void server_init_process(void)
         init_data.init_type = NEW_PROCESS;
         init_data.thread_id = thread_id; /* don't need create_process() */
     }
-    else 
+    else
     {
         fd_socket = server_connect(&init_data);
 

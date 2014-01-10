@@ -11,8 +11,6 @@ C_SRCS = \
 	instrument.c \
 	port.c
 
-IDL_R_SRCS = dmusic.idl
+IDL_SRCS = dmusic.idl
 
 RC_SRCS = version.rc
-
-@MAKE_DLL_RULES@

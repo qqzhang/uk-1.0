@@ -7,8 +7,6 @@ C_SRCS = \
 	gamestatistics.c \
 	main.c
 
-IDL_TLB_SRCS = gameux_tlb.idl
+IDL_SRCS = gameux_tlb.idl
 
 RC_SRCS = rsrc.rc
-
-@MAKE_DLL_RULES@

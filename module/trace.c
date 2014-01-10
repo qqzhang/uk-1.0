@@ -1555,6 +1555,17 @@ static void dump_release_semaphore_reply( const struct release_semaphore_reply *
     fprintf( stderr, " prev_count=%08x", req->prev_count );
 }
 
+static void dump_query_semaphore_request( const struct query_semaphore_request *req )
+{
+    fprintf( stderr, " handle=%04x", req->handle );
+}
+
+static void dump_query_semaphore_reply( const struct query_semaphore_reply *req )
+{
+    fprintf( stderr, " current=%08x", req->current_count );
+    fprintf( stderr, ", max=%08x", req->max );
+}
+
 static void dump_open_semaphore_request( const struct open_semaphore_request *req )
 {
     fprintf( stderr, " access=%08x", req->access );
@@ -4133,6 +4144,7 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_open_mutex_request,
     (dump_func)dump_create_semaphore_request,
     (dump_func)dump_release_semaphore_request,
+    (dump_func)dump_query_semaphore_request,
     (dump_func)dump_open_semaphore_request,
     (dump_func)dump_create_file_request,
     (dump_func)dump_open_file_object_request,
@@ -4390,6 +4402,7 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_open_mutex_reply,
     (dump_func)dump_create_semaphore_reply,
     (dump_func)dump_release_semaphore_reply,
+    (dump_func)dump_query_semaphore_reply,
     (dump_func)dump_open_semaphore_reply,
     (dump_func)dump_create_file_reply,
     (dump_func)dump_open_file_object_reply,
@@ -4647,6 +4660,7 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "open_mutex",
     "create_semaphore",
     "release_semaphore",
+    "query_semaphore",
     "open_semaphore",
     "create_file",
     "open_file_object",

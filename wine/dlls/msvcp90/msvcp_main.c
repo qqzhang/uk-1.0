@@ -60,9 +60,14 @@ void* (__cdecl *MSVCRT_operator_new)(MSVCP_size_t);
 void (__cdecl *MSVCRT_operator_delete)(void*);
 void* (__cdecl *MSVCRT_set_new_handler)(void*);
 
+#define VERSION_STRING(ver) #ver
+#define MSVCRT_NAME(ver) "msvcr" VERSION_STRING(ver) ".dll"
+
 static void init_cxx_funcs(void)
 {
-    HMODULE hmod = GetModuleHandleA("msvcrt.dll");
+    HMODULE hmod = GetModuleHandleA( MSVCRT_NAME(_MSVCP_VER) );
+
+    if (!hmod) FIXME( "%s not loaded\n", MSVCRT_NAME(_MSVCP_VER) );
 
     if (sizeof(void *) > sizeof(int))  /* 64-bit has different names */
     {
@@ -122,3 +127,8 @@ __int64 * __cdecl std_Fpz_func(void)
 {
     return &std_Fpz;
 }
+
+#if defined(__MINGW32__) && _MSVCP_VER >= 80 && _MSVCP_VER <= 90
+/* Hack: prevent Mingw from importing mingw_helpers.o which conflicts with encode/decode_pointer */
+int mingw_app_type = 0;
+#endif

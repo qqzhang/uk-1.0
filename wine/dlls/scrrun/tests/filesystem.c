@@ -33,6 +33,15 @@
 
 static IFileSystem3 *fs3;
 
+static inline ULONG get_refcount(IUnknown *iface)
+{
+    IUnknown_AddRef(iface);
+    return IUnknown_Release(iface);
+}
+
+#define GET_REFCOUNT(iface) \
+    get_refcount((IUnknown*)iface)
+
 static void test_interfaces(void)
 {
     static const WCHAR nonexistent_dirW[] = {
@@ -134,7 +143,7 @@ static void test_createfolder(void)
 
 static void test_textstream(void)
 {
-    static WCHAR testfileW[] = {'t','e','s','t','f','i','l','e','.','t','x','t',0};
+    static const WCHAR testfileW[] = {'t','e','s','t','f','i','l','e','.','t','x','t',0};
     ITextStream *stream;
     VARIANT_BOOL b;
     HANDLE file;
@@ -739,6 +748,138 @@ static void test_BuildPath(void)
     }
 }
 
+static void test_GetFolder(void)
+{
+    static const WCHAR dummyW[] = {'d','u','m','m','y',0};
+    WCHAR buffW[MAX_PATH];
+    IFolder *folder;
+    HRESULT hr;
+    BSTR str;
+
+    folder = (void*)0xdeadbeef;
+    hr = IFileSystem3_GetFolder(fs3, NULL, &folder);
+    ok(hr == E_INVALIDARG, "got 0x%08x\n", hr);
+    ok(folder == NULL, "got %p\n", folder);
+
+    hr = IFileSystem3_GetFolder(fs3, NULL, NULL);
+    ok(hr == E_POINTER, "got 0x%08x\n", hr);
+
+    /* something that doesn't exist */
+    str = SysAllocString(dummyW);
+
+    hr = IFileSystem3_GetFolder(fs3, str, NULL);
+    ok(hr == E_POINTER, "got 0x%08x\n", hr);
+
+    folder = (void*)0xdeadbeef;
+    hr = IFileSystem3_GetFolder(fs3, str, &folder);
+    ok(hr == CTL_E_PATHNOTFOUND, "got 0x%08x\n", hr);
+    ok(folder == NULL, "got %p\n", folder);
+    SysFreeString(str);
+
+    GetWindowsDirectoryW(buffW, MAX_PATH);
+    str = SysAllocString(buffW);
+    hr = IFileSystem3_GetFolder(fs3, str, &folder);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    SysFreeString(str);
+    IFolder_Release(folder);
+}
+
+static void test_FolderCollection(void)
+{
+    static const WCHAR aW[] = {'\\','a',0};
+    static const WCHAR bW[] = {'\\','b',0};
+    IFolderCollection *folders;
+    WCHAR buffW[MAX_PATH], pathW[MAX_PATH], path2W[MAX_PATH];
+    IEnumVARIANT *enumvar, *clone;
+    LONG count, count2, ref, ref2;
+    IUnknown *unk, *unk2;
+    IFolder *folder;
+    HRESULT hr;
+    BSTR str;
+
+    GetTempPathW(MAX_PATH, buffW);
+
+    str = SysAllocString(buffW);
+    hr = IFileSystem3_GetFolder(fs3, str, &folder);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    SysFreeString(str);
+
+    hr = IFolder_get_SubFolders(folder, NULL);
+    ok(hr == E_POINTER, "got 0x%08x\n", hr);
+
+    lstrcpyW(pathW, buffW);
+    lstrcatW(pathW, aW);
+    CreateDirectoryW(pathW, NULL);
+
+    hr = IFolder_get_SubFolders(folder, &folders);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    count = 0;
+    hr = IFolderCollection_get_Count(folders, &count);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok(count > 0, "got %d\n", count);
+
+    lstrcpyW(path2W, buffW);
+    lstrcatW(path2W, bW);
+    CreateDirectoryW(path2W, NULL);
+
+    /* every time property is requested it scans directory */
+    count2 = 0;
+    hr = IFolderCollection_get_Count(folders, &count2);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok(count2 > count, "got %d, %d\n", count, count2);
+
+    hr = IFolderCollection_get__NewEnum(folders, NULL);
+    ok(hr == E_POINTER, "got 0x%08x\n", hr);
+
+    hr = IFolderCollection_QueryInterface(folders, &IID_IEnumVARIANT, (void**)&unk);
+    ok(hr == E_NOINTERFACE, "got 0x%08x\n", hr);
+
+    /* NewEnum creates new instance each time it's called */
+    ref = GET_REFCOUNT(folders);
+
+    unk = NULL;
+    hr = IFolderCollection_get__NewEnum(folders, &unk);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    ref2 = GET_REFCOUNT(folders);
+    ok(ref2 == ref + 1, "got %d, %d\n", ref2, ref);
+
+    unk2 = NULL;
+    hr = IFolderCollection_get__NewEnum(folders, &unk2);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok(unk != unk2, "got %p, %p\n", unk2, unk);
+    IUnknown_Release(unk2);
+
+    /* now get IEnumVARIANT */
+    ref = GET_REFCOUNT(folders);
+    hr = IUnknown_QueryInterface(unk, &IID_IEnumVARIANT, (void**)&enumvar);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ref2 = GET_REFCOUNT(folders);
+    ok(ref2 == ref, "got %d, %d\n", ref2, ref);
+
+    /* clone enumerator */
+    hr = IEnumVARIANT_Clone(enumvar, &clone);
+todo_wine
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+if (hr == S_OK) {
+    ok(clone != enumvar, "got %p, %p\n", enumvar, clone);
+    IEnumVARIANT_Release(clone);
+}
+
+    hr = IEnumVARIANT_Reset(enumvar);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    IEnumVARIANT_Release(enumvar);
+    IUnknown_Release(unk);
+
+    RemoveDirectoryW(pathW);
+    RemoveDirectoryW(path2W);
+
+    IFolderCollection_Release(folders);
+    IFolder_Release(folder);
+}
+
 START_TEST(filesystem)
 {
     HRESULT hr;
@@ -763,6 +904,8 @@ START_TEST(filesystem)
     test_GetFile();
     test_CopyFolder();
     test_BuildPath();
+    test_GetFolder();
+    test_FolderCollection();
 
     IFileSystem3_Release(fs3);
 

@@ -1,4 +1,16 @@
-INSTALLDIRS = $(DESTDIR)$(fontdir)
+FONT_SRCS = \
+	courier.sfd \
+	fixedsys.sfd \
+	fixedsys_jp.sfd \
+	marlett.sfd \
+	ms_sans_serif.sfd \
+	small_fonts.sfd \
+	small_fonts_jp.sfd \
+	symbol.sfd \
+	system.sfd \
+	tahoma.sfd \
+	tahomabd.sfd \
+	wingding.sfd
 
 BITMAP_FONTS  = \
 	coue1255.fon \
@@ -58,6 +70,8 @@ TRUETYPE_FONTS = \
 	tahoma.ttf \
 	tahomabd.ttf \
 	wingding.ttf
+
+EXTRA_TARGETS = $(BITMAP_FONTS)
 
 all: $(BITMAP_FONTS)
 
@@ -215,13 +229,10 @@ cvgasys.fon: $(srcdir)/system.ttf
 
 $(BITMAP_FONTS): $(SFNT2FNT)
 
-install install-lib:: $(BITMAP_FONTS) $(INSTALLDIRS)
+install install-lib:: $(BITMAP_FONTS)
 	for i in $(BITMAP_FONTS); do $(INSTALL_DATA) $$i $(DESTDIR)$(fontdir)/$$i || exit 1; done
 	for i in $(TRUETYPE_FONTS); do $(INSTALL_DATA) $(srcdir)/$$i $(DESTDIR)$(fontdir)/$$i || exit 1; done
 
 uninstall::
 	-cd $(DESTDIR)$(fontdir) && $(RM) $(BITMAP_FONTS) $(TRUETYPE_FONTS)
 	-rmdir $(DESTDIR)$(fontdir)
-
-clean::
-	$(RM) $(BITMAP_FONTS)

@@ -159,18 +159,18 @@ void	dump_file(const char* name);
 /* DLL functions */
 BOOL  dll_open (const char *dll_name);
 
-int   dll_next_symbol (parsed_symbol * sym);
+BOOL  dll_next_symbol (parsed_symbol * sym);
 
 /* Symbol functions */
-int   symbol_init(parsed_symbol* symbol, const char* name);
+void  symbol_init(parsed_symbol* symbol, const char* name);
 
 int   symbol_demangle (parsed_symbol *symbol);
 
-int   symbol_search (parsed_symbol *symbol);
+BOOL  symbol_search (parsed_symbol *symbol);
 
 void  symbol_clear(parsed_symbol *sym);
 
-int   symbol_is_valid_c(const parsed_symbol *sym);
+BOOL  symbol_is_valid_c(const parsed_symbol *sym);
 
 const char *symbol_get_call_convention(const parsed_symbol *sym);
 

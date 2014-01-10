@@ -74,6 +74,11 @@ static const char manifest1[] =
 "<assemblyIdentity version=\"1.0.0.0\"  name=\"Wine.Test\" type=\"win32\"></assemblyIdentity>"
 "</assembly>";
 
+static const char manifest1_1[] =
+"<assembly xmlns = \"urn:schemas-microsoft-com:asm.v1\" manifestVersion = \"1.0\">"
+"<assemblyIdentity version = \"1.0.0.0\" name = \"Wine.Test\" type = \"win32\"></assemblyIdentity>"
+"</assembly>";
+
 static const char manifest2[] =
 "<assembly xmlns=\"urn:schemas-microsoft-com:asm.v1\" manifestVersion=\"1.0\">"
 "<assemblyIdentity version=\"1.2.3.4\" name=\"Wine.Test\" type=\"win32\">"
@@ -1748,6 +1753,13 @@ static void test_actctx(void)
         pReleaseActCtx(handle);
     }
 
+    /* test for whitespace handling in Eq ::= S? '=' S? */
+    create_manifest_file("test1_1.manifest", manifest1_1, -1, NULL, NULL);
+    handle = test_create("test1_1.manifest");
+    ok(handle != INVALID_HANDLE_VALUE, "got %p\n", handle);
+    DeleteFileA("test1_1.manifest");
+    pReleaseActCtx(handle);
+
     if(!create_manifest_file("test1.manifest", manifest1, -1, NULL, NULL)) {
         skip("Could not create manifest file\n");
         return;
@@ -2113,14 +2125,40 @@ static void test_CreateActCtx(void)
     actctx.lpAssemblyDirectory = dir;
     actctx.lpSource = path;
 
+    SetLastError(0xdeadbeef);
     handle = pCreateActCtxA(&actctx);
-todo_wine
-    ok(handle == INVALID_HANDLE_VALUE && GetLastError() == ERROR_SXS_CANT_GEN_ACTCTX,
-        "got handle %p, supposed to fail\n", handle);
+todo_wine {
+    ok(handle == INVALID_HANDLE_VALUE, "got handle %p\n", handle);
+    ok(GetLastError() == ERROR_SXS_CANT_GEN_ACTCTX, "got error %d\n", GetLastError());
+}
     if (handle != INVALID_HANDLE_VALUE) pReleaseActCtx(handle);
 
     delete_manifest_file("main.manifest");
     delete_manifest_file("testdep1.manifest");
+
+    /* ACTCTX_FLAG_HMODULE_VALID but hModule is not set */
+    memset(&actctx, 0, sizeof(ACTCTXA));
+    actctx.cbSize = sizeof(ACTCTXA);
+    actctx.dwFlags = ACTCTX_FLAG_HMODULE_VALID;
+    SetLastError(0xdeadbeef);
+    handle = pCreateActCtxA(&actctx);
+    ok(handle == INVALID_HANDLE_VALUE, "got handle %p\n", handle);
+todo_wine
+    ok(GetLastError() == ERROR_SXS_CANT_GEN_ACTCTX || broken(GetLastError() == ERROR_NOT_ENOUGH_MEMORY) /* XP, win2k3 */,
+        "got error %d\n", GetLastError());
+
+    /* create from HMODULE - resource doesn't exist, lpSource is set */
+    memset(&actctx, 0, sizeof(ACTCTXA));
+    actctx.cbSize = sizeof(ACTCTXA);
+    actctx.dwFlags = ACTCTX_FLAG_RESOURCE_NAME_VALID | ACTCTX_FLAG_HMODULE_VALID;
+    actctx.lpSource = "dummyfile.dll";
+    actctx.lpResourceName = MAKEINTRESOURCEA(20);
+    actctx.hModule = GetModuleHandleA(NULL);
+
+    SetLastError(0xdeadbeef);
+    handle = pCreateActCtxA(&actctx);
+    ok(handle == INVALID_HANDLE_VALUE, "got handle %p\n", handle);
+    ok(GetLastError() == ERROR_RESOURCE_TYPE_NOT_FOUND, "got error %d\n", GetLastError());
 }
 
 static BOOL init_funcs(void)

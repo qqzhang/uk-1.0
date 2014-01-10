@@ -12,12 +12,10 @@ C_SRCS = \
 	stream.c \
 	webbrowser.c
 
-IDL_TLB_SRCS = hhctrl_tlb.idl
+IDL_SRCS = hhctrl_tlb.idl
 
 RC_SRCS = hhctrl.rc
 
 SVG_SRCS = \
 	hhtoolbar.svg \
 	hhtreeview.svg
-
-@MAKE_DLL_RULES@

@@ -5,13 +5,6 @@ C_SRCS = \
 	main.c \
 	preloader.c
 
-PROGRAMS = \
-	wine \
-	wine-installed \
-	wine-preloader \
-	wine64 \
-	wine64-preloader
-
 MANPAGES = \
 	wine.de.UTF-8.man.in \
 	wine.fr.UTF-8.man.in \
@@ -21,10 +14,6 @@ MANPAGES = \
 IN_SRCS = \
 	wine.inf.in \
 	wine_info.plist.in
-
-INSTALLDIRS = \
-	$(DESTDIR)$(bindir) \
-	$(DESTDIR)$(datadir)/wine
 
 @MAKE_RULES@
 

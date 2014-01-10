@@ -5,6 +5,4 @@ C_SRCS = \
 	dictionary.c \
 	filesystem.c
 
-IDL_H_SRCS = scrrun.idl
-
-@MAKE_TEST_RULES@
+IDL_SRCS = scrrun.idl

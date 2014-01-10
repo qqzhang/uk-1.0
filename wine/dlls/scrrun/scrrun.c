@@ -105,6 +105,8 @@ static REFIID tid_ids[] = {
     &IID_IDictionary,
     &IID_IFileSystem3,
     &IID_IFolder,
+    &IID_IFolderCollection,
+    &IID_ITextStream,
     &IID_IFile
 };
 

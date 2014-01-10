@@ -6,6 +6,4 @@ C_SRCS = \
 	database.c \
 	marshal.c
 
-IDL_I_SRCS = convert.idl
-
-@MAKE_TEST_RULES@
+IDL_SRCS = convert.idl

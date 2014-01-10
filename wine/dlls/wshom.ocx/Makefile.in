@@ -7,6 +7,4 @@ C_SRCS = \
 
 RC_SRCS = wshom.rc
 
-IDL_TLB_SRCS = wshom.idl
-
-@MAKE_DLL_RULES@
+IDL_SRCS = wshom.idl

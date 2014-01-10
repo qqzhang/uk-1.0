@@ -89,11 +89,10 @@ static const char * const known_longs[] =
   "WCHAR", "BOOL", "bool", "INT16", "WORD", "DWORD", NULL
 };
 
-int symbol_init(parsed_symbol* sym, const char* name)
+void symbol_init(parsed_symbol* sym, const char* name)
 {
     memset(sym, 0, sizeof(parsed_symbol));
     sym->symbol = strdup(name);
-    return 0;
 }
 
 /*******************************************************************
@@ -126,7 +125,7 @@ void symbol_clear(parsed_symbol *sym)
  *
  * Check if a symbol is a valid C identifier
  */
-int symbol_is_valid_c(const parsed_symbol *sym)
+BOOL symbol_is_valid_c(const parsed_symbol *sym)
 {
   char *name;
 
@@ -138,10 +137,10 @@ int symbol_is_valid_c(const parsed_symbol *sym)
   while (*name)
   {
     if (!isalnum (*name) && *name != '_')
-      return 0;
+      return FALSE;
     name++;
   }
-  return 1;
+  return TRUE;
 }
 
 

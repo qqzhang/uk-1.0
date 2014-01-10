@@ -1331,8 +1331,8 @@
 @ thiscall -arch=i386 ?_Getmonths@_Locinfo@std@@QBEPBDXZ(ptr) msvcp90.?_Getmonths@_Locinfo@std@@QBEPBDXZ
 @ cdecl -arch=win64 ?_Getmonths@_Locinfo@std@@QEBAPEBDXZ(ptr) msvcp90.?_Getmonths@_Locinfo@std@@QEBAPEBDXZ
 @ stub -arch=arm ?_Getname@_Locinfo@std@@QBAPBDXZ
-@ stub -arch=i386 ?_Getname@_Locinfo@std@@QBEPBDXZ
-@ stub -arch=win64 ?_Getname@_Locinfo@std@@QEBAPEBDXZ
+@ thiscall -arch=win32 ?_Getname@_Locinfo@std@@QBEPBDXZ(ptr) msvcp100.?_Getname@_Locinfo@std@@QBEPBDXZ
+@ cdecl -arch=win64 ?_Getname@_Locinfo@std@@QEBAPEBDXZ(ptr) msvcp100.?_Getname@_Locinfo@std@@QEBAPEBDXZ
 @ cdecl -arch=arm ?_Getpfirst@_Container_base12@std@@QBAPAPAU_Iterator_base12@2@XZ(ptr) msvcp100.?_Getpfirst@_Container_base12@std@@QBAPAPAU_Iterator_base12@2@XZ
 @ thiscall -arch=i386 ?_Getpfirst@_Container_base12@std@@QBEPAPAU_Iterator_base12@2@XZ(ptr) msvcp100.?_Getpfirst@_Container_base12@std@@QBEPAPAU_Iterator_base12@2@XZ
 @ cdecl -arch=win64 ?_Getpfirst@_Container_base12@std@@QEBAPEAPEAU_Iterator_base12@2@XZ(ptr) msvcp100.?_Getpfirst@_Container_base12@std@@QEBAPEAPEAU_Iterator_base12@2@XZ
@@ -3615,7 +3615,7 @@
 @ cdecl -arch=arm ?uflow@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@MAAGXZ(ptr) msvcp90.?uflow@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@MAAGXZ
 @ thiscall -arch=i386 ?uflow@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@MAEGXZ(ptr) msvcp90.?uflow@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@MAEGXZ
 @ cdecl -arch=win64 ?uflow@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@MEAAGXZ(ptr) msvcp90.?uflow@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@MEAAGXZ
-@ cdecl ?uncaught_exception@std@@YA_NXZ() msvcrt.__uncaught_exception
+@ cdecl ?uncaught_exception@std@@YA_NXZ() msvcp90.?uncaught_exception@std@@YA_NXZ
 @ cdecl -arch=arm ?underflow@?$basic_streambuf@DU?$char_traits@D@std@@@std@@MAAHXZ(ptr) msvcp90.?underflow@?$basic_streambuf@DU?$char_traits@D@std@@@std@@MAAHXZ
 @ thiscall -arch=i386 ?underflow@?$basic_streambuf@DU?$char_traits@D@std@@@std@@MAEHXZ(ptr) msvcp90.?underflow@?$basic_streambuf@DU?$char_traits@D@std@@@std@@MAEHXZ
 @ cdecl -arch=win64 ?underflow@?$basic_streambuf@DU?$char_traits@D@std@@@std@@MEAAHXZ(ptr) msvcp90.?underflow@?$basic_streambuf@DU?$char_traits@D@std@@@std@@MEAAHXZ

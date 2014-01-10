@@ -908,8 +908,8 @@
 @ cdecl -arch=win64 ?_Getlconv@_Locinfo@std@@QEBAPEBUlconv@@XZ(ptr) _Locinfo__Getlconv
 @ thiscall -arch=win32 ?_Getmonths@_Locinfo@std@@QBEPBDXZ(ptr) _Locinfo__Getmonths
 @ cdecl -arch=win64 ?_Getmonths@_Locinfo@std@@QEBAPEBDXZ(ptr) _Locinfo__Getmonths
-@ stub -arch=win32 ?_Getname@_Locinfo@std@@QBEPBDXZ
-@ stub -arch=win64 ?_Getname@_Locinfo@std@@QEBAPEBDXZ
+@ thiscall -arch=win32 ?_Getname@_Locinfo@std@@QBEPBDXZ(ptr) _Locinfo__Getname
+@ cdecl -arch=win64 ?_Getname@_Locinfo@std@@QEBAPEBDXZ(ptr) _Locinfo__Getname
 @ cdecl -arch=arm ?_Getpfirst@_Container_base12@std@@QBAPAPAU_Iterator_base12@2@XZ(ptr) _Container_base12__Getpfirst
 @ thiscall -arch=i386 ?_Getpfirst@_Container_base12@std@@QBEPAPAU_Iterator_base12@2@XZ(ptr) _Container_base12__Getpfirst
 @ cdecl -arch=win64 ?_Getpfirst@_Container_base12@std@@QEBAPEAPEAU_Iterator_base12@2@XZ(ptr) _Container_base12__Getpfirst
@@ -2795,7 +2795,7 @@
 @ cdecl -arch=win64 ?uflow@?$basic_streambuf@GU?$char_traits@G@std@@@std@@MEAAGXZ(ptr) basic_streambuf_wchar_uflow
 @ thiscall -arch=win32 ?uflow@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@MAEGXZ(ptr) basic_streambuf_wchar_uflow
 @ cdecl -arch=win64 ?uflow@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@MEAAGXZ(ptr) basic_streambuf_wchar_uflow
-@ cdecl ?uncaught_exception@std@@YA_NXZ() msvcrt.__uncaught_exception
+@ cdecl ?uncaught_exception@std@@YA_NXZ() MSVCP__uncaught_exception
 @ thiscall -arch=win32 ?underflow@?$basic_streambuf@DU?$char_traits@D@std@@@std@@MAEHXZ(ptr) basic_streambuf_char_underflow
 @ cdecl -arch=win64 ?underflow@?$basic_streambuf@DU?$char_traits@D@std@@@std@@MEAAHXZ(ptr) basic_streambuf_char_underflow
 @ thiscall -arch=win32 ?underflow@?$basic_streambuf@GU?$char_traits@G@std@@@std@@MAEGXZ(ptr) basic_streambuf_wchar_underflow

@@ -1785,7 +1785,7 @@ static char *strdupA(const char *p)
     return ret;
 }
 
-static CALLBACK HRESULT ID3DXAllocateHierarchyImpl_DestroyFrame(ID3DXAllocateHierarchy *iface, LPD3DXFRAME frame)
+static HRESULT CALLBACK ID3DXAllocateHierarchyImpl_DestroyFrame(ID3DXAllocateHierarchy *iface, LPD3DXFRAME frame)
 {
     TRACECALLBACK("ID3DXAllocateHierarchyImpl_DestroyFrame(%p, %p)\n", iface, frame);
     if (frame) {
@@ -1795,7 +1795,7 @@ static CALLBACK HRESULT ID3DXAllocateHierarchyImpl_DestroyFrame(ID3DXAllocateHie
     return D3D_OK;
 }
 
-static CALLBACK HRESULT ID3DXAllocateHierarchyImpl_CreateFrame(ID3DXAllocateHierarchy *iface,
+static HRESULT CALLBACK ID3DXAllocateHierarchyImpl_CreateFrame(ID3DXAllocateHierarchy *iface,
         const char *name, D3DXFRAME **new_frame)
 {
     D3DXFRAME *frame;
@@ -1850,13 +1850,13 @@ static HRESULT destroy_mesh_container(LPD3DXMESHCONTAINER mesh_container)
     return D3D_OK;
 }
 
-static CALLBACK HRESULT ID3DXAllocateHierarchyImpl_DestroyMeshContainer(ID3DXAllocateHierarchy *iface, LPD3DXMESHCONTAINER mesh_container)
+static HRESULT CALLBACK ID3DXAllocateHierarchyImpl_DestroyMeshContainer(ID3DXAllocateHierarchy *iface, LPD3DXMESHCONTAINER mesh_container)
 {
     TRACECALLBACK("ID3DXAllocateHierarchyImpl_DestroyMeshContainer(%p, %p)\n", iface, mesh_container);
     return destroy_mesh_container(mesh_container);
 }
 
-static CALLBACK HRESULT ID3DXAllocateHierarchyImpl_CreateMeshContainer(ID3DXAllocateHierarchy *iface,
+static HRESULT CALLBACK ID3DXAllocateHierarchyImpl_CreateMeshContainer(ID3DXAllocateHierarchy *iface,
         const char *name, const D3DXMESHDATA *mesh_data, const D3DXMATERIAL *materials,
         const D3DXEFFECTINSTANCE *effects, DWORD num_materials, const DWORD *adjacency,
         ID3DXSkinInfo *skin_info, D3DXMESHCONTAINER **new_mesh_container)
@@ -2564,12 +2564,12 @@ static BOOL compute_sphere(struct mesh *mesh, FLOAT radius, UINT slices, UINT st
     int slice, stack;
 
     /* theta = angle on xy plane wrt x axis */
-    theta_step = M_PI / stacks;
+    theta_step = D3DX_PI / stacks;
     theta_start = theta_step;
 
     /* phi = angle on xz plane wrt z axis */
-    phi_step = -2 * M_PI / slices;
-    phi_start = M_PI / 2;
+    phi_step = -2 * D3DX_PI / slices;
+    phi_start = D3DX_PI / 2;
 
     if (!compute_sincos_table(&theta, theta_start, theta_step, stacks))
     {
@@ -2800,8 +2800,8 @@ static BOOL compute_cylinder(struct mesh *mesh, FLOAT radius1, FLOAT radius2, FL
     int slice, stack;
 
     /* theta = angle on xy plane wrt x axis */
-    theta_step = -2 * M_PI / slices;
-    theta_start = M_PI / 2;
+    theta_step = -2 * D3DX_PI / slices;
+    theta_start = D3DX_PI / 2;
 
     if (!compute_sincos_table(&theta, theta_start, theta_step, slices))
     {
@@ -4800,7 +4800,7 @@ static void test_create_skin_info(void)
             exp_vertices[0] = 0;
             exp_vertices[1] = 0x87654321;
             exp_weights[0] = 0.5;
-            exp_weights[1] = 0.0f / 0.0f; /* NAN */
+            exp_weights[1] = NAN;
             num_influences = 2;
 
             hr = skininfo->lpVtbl->SetBoneInfluence(skininfo, 1, num_influences, vertices, weights);
