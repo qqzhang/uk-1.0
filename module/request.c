@@ -912,10 +912,6 @@ NTSTATUS NtEarlyInit(int __user* init_data_ptr)
     struct thread *new_thread;
     int thread_id;
     char type;
-    int old_mask;
-
-    old_mask = umask(0);
-    umask(old_mask & 0770);
 
     memset(&init_data, 0, sizeof(struct init_data));
     if (copy_from_user(&init_data, init_data_ptr, sizeof(struct init_data)))

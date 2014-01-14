@@ -1149,8 +1149,6 @@ int timer_loop(void *data)
 {
     unsigned int msecs, timeout, next;
 
-    umask(0);
-
     while (1)
     {
         uk_lock();

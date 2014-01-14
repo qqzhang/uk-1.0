@@ -2042,6 +2042,9 @@ static int save_branch( struct reg_key *key, const char *path )
     {
         /* if successfully written, rename to final name */
         if (ret) ret = !rename( tmp, path );
+#ifdef CONFIG_UNIFIED_KERNEL
+        chmod( path, 0666 );
+#endif
         if (!ret) unlink( tmp );
     }
 
